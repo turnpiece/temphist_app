@@ -63,3 +63,7 @@ ios/.flutter-plugins-dependencies
 *.lock
 *.generated.*
 *.g.dart
+
+# Firebase configuration files
+lib/firebase_options.dart
+ios/Runner/GoogleService-Info.plist
