@@ -67,3 +67,4 @@ ios/.flutter-plugins-dependencies
 # Firebase configuration files
 lib/firebase_options.dart
 ios/Runner/GoogleService-Info.plist
+GoogleService-Info.plist
