@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart'; // from FlutterFire CLI
 
 // Color constants
 const backgroundColor = Color(0xFF121234);
@@ -8,6 +10,14 @@ const textColor = Color(0xFFECECEC);
 const secondaryTextColor = Color(0xFF808080); // Darker color for grid and axis text
 
 void main() => runApp(TempHistApp());
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  runApp(MyApp());
+}
 
 class TempHistApp extends StatelessWidget {
   @override
