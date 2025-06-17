@@ -1,6 +1,6 @@
 # TempHist Flutter App
 
-TempHist is a simple Flutter application that visualizes historical average temperatures by year using a horizontal bar chart. It is built using the [Syncfusion Flutter Charts](https://pub.dev/packages/syncfusion_flutter_charts) package.
+TempHist is a simple Flutter application that visualizes historical average temperatures by year using a horizontal bar chart. It is built using the [graphic](https://pub.dev/packages/graphic) package.
 
 ## Features
 
@@ -42,7 +42,7 @@ flutter run
 
 ## Dependencies
 
-- [syncfusion_flutter_charts](https://pub.dev/packages/syncfusion_flutter_charts)
+- [graphic](https://pub.dev/packages/graphic)
 
 ## Screenshots
 
