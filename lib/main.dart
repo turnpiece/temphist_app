@@ -1,147 +1,130 @@
-
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:graphic/graphic.dart' as graphic;
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 
-void main() => runApp(TempHistApp());
+import 'services/temperature_service.dart';
 
-class TempHistApp extends StatelessWidget {
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TempHist Graphic Chart',
-      home: TempChartScreen(),
+      title: 'Temperature Trends',
+      home: TemperatureScreen(),
     );
   }
 }
 
-class TempChartScreen extends StatefulWidget {
+class TemperatureScreen extends StatefulWidget {
   @override
-  _TempChartScreenState createState() => _TempChartScreenState();
+  _TemperatureScreenState createState() => _TemperatureScreenState();
 }
 
-class _TempChartScreenState extends State<TempChartScreen> {
-  List<Map<String, dynamic>> chartData = [];
-  bool loading = true;
-  String? error;
+class _TemperatureScreenState extends State<TemperatureScreen> {
+  late Future<List<Map<String, dynamic>>> futureChartData;
 
   @override
   void initState() {
     super.initState();
-    fetchData();
+    futureChartData = _loadChartData();
   }
 
-  Future<void> fetchData() async {
+  Future<List<Map<String, dynamic>>> _loadChartData() async {
     final now = DateTime.now();
-    final location = 'london';
-    final month = now.month.toString().padLeft(2, '0');
-    final day = now.day.toString().padLeft(2, '0');
-    final url = Uri.parse('https://api.temphist.com/data/$location/$month-$day');
+    final useYesterday = now.hour < 1;
+    final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+    final formattedDate = DateFormat('yyyy-MM-dd').format(dateToUse);
 
-    try {
-      final response = await http.get(url, headers: {'X-API-Token': 'testing'});
-      if (response.statusCode == 200) {
-        final jsonBody = json.decode(response.body);
-        final series = jsonBody['series']['data'] as List;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          setState(() {
-            chartData = series.map((e) => {
-              'year': e['x'].toString(),
-              'temp': e['y'],
-              'color': e['x'] == now.year ? 'current' : 'past',
-            }).toList();
-            loading = false;
-          });
+    final service = TemperatureService();
+    final city = 'London';
+    final currentYear = dateToUse.year;
+
+    final List<Map<String, dynamic>> chartData = [];
+
+    for (int year = currentYear - 49; year <= currentYear; year++) {
+      final dateForYear = '$year-${formattedDate.substring(5)}';
+      try {
+        final tempData = await service.fetchTemperature(city, dateForYear);
+        chartData.add({
+          'year': year.toString(),
+          'temp': tempData.temperature ?? tempData.average?.temperature ?? 0.0,
+          'color': year == currentYear ? 'highlight' : 'normal',
         });
-      } else {
-        setState(() {
-          error = 'HTTP error: ${response.statusCode}';
-          loading = false;
-        });
+      } catch (e) {
+        debugPrint('Failed to fetch data for $year: $e');
       }
-    } catch (e) {
-      setState(() {
-        error = 'Failed to fetch data: $e';
-        loading = false;
-      });
     }
+
+    return chartData;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (loading) {
-      return Scaffold(
-        appBar: AppBar(title: Text('Temperature Trends')),
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (error != null) {
-      return Scaffold(
-        appBar: AppBar(title: Text('Temperature Trends')),
-        body: Center(child: Text(error!)),
-      );
-    }
-
-    if (chartData.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: Text('Temperature Trends')),
-        body: Center(child: Text('No data available')),
-      );
-    }
-
-    final barCount = chartData.length;
-    final barHeight = 34.0;
-    final minHeight = 300.0;
-    final maxHeight = 900.0;
-    final chartHeight = (barCount * barHeight).clamp(minHeight, maxHeight);
+    final double chartHeight = 800;
 
     return Scaffold(
       appBar: AppBar(title: Text('Temperature Trends')),
-      body: SingleChildScrollView(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SizedBox(
-              height: chartHeight,
-              child: graphic.Chart(
-                data: chartData,
-                variables: {
-                  'year': graphic.Variable(
-                    accessor: (row) => (row as Map<String, dynamic>)['year'] as String,
-                  ),
-                  'temp': graphic.Variable(
-                    accessor: (row) => (row as Map<String, dynamic>)['temp'] as num,
-                  ),
-                  'color': graphic.Variable(
-                    accessor: (row) => (row as Map<String, dynamic>)['color'] as String,
-                  ),
-                },
-                marks: [
-                  graphic.IntervalMark(
-                    size: graphic.SizeEncode(value: 18),
-                    color: graphic.ColorEncode(
-                      variable: 'color',
-                      values: [
-                        const Color(0xFFFF6B6B),
-                        const Color(0xFF51CF66),
-                      ],
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: futureChartData,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(child: Text('Error loading data: ${snapshot.error}'));
+          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('No temperature data available.'));
+          }
+
+          final chartData = snapshot.data!;
+
+          return SingleChildScrollView(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: SizedBox(
+                  height: chartHeight,
+                  child: graphic.Chart(
+                    data: chartData,
+                    variables: {
+                      'year': graphic.Variable(
+                        accessor: (row) => (row as Map<String, dynamic>)['year'] as String,
+                      ),
+                      'temp': graphic.Variable(
+                        accessor: (row) => (row as Map<String, dynamic>)['temp'] as num,
+                      ),
+                      'color': graphic.Variable(
+                        accessor: (row) => (row as Map<String, dynamic>)['color'] as String,
+                      ),
+                    },
+                    marks: [
+                      graphic.IntervalMark(
+                        size: graphic.SizeEncode(value: 18),
+                        color: graphic.ColorEncode(
+                          variable: 'color',
+                          values: [
+                            const Color(0xFFFF6B6B),
+                            const Color(0xFF51CF66),
+                          ],
+                        ),
+                      )
+                    ],
+                    coord: graphic.RectCoord(
+                      transposed: true,
+                      horizontalRange: [0.05, 0.95],
                     ),
-                  )
-                ],
-                coord: graphic.RectCoord(
-                  transposed: true,
-                  horizontalRange: [0.05, 0.95],
+                    axes: [
+                      graphic.Defaults.horizontalAxis,
+                      graphic.Defaults.verticalAxis,
+                    ],
+                  ),
                 ),
-                axes: [
-                  graphic.Defaults.horizontalAxis,
-                  graphic.Defaults.verticalAxis,
-                ],
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

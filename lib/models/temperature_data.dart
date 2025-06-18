@@ -1,25 +1,41 @@
 class TemperatureData {
-  final Average average;
-  final Trend trend;
-  final String summary;
+  final Average? average;
+  final Trend? trend;
+  final String? summary;
   final dynamic currentWeather;
-  final Series series;
+  final Series? series;
+  final double? temperature; // For simple API responses
 
   TemperatureData({
-    required this.average,
-    required this.trend,
-    required this.summary,
+    this.average,
+    this.trend,
+    this.summary,
     this.currentWeather,
-    required this.series,
+    this.series,
+    this.temperature,
   });
 
+  // Constructor for simple API responses like {"days":[{"temp":19.8}]}
+  factory TemperatureData.simple(double temp) {
+    return TemperatureData(temperature: temp);
+  }
+
   factory TemperatureData.fromJson(Map<String, dynamic> json) {
+    // Check if this is a simple response with days array
+    if (json.containsKey('days') && json['days'] is List) {
+      final days = json['days'] as List;
+      if (days.isNotEmpty && days[0] is Map && days[0]['temp'] != null) {
+        return TemperatureData.simple(days[0]['temp'].toDouble());
+      }
+    }
+    
+    // Handle complex response structure
     return TemperatureData(
-      average: Average.fromJson(json['average']),
-      trend: Trend.fromJson(json['trend']),
+      average: json['average'] != null ? Average.fromJson(json['average']) : null,
+      trend: json['trend'] != null ? Trend.fromJson(json['trend']) : null,
       summary: json['summary'],
       currentWeather: json['current_weather'],
-      series: Series.fromJson(json['series']),
+      series: json['series'] != null ? Series.fromJson(json['series']) : null,
     );
   }
 }
