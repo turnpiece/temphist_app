@@ -4,10 +4,13 @@ import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:geocoding/geocoding.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 import 'services/temperature_service.dart';
 
 // App color constants
+const bool DEBUGGING = true;
 const kBackgroundColour = Color(0xFF242456);
 const kAccentColour = Color(0xFFFF6B6B);
 const kTextPrimaryColour = Color(0xFFECECEC);
@@ -42,11 +45,38 @@ class TemperatureScreen extends StatefulWidget {
 
 class _TemperatureScreenState extends State<TemperatureScreen> {
   late Future<Map<String, dynamic>> futureChartData;
+  bool _hasFreshData = false;
 
   @override
   void initState() {
     super.initState();
-    futureChartData = _loadChartData();
+    _loadInitialData();
+  }
+
+  void _loadInitialData() async {
+    // First, try to load cached data and show it immediately if available
+    final cached = await _loadCachedChartData();
+    bool usedCache = false;
+    if (cached != null) {
+      setState(() {
+        futureChartData = Future.value(cached);
+      });
+      usedCache = true;
+    } else {
+      setState(() {
+        futureChartData = _loadChartData();
+      });
+    }
+    // Only try to fetch fresh data in the background if we used the cache
+    if (usedCache) {
+      Future.delayed(Duration.zero, () async {
+        final freshFuture = _loadChartData();
+        final fresh = await freshFuture;
+        setState(() {
+          futureChartData = Future.value(fresh);
+        });
+      });
+    }
   }
 
   Future<Map<String, dynamic>> _loadChartData() async {
@@ -102,7 +132,19 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
 
     // Try main /data/ endpoint first
     try {
-      final tempData = await service.fetchCompleteData(city, '$currentYear-${formattedDate.substring(5)}');
+      if (DEBUGGING) {
+        print('DEBUG: Starting /data/ fetch for $city, $formattedDate');
+      }
+      final tempData = await service
+          .fetchCompleteData(city, '$currentYear-${formattedDate.substring(5)}')
+          .timeout(const Duration(seconds: 3));
+      if (DEBUGGING) {
+        print('DEBUG: Complete API Response: ${tempData.series != null ? tempData.series!.data.length : 'no series'} | average: ${tempData.average?.temperature}, trend: ${tempData.trend?.slope}, summary: ${tempData.summary}');
+        print('DEBUG: tempData.series: ${tempData.series}');
+        print('DEBUG: tempData.series?.data: ${tempData.series?.data}');
+        print('DEBUG: tempData.series?.data.runtimeType: ${tempData.series?.data.runtimeType}');
+      }
+      _hasFreshData = true;
       averageTemperature = tempData.average?.temperature;
       trendSlope = tempData.trend?.slope;
       summaryText = tempData.summary;
@@ -120,7 +162,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           startYear = tempData.average!.yearRange.start;
           endYear = tempData.average!.yearRange.end;
         }
-        return {
+        final result = {
           'chartData': chartData,
           'averageTemperature': averageTemperature,
           'trendSlope': trendSlope,
@@ -128,40 +170,75 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           'displayDate': _formatDayMonth(dateToUse),
           'city': city,
         };
+        await _cacheChartData(result);
+        return result;
       } else {
-        if (tempData.average?.yearRange != null) {
-          startYear = tempData.average!.yearRange.start;
-          endYear = tempData.average!.yearRange.end;
-        }
-        await fetchYearlyData(startYear, endYear);
-        return {
-          'chartData': chartData,
-          'averageTemperature': averageTemperature,
-          'trendSlope': trendSlope,
-          'summary': summaryText,
-          'displayDate': _formatDayMonth(dateToUse),
-          'city': city,
-        };
+        // If /data/ endpoint returns but has no series, treat as error and go to fallback
+        throw Exception('No series data in /data/ endpoint response');
       }
-    } catch (_) {
+    } catch (e, stack) {
+      if (DEBUGGING) {
+        print('DEBUG: Exception in /data/ fetch: $e');
+        print('DEBUG: Stack trace: $stack');
+      }
+      if (_hasFreshData) {
+        if (DEBUGGING) print('DEBUG: Skipping fallback update because fresh data arrived.');
+        return Future.value();
+      }
       // Fallback: try /average/, /trend/, /summary/ endpoints
       try {
-        final averageData = await service.fetchAverageData(city, '$currentYear-${formattedDate.substring(5)}');
-        averageTemperature = averageData['average']?.toDouble();
+        if (DEBUGGING) print('DEBUG: Calling /average/ endpoint...');
+        if (DEBUGGING) {
+          print('DEBUG: formattedDate = '
+              '$formattedDate');
+          print('DEBUG: formattedDate.substring(5) = '
+              '${formattedDate.length >= 5 ? formattedDate.substring(5) : 'INVALID'}');
+        }
+        final mmdd = (formattedDate.length >= 5) ? formattedDate.substring(5) : '';
+        if (mmdd.isEmpty) {
+          throw Exception('Invalid date format for /average/ endpoint: $formattedDate');
+        }
+        final averageData = await service
+            .fetchAverageData(city, mmdd)
+            .timeout(const Duration(seconds: 30));
+        averageTemperature = averageData['average'] != null
+            ? (averageData['average'] as num).toDouble()
+            : null;
+        if (averageTemperature == null) {
+          throw Exception('No average temperature available');
+        }
         if (averageData['year_range'] != null) {
           startYear = averageData['year_range']['start'];
           endYear = averageData['year_range']['end'];
         }
+        // Try to get trend and summary, but don't fail if they are missing
+        if (DEBUGGING) print('DEBUG: Calling /trend/ endpoint...');
         try {
-          final trendData = await service.fetchTrendData(city, '$currentYear-${formattedDate.substring(5)}');
+          final trendData = await service
+              .fetchTrendData(city, mmdd)
+              .timeout(const Duration(seconds: 30));
           trendSlope = trendData['slope']?.toDouble();
-        } catch (_) {}
+        } catch (_) {
+          trendSlope = null;
+        }
+        if (DEBUGGING) print('DEBUG: Calling /summary/ endpoint...');
         try {
-          final summaryData = await service.fetchSummaryData(city, '$currentYear-${formattedDate.substring(5)}');
+          final summaryData = await service
+              .fetchSummaryData(city, mmdd)
+              .timeout(const Duration(seconds: 30));
           summaryText = summaryData['summary'] as String?;
-        } catch (_) {}
+        } catch (_) {
+          summaryText = null;
+        }
         await fetchYearlyData(startYear, endYear);
-        return {
+        if (_hasFreshData) {
+          if (DEBUGGING) print('DEBUG: Skipping fallback update because fresh data arrived.');
+          return Future.value();
+        }
+        if (DEBUGGING) {
+          print('DEBUG: Fallback result: averageTemperature=$averageTemperature, trendSlope=$trendSlope, summaryText=$summaryText');
+        }
+        final result = {
           'chartData': chartData,
           'averageTemperature': averageTemperature,
           'trendSlope': trendSlope,
@@ -169,10 +246,19 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           'displayDate': _formatDayMonth(dateToUse),
           'city': city,
         };
+        await _cacheChartData(result);
+        return result;
       } catch (_) {
         // Final fallback: just fetch year-by-year
         await fetchYearlyData(startYear, endYear);
-        return {
+        // No summary, average, or trend available in this fallback
+        averageTemperature = null;
+        trendSlope = null;
+        summaryText = null;
+        if (DEBUGGING) {
+          print('DEBUG: Final fallback (year-by-year only): averageTemperature=$averageTemperature, trendSlope=$trendSlope, summaryText=$summaryText');
+        }
+        final result = {
           'chartData': chartData,
           'averageTemperature': averageTemperature,
           'trendSlope': trendSlope,
@@ -180,8 +266,54 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           'displayDate': _formatDayMonth(dateToUse),
           'city': city,
         };
+        await _cacheChartData(result);
+        return result;
       }
     }
+    // If all above fails, try to load from cache
+    final cached = await _loadCachedChartData();
+    if (cached != null) {
+      return cached;
+    }
+    throw Exception('Failed to load data and no cached data available.');
+  }
+
+  Future<void> _cacheChartData(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    // Only cache the minimal necessary data
+    final cache = jsonEncode({
+      'chartData': (data['chartData'] as List<TemperatureChartData>).map((e) => {
+        'year': e.year,
+        'temperature': e.temperature,
+        'isCurrentYear': e.isCurrentYear,
+      }).toList(),
+      'averageTemperature': data['averageTemperature'],
+      'trendSlope': data['trendSlope'],
+      'summary': data['summary'],
+      'displayDate': data['displayDate'],
+      'city': data['city'],
+    });
+    await prefs.setString('cachedChartData', cache);
+  }
+
+  Future<Map<String, dynamic>?> _loadCachedChartData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cache = prefs.getString('cachedChartData');
+    if (cache == null) return null;
+    final decoded = jsonDecode(cache);
+    final chartDataList = (decoded['chartData'] as List).map((e) => TemperatureChartData(
+      year: e['year'],
+      temperature: (e['temperature'] as num).toDouble(),
+      isCurrentYear: e['isCurrentYear'],
+    )).toList();
+    return {
+      'chartData': chartDataList,
+      'averageTemperature': decoded['averageTemperature'],
+      'trendSlope': decoded['trendSlope'],
+      'summary': decoded['summary'],
+      'displayDate': decoded['displayDate'],
+      'city': decoded['city'],
+    };
   }
 
   @override
@@ -196,13 +328,94 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return Center(child: Text('Error loading data: ${snapshot.error}'));
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Error loading data: ${snapshot.error}',
+                    style: const TextStyle(color: kTextPrimaryColour),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        futureChartData = _loadChartData();
+                      });
+                    },
+                    child: const Text(
+                      'Retry',
+                      style: TextStyle(color: kTextPrimaryColour),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kAccentColour,
+                    ),
+                  ),
+                ],
+              ),
+            );
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('No temperature data available.'));
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'No temperature data available.',
+                    style: TextStyle(color: kTextPrimaryColour),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        futureChartData = _loadChartData();
+                      });
+                    },
+                    child: const Text(
+                      'Retry',
+                      style: TextStyle(color: kTextPrimaryColour),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kAccentColour,
+                    ),
+                  ),
+                ],
+              ),
+            );
           }
 
           final data = snapshot.data!;
           final chartData = data['chartData'] as List<TemperatureChartData>;
+          if (chartData.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'No temperature data available.',
+                    style: TextStyle(color: kTextPrimaryColour),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        futureChartData = _loadChartData();
+                      });
+                    },
+                    child: const Text(
+                      'Retry',
+                      style: TextStyle(color: kTextPrimaryColour),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kAccentColour,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
           final averageTemperature = data['averageTemperature'] as double?;
           final trendSlope = data['trendSlope'] as double?;
           final summaryText = data['summary'] as String?;
@@ -248,7 +461,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                                   'TempHist',
                                   style: TextStyle(
                                     color: kAccentColour,
-                                    fontSize: 28,
+                                    fontSize: 22,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 1.2,
                                   ),

@@ -55,6 +55,9 @@ dependencies:
   geolocator: ^10.1.0
   geocoding: ^2.1.0
 
+  # For caching
+  shared_preferences: ^2.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

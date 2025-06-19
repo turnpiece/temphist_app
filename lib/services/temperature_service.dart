@@ -87,9 +87,9 @@ class TemperatureService {
 
   Future<Map<String, dynamic>> fetchAverageData(String city, String date) async {
     final token = await getAuthToken();
-    // Extract month-day from the date (e.g., "2025-06-18" -> "06-18")
-    final monthDay = date.substring(5); // Get "06-18" from "2025-06-18"
-    final url = Uri.parse('$apiBaseUrl/average/$city/$monthDay');
+    final url = Uri.parse('$apiBaseUrl/average/$city/$date');
+
+    print('DEBUG: Fetching /average/ for city=$city, date=$date');
 
     final response = await http.get(
       url,
@@ -100,7 +100,7 @@ class TemperatureService {
 
     if (response.statusCode == 200) {
       final responseBody = response.body;
-      print('Average API Response for $city/$monthDay: $responseBody'); // Debug log
+      print('Average API Response for $city/$date: $responseBody'); // Debug log
       
       if (responseBody.isEmpty) {
         throw Exception('Empty response from API');
@@ -120,9 +120,7 @@ class TemperatureService {
 
   Future<Map<String, dynamic>> fetchTrendData(String city, String date) async {
     final token = await getAuthToken();
-    // Extract month-day from the date (e.g., "2025-06-18" -> "06-18")
-    final monthDay = date.substring(5); // Get "06-18" from "2025-06-18"
-    final url = Uri.parse('$apiBaseUrl/trend/$city/$monthDay');
+    final url = Uri.parse('$apiBaseUrl/trend/$city/$date');
 
     final response = await http.get(
       url,
@@ -133,7 +131,7 @@ class TemperatureService {
 
     if (response.statusCode == 200) {
       final responseBody = response.body;
-      print('Trend API Response for $city/$monthDay: $responseBody'); // Debug log
+      print('Trend API Response for $city/$date: $responseBody'); // Debug log
       
       if (responseBody.isEmpty) {
         throw Exception('Empty response from API');
@@ -153,9 +151,7 @@ class TemperatureService {
 
   Future<Map<String, dynamic>> fetchSummaryData(String city, String date) async {
     final token = await getAuthToken();
-    // Extract month-day from the date (e.g., "2025-06-18" -> "06-18")
-    final monthDay = date.substring(5); // Get "06-18" from "2025-06-18"
-    final url = Uri.parse('$apiBaseUrl/summary/$city/$monthDay');
+    final url = Uri.parse('$apiBaseUrl/summary/$city/$date');
 
     final response = await http.get(
       url,
@@ -166,7 +162,7 @@ class TemperatureService {
 
     if (response.statusCode == 200) {
       final responseBody = response.body;
-      print('Summary API Response for $city/$monthDay: $responseBody'); // Debug log
+      print('Summary API Response for $city/$date: $responseBody'); // Debug log
       
       if (responseBody.isEmpty) {
         throw Exception('Empty response from API');
