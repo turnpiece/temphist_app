@@ -48,6 +48,9 @@ dependencies:
   # Added Syncfusion charts package
   syncfusion_flutter_charts: ^29.2.11
 
+  # Render SVGs
+  flutter_svg: ^2.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -68,6 +71,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/logo.svg
+    - assets/logo.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

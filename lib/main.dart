@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'services/temperature_service.dart';
 
@@ -89,6 +90,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           'averageTemperature': averageTemperature,
           'trendSlope': trendSlope,
           'summary': summaryText,
+          'displayDate': _formatDayMonth(dateToUse),
+          'city': city,
         };
       } else {
         if (tempData.average?.yearRange != null) {
@@ -101,6 +104,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           'averageTemperature': averageTemperature,
           'trendSlope': trendSlope,
           'summary': summaryText,
+          'displayDate': _formatDayMonth(dateToUse),
+          'city': city,
         };
       }
     } catch (_) {
@@ -126,6 +131,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           'averageTemperature': averageTemperature,
           'trendSlope': trendSlope,
           'summary': summaryText,
+          'displayDate': _formatDayMonth(dateToUse),
+          'city': city,
         };
       } catch (_) {
         // Final fallback: just fetch year-by-year
@@ -135,6 +142,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           'averageTemperature': averageTemperature,
           'trendSlope': trendSlope,
           'summary': summaryText,
+          'displayDate': _formatDayMonth(dateToUse),
+          'city': city,
         };
       }
     }
@@ -145,7 +154,33 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     final double chartHeight = 800;
 
     return Scaffold(
-      appBar: AppBar(title: Text('Temperature Trends')),
+      backgroundColor: const Color(0xFF242456),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF242456),
+        elevation: 0,
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 8.0, right: 12.0),
+              child: SvgPicture.asset(
+                'logo.svg',
+                width: 40,
+                height: 40,
+              ),
+            ),
+            Text(
+              'TempHist',
+              style: TextStyle(
+                color: Color(0xFFFF6B6B),
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
+        ),
+      ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: futureChartData,
         builder: (context, snapshot) {
@@ -162,6 +197,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           final averageTemperature = data['averageTemperature'] as double?;
           final trendSlope = data['trendSlope'] as double?;
           final summaryText = data['summary'] as String?;
+          final displayDate = data['displayDate'] as String?;
+          final city = data['city'] as String?;
           
           debugPrint('Average temperature for plot band: $averageTemperature°C');
 
@@ -175,13 +212,50 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
+                    // Date and location above summary
+                    if (displayDate != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4.0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 40),
+                            child: Text(
+                              displayDate,
+                              style: const TextStyle(color: Color(0xFFECECEC), fontSize: 16, fontWeight: FontWeight.w400),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (city != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12.0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 40),
+                            child: Text(
+                              city,
+                              style: const TextStyle(color: Color(0xFFECECEC), fontSize: 16, fontWeight: FontWeight.w400),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                        ),
+                      ),
                     if (summaryText != null && summaryText.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16.0),
-                        child: Text(
-                          summaryText,
-                          style: TextStyle(color: Colors.green, fontSize: 18, fontWeight: FontWeight.w500),
-                          textAlign: TextAlign.center,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 40),
+                            child: Text(
+                              summaryText,
+                              style: TextStyle(color: Colors.green, fontSize: 18, fontWeight: FontWeight.w500),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
                         ),
                       ),
                     SizedBox(
@@ -220,7 +294,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                             ),
                         ],
                         primaryXAxis: CategoryAxis(
-                          labelStyle: TextStyle(fontSize: 12),
+                          labelStyle: TextStyle(fontSize: 12, color: Colors.grey[300]),
                           majorGridLines: MajorGridLines(width: 0),
                           labelIntersectAction: AxisLabelIntersectAction.hide,
                         ),
@@ -229,10 +303,42 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                           numberFormat: NumberFormat('0'),
                           minimum: yAxisMin,
                           majorGridLines: MajorGridLines(width: 0),
+                          labelStyle: TextStyle(fontSize: 12, color: Colors.grey[300]),
                         ),
                         plotAreaBorderWidth: 0,
                       ),
                     ),
+                    // Add average and trend info below the chart
+                    if (averageTemperature != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16.0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 40),
+                            child: Text(
+                              'Average: ${averageTemperature.toStringAsFixed(1)}°C',
+                              style: TextStyle(color: Colors.blue, fontSize: 16, fontWeight: FontWeight.w500),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (trendSlope != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 40),
+                            child: Text(
+                              'Trend: ${trendSlope > 0 ? 'rising' : 'falling'} at ${trendSlope.abs().toStringAsFixed(2)}°C/decade',
+                              style: TextStyle(color: Colors.yellow[700], fontSize: 16, fontWeight: FontWeight.w500),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -292,4 +398,28 @@ List<TemperatureChartData> _generateAverageData(List<TemperatureChartData> chart
       isCurrentYear: data.isCurrentYear,
     );
   }).toList();
+}
+
+String _formatDayMonth(DateTime date) {
+  final day = date.day;
+  final month = DateFormat('MMMM').format(date);
+  String suffix;
+  if (day >= 11 && day <= 13) {
+    suffix = 'th';
+  } else {
+    switch (day % 10) {
+      case 1:
+        suffix = 'st';
+        break;
+      case 2:
+        suffix = 'nd';
+        break;
+      case 3:
+        suffix = 'rd';
+        break;
+      default:
+        suffix = 'th';
+    }
+  }
+  return '$day$suffix $month';
 }
