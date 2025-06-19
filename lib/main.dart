@@ -42,27 +42,37 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     final city = 'London';
     final currentYear = dateToUse.year;
 
-    final List<TemperatureChartData> chartData = [];
+    List<TemperatureChartData> chartData = [];
     double? averageTemperature;
     double? trendSlope;
+    String? summaryText;
+    int startYear = currentYear - 50;
+    int endYear = currentYear;
 
-    // Get the complete data from the API
+    // Helper to fetch year-by-year data
+    Future<void> fetchYearlyData(int start, int end) async {
+      for (int year = start; year <= end; year++) {
+        final dateForYear = '$year-${formattedDate.substring(5)}';
+        try {
+          final tempData = await service.fetchTemperature(city, dateForYear);
+          chartData.add(TemperatureChartData(
+            year: year.toString(),
+            temperature: tempData.temperature ?? tempData.average?.temperature ?? 0.0,
+            isCurrentYear: year == currentYear,
+          ));
+        } catch (_) {}
+      }
+    }
+
+    // Try main /data/ endpoint first
     try {
       final tempData = await service.fetchCompleteData(city, '$currentYear-${formattedDate.substring(5)}');
-      
-      // Get the average temperature from the API response
       averageTemperature = tempData.average?.temperature;
-      debugPrint('Average temperature from API: $averageTemperature°C');
-      
-      // Get the trend slope from the API response
       trendSlope = tempData.trend?.slope;
-      debugPrint('Trend slope from API: $trendSlope°C/decade');
-      
-      // Use the series data if available
+      summaryText = tempData.summary;
+
       if (tempData.series?.data.isNotEmpty == true) {
         final seriesData = tempData.series!.data;
-        final currentYear = dateToUse.year;
-        
         for (final dataPoint in seriesData) {
           chartData.add(TemperatureChartData(
             year: dataPoint.x.toString(),
@@ -70,108 +80,64 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
             isCurrentYear: dataPoint.x == currentYear,
           ));
         }
-        
-        debugPrint('Loaded ${chartData.length} years from series data');
-      } else {
-        // Fallback to individual API calls if series data not available
-        debugPrint('No series data available, falling back to individual calls');
-        
-        // Get year range from the API response
-        int startYear = currentYear - 50; // fallback
-        int endYear = currentYear;
-        
         if (tempData.average?.yearRange != null) {
           startYear = tempData.average!.yearRange.start;
           endYear = tempData.average!.yearRange.end;
         }
-        
-        debugPrint('Year range from API: $startYear to $endYear');
-
-        // Fetch data for all years in the range
-        for (int year = startYear; year <= endYear; year++) {
-          final dateForYear = '$year-${formattedDate.substring(5)}';
-          try {
-            final yearTempData = await service.fetchTemperature(city, dateForYear);
-            chartData.add(TemperatureChartData(
-              year: year.toString(),
-              temperature: yearTempData.temperature ?? yearTempData.average?.temperature ?? 0.0,
-              isCurrentYear: year == currentYear,
-            ));
-            debugPrint('Successfully fetched data for $year: ${yearTempData.temperature ?? yearTempData.average?.temperature ?? 0.0}°C');
-          } catch (e) {
-            debugPrint('Failed to fetch data for $year: $e');
-          }
+        return {
+          'chartData': chartData,
+          'averageTemperature': averageTemperature,
+          'trendSlope': trendSlope,
+          'summary': summaryText,
+        };
+      } else {
+        if (tempData.average?.yearRange != null) {
+          startYear = tempData.average!.yearRange.start;
+          endYear = tempData.average!.yearRange.end;
         }
+        await fetchYearlyData(startYear, endYear);
+        return {
+          'chartData': chartData,
+          'averageTemperature': averageTemperature,
+          'trendSlope': trendSlope,
+          'summary': summaryText,
+        };
       }
-    } catch (e) {
-      debugPrint('Failed to get complete data from API: $e');
-      
-      // Try to get average data as fallback
+    } catch (_) {
+      // Fallback: try /average/, /trend/, /summary/ endpoints
       try {
         final averageData = await service.fetchAverageData(city, '$currentYear-${formattedDate.substring(5)}');
         averageTemperature = averageData['average']?.toDouble();
-        debugPrint('Average temperature from average endpoint: $averageTemperature°C');
-        
-        // Try to get trend data as well
-        try {
-          final trendData = await service.fetchTrendData(city, '$currentYear-${formattedDate.substring(5)}');
-          trendSlope = trendData['slope']?.toDouble();
-          debugPrint('Trend slope from trend endpoint: $trendSlope°C/decade');
-        } catch (trendError) {
-          debugPrint('Failed to get trend data: $trendError');
-        }
-        
-        // Get year range from average data
-        int startYear = currentYear - 50; // fallback
-        int endYear = currentYear;
-        
         if (averageData['year_range'] != null) {
           startYear = averageData['year_range']['start'];
           endYear = averageData['year_range']['end'];
         }
-        
-        debugPrint('Year range from average API: $startYear to $endYear');
-        
-        // Fetch individual year data
-        for (int year = startYear; year <= endYear; year++) {
-          final dateForYear = '$year-${formattedDate.substring(5)}';
-          try {
-            final tempData = await service.fetchTemperature(city, dateForYear);
-            chartData.add(TemperatureChartData(
-              year: year.toString(),
-              temperature: tempData.temperature ?? tempData.average?.temperature ?? 0.0,
-              isCurrentYear: year == currentYear,
-            ));
-            debugPrint('Successfully fetched data for $year: ${tempData.temperature ?? tempData.average?.temperature ?? 0.0}°C');
-          } catch (e) {
-            debugPrint('Failed to fetch data for $year: $e');
-          }
-        }
-      } catch (averageError) {
-        debugPrint('Failed to get average data: $averageError');
-        // Final fallback to current approach
-        for (int year = currentYear - 50; year <= currentYear; year++) {
-          final dateForYear = '$year-${formattedDate.substring(5)}';
-          try {
-            final tempData = await service.fetchTemperature(city, dateForYear);
-            chartData.add(TemperatureChartData(
-              year: year.toString(),
-              temperature: tempData.temperature ?? tempData.average?.temperature ?? 0.0,
-              isCurrentYear: year == currentYear,
-            ));
-            debugPrint('Fallback: Successfully fetched data for $year: ${tempData.temperature ?? tempData.average?.temperature ?? 0.0}°C');
-          } catch (e) {
-            debugPrint('Failed to fetch data for $year: $e');
-          }
-        }
+        try {
+          final trendData = await service.fetchTrendData(city, '$currentYear-${formattedDate.substring(5)}');
+          trendSlope = trendData['slope']?.toDouble();
+        } catch (_) {}
+        try {
+          final summaryData = await service.fetchSummaryData(city, '$currentYear-${formattedDate.substring(5)}');
+          summaryText = summaryData['summary'] as String?;
+        } catch (_) {}
+        await fetchYearlyData(startYear, endYear);
+        return {
+          'chartData': chartData,
+          'averageTemperature': averageTemperature,
+          'trendSlope': trendSlope,
+          'summary': summaryText,
+        };
+      } catch (_) {
+        // Final fallback: just fetch year-by-year
+        await fetchYearlyData(startYear, endYear);
+        return {
+          'chartData': chartData,
+          'averageTemperature': averageTemperature,
+          'trendSlope': trendSlope,
+          'summary': summaryText,
+        };
       }
     }
-
-    return {
-      'chartData': chartData,
-      'averageTemperature': averageTemperature,
-      'trendSlope': trendSlope,
-    };
   }
 
   @override
@@ -195,6 +161,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           final chartData = data['chartData'] as List<TemperatureChartData>;
           final averageTemperature = data['averageTemperature'] as double?;
           final trendSlope = data['trendSlope'] as double?;
+          final summaryText = data['summary'] as String?;
           
           debugPrint('Average temperature for plot band: $averageTemperature°C');
 
@@ -206,54 +173,67 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
             child: Center(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: SizedBox(
-                  height: chartHeight,
-                  child: SfCartesianChart(
-                    margin: EdgeInsets.symmetric(horizontal: 40),
-                    series: [
-                      BarSeries<TemperatureChartData, String>(
-                        dataSource: chartData,
-                        xValueMapper: (TemperatureChartData data, int index) => data.year,
-                        yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                        pointColorMapper: (TemperatureChartData data, int index) =>
-                            data.isCurrentYear ? Colors.green : Colors.red,
-                        width: 0.8,
-                        name: 'Yearly Temperature',
+                child: Column(
+                  children: [
+                    if (summaryText != null && summaryText.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: Text(
+                          summaryText,
+                          style: TextStyle(color: Colors.green, fontSize: 18, fontWeight: FontWeight.w500),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                      if (averageTemperature != null)
-                        LineSeries<TemperatureChartData, String>(
-                          dataSource: _generateAverageData(chartData, averageTemperature!),
-                          xValueMapper: (TemperatureChartData data, int index) => data.year,
-                          yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                          color: Colors.blue,
-                          width: 2,
-                          name: 'Average Temperature',
-                          markerSettings: MarkerSettings(isVisible: false),
+                    SizedBox(
+                      height: chartHeight,
+                      child: SfCartesianChart(
+                        margin: EdgeInsets.symmetric(horizontal: 40),
+                        series: [
+                          BarSeries<TemperatureChartData, String>(
+                            dataSource: chartData,
+                            xValueMapper: (TemperatureChartData data, int index) => data.year,
+                            yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                            pointColorMapper: (TemperatureChartData data, int index) =>
+                                data.isCurrentYear ? Colors.green : Colors.red,
+                            width: 0.8,
+                            name: 'Yearly Temperature',
+                          ),
+                          if (averageTemperature != null)
+                            LineSeries<TemperatureChartData, String>(
+                              dataSource: _generateAverageData(chartData, averageTemperature!),
+                              xValueMapper: (TemperatureChartData data, int index) => data.year,
+                              yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                              color: Colors.blue,
+                              width: 2,
+                              name: 'Average Temperature',
+                              markerSettings: MarkerSettings(isVisible: false),
+                            ),
+                          if (trendSlope != null)
+                            LineSeries<TemperatureChartData, String>(
+                              dataSource: _generateTrendData(chartData, trendSlope!),
+                              xValueMapper: (TemperatureChartData data, int index) => data.year,
+                              yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                              color: Colors.yellow,
+                              width: 2,
+                              name: 'Trend',
+                              markerSettings: MarkerSettings(isVisible: false),
+                            ),
+                        ],
+                        primaryXAxis: CategoryAxis(
+                          labelStyle: TextStyle(fontSize: 12),
+                          majorGridLines: MajorGridLines(width: 0),
+                          labelIntersectAction: AxisLabelIntersectAction.hide,
                         ),
-                      if (trendSlope != null)
-                        LineSeries<TemperatureChartData, String>(
-                          dataSource: _generateTrendData(chartData, trendSlope!),
-                          xValueMapper: (TemperatureChartData data, int index) => data.year,
-                          yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                          color: Colors.yellow,
-                          width: 2,
-                          name: 'Trend',
-                          markerSettings: MarkerSettings(isVisible: false),
+                        primaryYAxis: NumericAxis(
+                          labelFormat: '{value}°C',
+                          numberFormat: NumberFormat('0'),
+                          minimum: yAxisMin,
+                          majorGridLines: MajorGridLines(width: 0),
                         ),
-                    ],
-                    primaryXAxis: CategoryAxis(
-                      labelStyle: TextStyle(fontSize: 12),
-                      majorGridLines: MajorGridLines(width: 0),
-                      labelIntersectAction: AxisLabelIntersectAction.hide,
+                        plotAreaBorderWidth: 0,
+                      ),
                     ),
-                    primaryYAxis: NumericAxis(
-                      labelFormat: '{value}°C',
-                      numberFormat: NumberFormat('0'),
-                      minimum: yAxisMin,
-                      majorGridLines: MajorGridLines(width: 0),
-                    ),
-                    plotAreaBorderWidth: 0,
-                  ),
+                  ],
                 ),
               ),
             ),
