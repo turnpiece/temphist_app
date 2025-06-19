@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:geolocator/geolocator.dart' as geo;
+import 'package:geocoding/geocoding.dart';
 
 import 'services/temperature_service.dart';
 
@@ -40,7 +42,26 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     final formattedDate = DateFormat('yyyy-MM-dd').format(dateToUse);
 
     final service = TemperatureService();
-    final city = 'London';
+    String city = 'London';
+    // Try to get user's city via geolocation
+    try {
+      bool serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
+      if (serviceEnabled) {
+        geo.LocationPermission permission = await geo.Geolocator.checkPermission();
+        if (permission == geo.LocationPermission.denied) {
+          permission = await geo.Geolocator.requestPermission();
+        }
+        if (permission == geo.LocationPermission.whileInUse || permission == geo.LocationPermission.always) {
+          geo.Position position = await geo.Geolocator.getCurrentPosition(desiredAccuracy: geo.LocationAccuracy.low);
+          List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+          if (placemarks.isNotEmpty && placemarks.first.locality != null && placemarks.first.locality!.isNotEmpty) {
+            city = placemarks.first.locality!;
+          }
+        }
+      }
+    } catch (_) {
+      // Ignore and fall back to London
+    }
     final currentYear = dateToUse.year;
 
     List<TemperatureChartData> chartData = [];
@@ -260,52 +281,65 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                       ),
                     SizedBox(
                       height: chartHeight,
-                      child: SfCartesianChart(
-                        margin: EdgeInsets.symmetric(horizontal: 40),
-                        series: [
-                          BarSeries<TemperatureChartData, String>(
-                            dataSource: chartData,
-                            xValueMapper: (TemperatureChartData data, int index) => data.year,
-                            yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                            pointColorMapper: (TemperatureChartData data, int index) =>
-                                data.isCurrentYear ? Colors.green : Colors.red,
-                            width: 0.8,
-                            name: 'Yearly Temperature',
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minWidth: 350, maxWidth: 800),
+                          child: SfCartesianChart(
+                            margin: EdgeInsets.symmetric(horizontal: 40),
+                            tooltipBehavior: TooltipBehavior(
+                              enable: true,
+                              format: 'point.x: point.y',
+                              canShowMarker: false,
+                              header: '',
+                              textStyle: TextStyle(fontSize: 16),
+                            ),
+                            series: [
+                              BarSeries<TemperatureChartData, String>(
+                                dataSource: chartData,
+                                xValueMapper: (TemperatureChartData data, int index) => data.year,
+                                yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                                pointColorMapper: (TemperatureChartData data, int index) =>
+                                    data.isCurrentYear ? Colors.green : const Color(0xFFFF6B6B),
+                                width: 0.8,
+                                name: 'Yearly Temperature',
+                                enableTooltip: true,
+                              ),
+                              if (averageTemperature != null)
+                                LineSeries<TemperatureChartData, String>(
+                                  dataSource: _generateAverageData(chartData, averageTemperature!),
+                                  xValueMapper: (TemperatureChartData data, int index) => data.year,
+                                  yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                                  color: Colors.blue,
+                                  width: 2,
+                                  name: 'Average Temperature',
+                                  markerSettings: MarkerSettings(isVisible: false),
+                                ),
+                              if (trendSlope != null)
+                                LineSeries<TemperatureChartData, String>(
+                                  dataSource: _generateTrendData(chartData, trendSlope!),
+                                  xValueMapper: (TemperatureChartData data, int index) => data.year,
+                                  yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                                  color: Colors.yellow,
+                                  width: 2,
+                                  name: 'Trend',
+                                  markerSettings: MarkerSettings(isVisible: false),
+                                ),
+                            ],
+                            primaryXAxis: CategoryAxis(
+                              labelStyle: TextStyle(fontSize: 12, color: Colors.grey[300]),
+                              majorGridLines: MajorGridLines(width: 0),
+                              labelIntersectAction: AxisLabelIntersectAction.hide,
+                            ),
+                            primaryYAxis: NumericAxis(
+                              labelFormat: '{value}°C',
+                              numberFormat: NumberFormat('0'),
+                              minimum: yAxisMin,
+                              majorGridLines: MajorGridLines(width: 0),
+                              labelStyle: TextStyle(fontSize: 12, color: Colors.grey[300]),
+                            ),
+                            plotAreaBorderWidth: 0,
                           ),
-                          if (averageTemperature != null)
-                            LineSeries<TemperatureChartData, String>(
-                              dataSource: _generateAverageData(chartData, averageTemperature!),
-                              xValueMapper: (TemperatureChartData data, int index) => data.year,
-                              yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                              color: Colors.blue,
-                              width: 2,
-                              name: 'Average Temperature',
-                              markerSettings: MarkerSettings(isVisible: false),
-                            ),
-                          if (trendSlope != null)
-                            LineSeries<TemperatureChartData, String>(
-                              dataSource: _generateTrendData(chartData, trendSlope!),
-                              xValueMapper: (TemperatureChartData data, int index) => data.year,
-                              yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                              color: Colors.yellow,
-                              width: 2,
-                              name: 'Trend',
-                              markerSettings: MarkerSettings(isVisible: false),
-                            ),
-                        ],
-                        primaryXAxis: CategoryAxis(
-                          labelStyle: TextStyle(fontSize: 12, color: Colors.grey[300]),
-                          majorGridLines: MajorGridLines(width: 0),
-                          labelIntersectAction: AxisLabelIntersectAction.hide,
                         ),
-                        primaryYAxis: NumericAxis(
-                          labelFormat: '{value}°C',
-                          numberFormat: NumberFormat('0'),
-                          minimum: yAxisMin,
-                          majorGridLines: MajorGridLines(width: 0),
-                          labelStyle: TextStyle(fontSize: 12, color: Colors.grey[300]),
-                        ),
-                        plotAreaBorderWidth: 0,
                       ),
                     ),
                     // Add average and trend info below the chart

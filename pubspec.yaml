@@ -51,6 +51,10 @@ dependencies:
   # Render SVGs
   flutter_svg: ^2.0.0
 
+  # Added geolocator
+  geolocator: ^10.1.0
+  geocoding: ^2.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
