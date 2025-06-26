@@ -35,18 +35,18 @@ class TemperatureData {
       trend: json['trend'] != null ? Trend.fromJson(json['trend']) : null,
       summary: json['summary'],
       currentWeather: json['current_weather'],
-      series: json['series'] != null ? Series.fromJson(json['series']) : null,
+      series: json['weather'] != null ? Series.fromJson(json['weather']) : null,
     );
   }
 }
 
 class Average {
-  final double temperature;
+  final double? temperature;
   final String unit;
   final int dataPoints;
   final YearRange yearRange;
   final List<dynamic> missingYears;
-  final double completeness;
+  final double? completeness;
 
   Average({
     required this.temperature,
@@ -58,13 +58,15 @@ class Average {
   });
 
   factory Average.fromJson(Map<String, dynamic> json) {
+    final temp = json['average'];
+    final completeness = json['completeness'];
     return Average(
-      temperature: json['temperature'].toDouble(),
-      unit: json['unit'],
-      dataPoints: json['data_points'],
-      yearRange: YearRange.fromJson(json['year_range']),
-      missingYears: json['missing_years'],
-      completeness: json['completeness'].toDouble(),
+      temperature: temp != null ? (temp as num).toDouble() : null,
+      unit: json['unit'] ?? '',
+      dataPoints: json['data_points'] ?? 0,
+      yearRange: json['year_range'] != null ? YearRange.fromJson(json['year_range']) : YearRange(start: 0, end: 0),
+      missingYears: json['missing_years'] ?? [],
+      completeness: completeness != null ? (completeness as num).toDouble() : null,
     );
   }
 }
@@ -84,15 +86,16 @@ class YearRange {
 }
 
 class Trend {
-  final double slope;
+  final double? slope;
   final String units;
 
   Trend({required this.slope, required this.units});
 
   factory Trend.fromJson(Map<String, dynamic> json) {
+    final slope = json['slope'];
     return Trend(
-      slope: json['slope'].toDouble(),
-      units: json['units'],
+      slope: slope != null ? (slope as num).toDouble() : null,
+      units: json['units'] ?? '',
     );
   }
 }
@@ -115,35 +118,30 @@ class Series {
 
 class DataPoint {
   final int x;
-  final double y;
+  final double? y;
 
   DataPoint({required this.x, required this.y});
 
   factory DataPoint.fromJson(Map<String, dynamic> json) {
+    final y = json['y'];
     return DataPoint(
-      x: json['x'],
-      y: json['y'].toDouble(),
+      x: json['x'] ?? 0,
+      y: y != null ? (y as num).toDouble() : null,
     );
   }
 }
 
 class Metadata {
-  final String location;
-  final String date;
   final int totalYears;
   final int availableYears;
 
   Metadata({
-    required this.location,
-    required this.date,
     required this.totalYears,
     required this.availableYears,
   });
 
   factory Metadata.fromJson(Map<String, dynamic> json) {
     return Metadata(
-      location: json['location'],
-      date: json['date'],
       totalYears: json['total_years'],
       availableYears: json['available_years'],
     );

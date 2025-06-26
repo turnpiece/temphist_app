@@ -68,3 +68,4 @@ ios/.flutter-plugins-dependencies
 lib/firebase_options.dart
 ios/Runner/GoogleService-Info.plist
 GoogleService-Info.plist
+android/app/google-services.json
