@@ -67,6 +67,7 @@ ios/.flutter-plugins-dependencies
 # Firebase configuration files
 lib/firebase_options.dart
 firebase_options_escaped.txt
+firebase_options.b64
 ios/Runner/GoogleService-Info.plist
 GoogleService-Info.plist
 android/app/google-services.json

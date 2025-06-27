@@ -27,14 +27,9 @@ jobs:
       - name: 📦 Install dependencies
         run: flutter pub get
 
-      - name: 🔐 Restore firebase_options.dart
-        shell: bash
+      - name: 🔐 Decode firebase_options.dart from base64
         run: |
-          printf "%s" "${{ secrets.FIREBASE_OPTIONS_DART }}" > lib/firebase_options.dart
-
-      - name: 🧪 Debug firebase_options.dart
-        run: |
-          head -n 20 lib/firebase_options.dart
+          echo "${{ secrets.FIREBASE_OPTIONS_B64 }}" | base64 --decode > lib/firebase_options.dart
 
       - name: 🔧 Build iOS app
         run: flutter build ios --release --no-codesign
