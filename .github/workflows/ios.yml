@@ -31,9 +31,9 @@ jobs:
         run: echo "${{ secrets.FIREBASE_OPTIONS_DART }}" | head -c 60
 
       - name: 🔐 Restore firebase_options.dart
-        run: |
-          echo "${{ secrets.FIREBASE_OPTIONS_DART }}" > lib/firebase_options.dart
         shell: bash
+        run: |
+          echo "${{ secrets.FIREBASE_OPTIONS_DART }}" | sed 's/\\n/\n/g' > lib/firebase_options.dart
 
       - name: 🔧 Build iOS app
         run: flutter build ios --release --no-codesign
