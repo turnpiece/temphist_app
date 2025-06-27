@@ -17,8 +17,8 @@ jobs:
       - name: 🚀 Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.22.1" # Change if needed
-          channel: "stable"
+          flutter-version: "3.23.0-0.1.pre"
+          channel: "beta"
 
       - name: 🔍 Check Flutter and Dart versions
         run: |
