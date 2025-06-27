@@ -27,9 +27,6 @@ jobs:
       - name: 📦 Install dependencies
         run: flutter pub get
 
-      - name: 🔍 Show secret preview for debugging
-        run: echo "${{ secrets.FIREBASE_OPTIONS_DART }}" | head -c 60
-
       - name: 🔐 Restore firebase_options.dart
         shell: bash
         run: |
