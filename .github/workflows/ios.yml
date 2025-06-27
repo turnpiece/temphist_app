@@ -38,6 +38,20 @@ jobs:
       - name: 🔧 Build iOS app
         run: flutter build ios --release --no-codesign
 
+      - name: 🧩 Build .ipa file
+        run: |
+          mkdir -p build/ios/ipa_payload/Payload
+          cp -r build/ios/iphoneos/Runner.app build/ios/ipa_payload/Payload/
+          cd build/ios/ipa_payload
+          zip -r ../temphist.ipa Payload
+          cd ../../..
+
+      - name: 📦 Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: temphist-ipa
+          path: build/ios/temphist.ipa
+
       - name: ✅ Archive output
         run: |
           mkdir -p build-artifacts
