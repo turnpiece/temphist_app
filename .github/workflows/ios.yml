@@ -46,6 +46,17 @@ jobs:
           zip -r ../temphist.ipa Payload
           cd ../../..
 
+      - name: 🚀 Upload to TestFlight with Fastlane
+        working-directory: ios
+        run: bundle exec fastlane beta
+        env:
+          APP_STORE_KEY_ID: ${{ secrets.APP_STORE_KEY_ID }}
+          APP_STORE_ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}
+          APP_STORE_PRIVATE_KEY: ${{ secrets.APP_STORE_PRIVATE_KEY }}
+          APP_IDENTIFIER: ${{ secrets.APP_IDENTIFIER }}
+          APP_STORE_TEAM_ID: ${{ secrets.APP_STORE_TEAM_ID }}
+          FASTLANE_DISABLE_COLORS: 1
+
       - name: 📦 Upload .ipa artifact
         uses: actions/upload-artifact@v4
         with:
