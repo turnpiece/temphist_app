@@ -35,17 +35,6 @@ jobs:
         run: |
           echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_B64 }}" | base64 --decode > ios/Runner/GoogleService-Info.plist
 
-      - name: 🔧 Build iOS app
-        run: flutter build ios --release --no-codesign
-
-      - name: 🧩 Build .ipa file
-        run: |
-          mkdir -p build/ios/ipa_payload/Payload
-          cp -r build/ios/iphoneos/Runner.app build/ios/ipa_payload/Payload/
-          cd build/ios/ipa_payload
-          zip -r ../temphist.ipa Payload
-          cd ../../..
-
       - name: 🛠️ Install Fastlane
         working-directory: ios
         run: bundle install
