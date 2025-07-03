@@ -21,7 +21,7 @@ platform :ios do
     )
 
     update_project_provisioning(
-      xcodeproj: "ios/Runner.xcodeproj",
+      xcodeproj: "Runner.xcodeproj",
       build_configuration: "Release",
       target_filter: "Runner",
       code_signing_identity: "Apple Distribution",
