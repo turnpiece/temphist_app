@@ -29,6 +29,7 @@ platform :ios do
         },
         signingStyle: "manual",
         signingCertificate: "Apple Distribution"
+        teamID: "77X2NFV437"
       }
     )    
 
