@@ -22,8 +22,15 @@ platform :ios do
 
     build_app(
       scheme: "Runner",
-      export_method: "app-store"
-    )
+      export_method: "app-store",
+      export_options: {
+        provisioningProfiles: {
+          ENV["APP_IDENTIFIER"] => "match AppStore #{ENV["APP_IDENTIFIER"]}"
+        },
+        signingStyle: "manual",
+        signingCertificate: "Apple Distribution"
+      }
+    )    
 
     upload_to_testflight(
       api_key: api_key,

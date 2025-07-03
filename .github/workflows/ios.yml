@@ -39,6 +39,11 @@ jobs:
         working-directory: ios
         run: bundle install
 
+      - name: 📦 Install CocoaPods dependencies
+        working-directory: ios
+        run: |
+          pod install
+
       - name: 🚀 Upload to TestFlight with Fastlane
         working-directory: ios
         run: bundle exec fastlane beta
