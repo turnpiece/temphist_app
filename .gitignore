@@ -61,6 +61,7 @@ ios/.flutter-plugins-dependencies
 
 # Generated files
 *.lock
+!ios/Podfile.lock
 *.generated.*
 *.g.dart
 
