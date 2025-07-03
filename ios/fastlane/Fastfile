@@ -20,6 +20,16 @@ platform :ios do
       api_key: api_key
     )
 
+    update_project_provisioning(
+      xcodeproj: "ios/Runner.xcodeproj",
+      profile: "/Users/runner/Library/MobileDevice/Provisioning Profiles/#{ENV['SIGH_#{ENV['APP_IDENTIFIER'].gsub('.', '_')}_appstore_udh_profile-path'].split('/').last}", # optional
+      build_configuration: "Release",
+      target_filter: "Runner",
+      code_signing_identity: "Apple Distribution",
+      profile_name: "match AppStore #{ENV["APP_IDENTIFIER"]}",
+      team_id: ENV["APP_STORE_TEAM_ID"]
+    )
+
     build_app(
       scheme: "Runner",
       export_method: "app-store",
@@ -30,7 +40,7 @@ platform :ios do
         provisioningProfileSpecifier: "match AppStore #{ENV["APP_IDENTIFIER"]}",
         signingStyle: "manual",
         signingCertificate: "Apple Distribution",
-        teamID: "77X2NFV437"
+        teamID: ENV["APP_STORE_TEAM_ID"]
       }
     )    
 
