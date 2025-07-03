@@ -28,7 +28,7 @@ platform :ios do
           ENV["APP_IDENTIFIER"] => "match AppStore #{ENV["APP_IDENTIFIER"]}"
         },
         signingStyle: "manual",
-        signingCertificate: "Apple Distribution"
+        signingCertificate: "Apple Distribution",
         teamID: "77X2NFV437"
       }
     )    
