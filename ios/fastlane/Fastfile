@@ -27,6 +27,7 @@ platform :ios do
         provisioningProfiles: {
           ENV["APP_IDENTIFIER"] => "match AppStore #{ENV["APP_IDENTIFIER"]}"
         },
+        provisioningProfileSpecifier: "match AppStore #{ENV["APP_IDENTIFIER"]}",
         signingStyle: "manual",
         signingCertificate: "Apple Distribution",
         teamID: "77X2NFV437"
