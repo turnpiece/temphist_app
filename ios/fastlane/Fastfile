@@ -22,7 +22,6 @@ platform :ios do
 
     update_project_provisioning(
       xcodeproj: "ios/Runner.xcodeproj",
-      profile: "/Users/runner/Library/MobileDevice/Provisioning Profiles/#{ENV['SIGH_#{ENV['APP_IDENTIFIER'].gsub('.', '_')}_appstore_udh_profile-path'].split('/').last}", # optional
       build_configuration: "Release",
       target_filter: "Runner",
       code_signing_identity: "Apple Distribution",
