@@ -38,8 +38,8 @@ platform :ios do
       code_signing_identity: "Apple Distribution",
       profile: profile_path
     )
-    
-    timeout(time: 20, time_unit: 'minutes') do
+
+    Timeout::timeout(1200) do # 20 minutes = 1200 seconds
       build_app(
         scheme: "Runner",
         export_method: "app-store",
