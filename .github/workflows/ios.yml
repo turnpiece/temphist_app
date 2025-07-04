@@ -53,7 +53,7 @@ jobs:
 
       - name: 🚀 Upload to TestFlight with Fastlane
         working-directory: ios
-        run: bundle exec fastlane beta
+        run: bundle exec fastlane beta --verbose
         env:
           APP_STORE_KEY_ID: ${{ secrets.APP_STORE_KEY_ID }}
           APP_STORE_ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}

@@ -38,20 +38,22 @@ platform :ios do
       code_signing_identity: "Apple Distribution",
       profile: profile_path
     )
-
-    build_app(
-      scheme: "Runner",
-      export_method: "app-store",
-      export_options: {
-        provisioningProfiles: {
-          ENV["APP_IDENTIFIER"] => "match AppStore #{ENV["APP_IDENTIFIER"]}"
+    
+    timeout(time: 20, time_unit: 'minutes') do
+      build_app(
+        scheme: "Runner",
+        export_method: "app-store",
+        export_options: {
+          provisioningProfiles: {
+            ENV["APP_IDENTIFIER"] => "match AppStore #{ENV["APP_IDENTIFIER"]}"
+          },
+          signingStyle: "manual",
+          signingCertificate: "Apple Distribution",
+          teamID: ENV["APP_STORE_TEAM_ID"]
         },
-        signingStyle: "manual",
-        signingCertificate: "Apple Distribution",
-        teamID: ENV["APP_STORE_TEAM_ID"]
-      },
-      workspace: "Runner.xcworkspace"
-    )
+        workspace: "Runner.xcworkspace"
+      )
+    end
 
     upload_to_testflight(
       api_key: api_key
