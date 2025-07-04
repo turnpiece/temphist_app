@@ -21,10 +21,14 @@ platform :ios do
       generate_apple_certs: true
     )
 
-    uuid = ENV["sigh_#{ENV["APP_IDENTIFIER"].gsub('.', '_')}_appstore"]
-    UI.user_error!("Missing provisioning profile UUID in ENV") if uuid.to_s.empty?
+    # Fallback: scan the installed profiles for one matching the app identifier
+    profile_dir = File.join(ENV["HOME"], "Library/MobileDevice/Provisioning Profiles")
+    profile_path = Dir["#{profile_dir}/*.mobileprovision"].find do |path|
+      File.read(path).include?(ENV["APP_IDENTIFIER"])
+    end
 
-    profile_path = File.join(ENV["HOME"], "Library/MobileDevice/Provisioning Profiles", "#{uuid}.mobileprovision")
+    UI.user_error!("Could not find provisioning profile for #{ENV["APP_IDENTIFIER"]}") if profile_path.nil?
+
     UI.message("Using provisioning profile at path: #{profile_path}")
 
     update_project_provisioning(
