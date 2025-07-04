@@ -49,7 +49,8 @@ platform :ios do
         signingStyle: "manual",
         signingCertificate: "Apple Distribution",
         teamID: ENV["APP_STORE_TEAM_ID"]
-      }
+      },
+      workspace: "Runner.xcworkspace"
     )
 
     upload_to_testflight(
