@@ -20,8 +20,16 @@ platform :ios do
       api_key: api_key
     )
 
+    ENV.select { |k,v| k.include?("SIGH") }.each { |k,v| UI.message("#{k}=#{v}") }
+
     profile_env_key = "SIGH_#{ENV['APP_IDENTIFIER'].gsub('.', '_')}_appstore_profile-path"
 
+    UI.message("Using provisioning profile at path: #{ENV[profile_env_key]}")
+
+    if ENV[profile_env_key].nil?
+      UI.user_error!("Missing provisioning profile path in env variable #{profile_env_key}")
+    end
+    
     update_project_provisioning(
       xcodeproj: "Runner.xcodeproj",
       build_configuration: "Release",
