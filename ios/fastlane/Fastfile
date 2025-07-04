@@ -20,8 +20,8 @@ platform :ios do
       api_key: api_key
     )
 
-    profile_mapping = lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING]
-    profile_path = profile_mapping[ENV["APP_IDENTIFIER"]]
+    profile_path = lane_context[:provisioning_profile_path]
+    UI.user_error!("No provisioning profile path set in lane_context") if profile_path.to_s.empty?
     
     UI.message("Using provisioning profile at path: #{profile_path}")
     
