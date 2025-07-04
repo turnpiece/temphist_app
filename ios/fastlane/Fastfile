@@ -12,7 +12,7 @@ platform :ios do
       is_key_content_base64: true
     )      
 
-    profile_mapping = match(
+    match(
       api_key: api_key,
       type: "appstore",
       app_identifier: ENV["APP_IDENTIFIER"],
@@ -21,8 +21,10 @@ platform :ios do
       generate_apple_certs: true
     )
 
-    profile_path = profile_mapping[ENV["APP_IDENTIFIER"]]
-    UI.user_error!("Profile path for #{ENV['APP_IDENTIFIER']} not found") if profile_path.to_s.empty?
+    uuid = ENV["sigh_#{ENV["APP_IDENTIFIER"].gsub('.', '_')}_appstore"]
+    UI.user_error!("Missing provisioning profile UUID in ENV") if uuid.to_s.empty?
+
+    profile_path = File.join(ENV["HOME"], "Library/MobileDevice/Provisioning Profiles", "#{uuid}.mobileprovision")
     UI.message("Using provisioning profile at path: #{profile_path}")
 
     update_project_provisioning(
