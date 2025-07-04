@@ -44,6 +44,13 @@ jobs:
         run: |
           pod install
 
+      - name: 🔍 Debug App Store Private Key
+        run: |
+          echo "$APP_STORE_PRIVATE_KEY" | od -c
+          echo "Lines: $(echo "$APP_STORE_PRIVATE_KEY" | wc -l)"
+        env:
+          APP_STORE_PRIVATE_KEY: ${{ secrets.APP_STORE_PRIVATE_KEY }}
+
       - name: 🚀 Upload to TestFlight with Fastlane
         working-directory: ios
         run: bundle exec fastlane beta
