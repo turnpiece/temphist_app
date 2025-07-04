@@ -12,7 +12,7 @@ platform :ios do
       is_key_content_base64: true
     )      
 
-    profile_path = match(
+    profile_mapping = match(
       api_key: api_key,
       type: "appstore",
       app_identifier: ENV["APP_IDENTIFIER"],
@@ -21,6 +21,8 @@ platform :ios do
       generate_apple_certs: true
     )
 
+    profile_path = profile_mapping[ENV["APP_IDENTIFIER"]]
+    UI.user_error!("Profile path for #{ENV['APP_IDENTIFIER']} not found") if profile_path.to_s.empty?
     UI.message("Using provisioning profile at path: #{profile_path}")
 
     update_project_provisioning(
