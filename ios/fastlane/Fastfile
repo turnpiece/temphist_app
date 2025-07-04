@@ -20,9 +20,10 @@ platform :ios do
       api_key: api_key
     )
 
-    profile_path = lane_context[:provisioning_profile_path]
-    UI.user_error!("No provisioning profile path set in lane_context") if profile_path.to_s.empty?
+    profile_env_key = "SIGH_#{ENV['APP_IDENTIFIER'].gsub('.', '_')}_appstore_profile-path"
+    profile_path = ENV[profile_env_key]
     
+    UI.user_error!("Missing provisioning profile path in env variable #{profile_env_key}") if profile_path.to_s.empty?
     UI.message("Using provisioning profile at path: #{profile_path}")
     
     update_project_provisioning(
