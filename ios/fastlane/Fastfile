@@ -20,22 +20,23 @@ platform :ios do
       api_key: api_key
     )
 
-    # Extract UUID from profile ENV
-    uuid_env_key = "SIGH_#{ENV['APP_IDENTIFIER'].gsub('.', '_')}_appstore"
-    uuid = ENV[uuid_env_key]
+    uuid = ENV["SIGH_#{ENV['APP_IDENTIFIER'].gsub('.', '_')}_appstore"]
 
-    UI.user_error!("Missing provisioning profile UUID in ENV #{uuid_env_key}") if uuid.to_s.empty?
-
+    if uuid.to_s.empty?
+      UI.user_error!("Missing provisioning profile UUID in ENV")
+    end
+    
     profile_path = File.join(ENV['HOME'], "Library/MobileDevice/Provisioning Profiles", "#{uuid}.mobileprovision")
+    
     UI.message("Using provisioning profile at path: #{profile_path}")
-
+    
     update_project_provisioning(
       xcodeproj: "Runner.xcodeproj",
       build_configuration: "Release",
       target_filter: "Runner",
       code_signing_identity: "Apple Distribution",
       profile: profile_path
-    )
+    )    
 
     build_app(
       scheme: "Runner",
