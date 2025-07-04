@@ -20,11 +20,14 @@ platform :ios do
       api_key: api_key
     )
 
+    profile_env_key = "SIGH_#{ENV['APP_IDENTIFIER'].gsub('.', '_')}_appstore_profile-path"
+
     update_project_provisioning(
       xcodeproj: "Runner.xcodeproj",
       build_configuration: "Release",
       target_filter: "Runner",
-      code_signing_identity: "Apple Distribution"
+      code_signing_identity: "Apple Distribution",
+      profile: ENV[profile_env_key]
     )
 
     build_app(
