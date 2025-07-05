@@ -62,7 +62,9 @@ platform :ios do
           signingCertificate: "Apple Distribution",
           teamID: ENV["APP_STORE_TEAM_ID"]
         },
-        workspace: "Runner.xcworkspace"
+        workspace: "Runner.xcworkspace",
+        build_number: ENV["BUILD_NUMBER"] || Time.now.strftime("%Y%m%d%H%M"),
+        version_number: ENV["VERSION_NUMBER"] || "1.0.0"
       )
     end
 
