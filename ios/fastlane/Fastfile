@@ -58,6 +58,8 @@ platform :ios do
       build_app(
         scheme: "Runner",
         export_method: "app-store",
+        output_directory: "ios/build",
+        output_name: "Runner.ipa",
         export_options: {
           provisioningProfiles: {
             ENV["APP_IDENTIFIER"] => "match AppStore #{ENV["APP_IDENTIFIER"]}"
