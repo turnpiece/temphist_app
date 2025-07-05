@@ -35,6 +35,12 @@ jobs:
         run: |
           echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_B64 }}" | base64 --decode > ios/Runner/GoogleService-Info.plist
 
+      - name: Clear match cache
+        run: rm -rf ~/Library/MobileDevice/Provisioning\ Profiles/*
+
+      - name: Remove old match repo
+        run: rm -rf /Users/runner/.fastlane/ci/*
+
       - name: 🛠️ Install Fastlane
         working-directory: ios
         run: bundle install
