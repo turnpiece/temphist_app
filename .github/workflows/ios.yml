@@ -63,6 +63,7 @@ jobs:
           APP_STORE_TEAM_ID: ${{ secrets.APP_STORE_TEAM_ID }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
           FASTLANE_DISABLE_COLORS: 1
 
       - name: ✅ Archive output
