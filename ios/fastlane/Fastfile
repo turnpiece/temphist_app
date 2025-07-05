@@ -5,6 +5,15 @@ default_platform(:ios)
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
+    create_keychain(
+      name: "fastlane_tmp",
+      password: ENV["KEYCHAIN_PASSWORD"],
+      default_keychain: true,
+      unlock: true,
+      timeout: 3600,
+      add_to_search_list: true
+    )
+
     api_key = app_store_connect_api_key(
       key_id: ENV["APP_STORE_KEY_ID"],
       issuer_id: ENV["APP_STORE_ISSUER_ID"],
@@ -15,6 +24,8 @@ platform :ios do
     match(
       api_key: api_key,
       type: "appstore",
+      keychain_name: "fastlane_tmp",
+      keychain_password: ENV["KEYCHAIN_PASSWORD"],
       app_identifier: ENV["APP_IDENTIFIER"],
       readonly: false,
       git_branch: "master",
