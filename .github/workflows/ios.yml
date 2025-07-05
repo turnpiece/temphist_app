@@ -41,11 +41,8 @@ jobs:
       - name: Remove old match repo
         run: rm -rf /Users/runner/.fastlane/ci/*
 
-      - name: List available Xcode versions
-        run: ls /Applications | grep Xcode
-
-      - name: Select Xcode 16 beta
-        run: sudo xcode-select -s /Applications/Xcode_16.0.app
+      - name: Select Xcode 16.2
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app
 
       - name: 🛠️ Install Fastlane
         working-directory: ios
