@@ -41,8 +41,16 @@ jobs:
       - name: Remove old match repo
         run: rm -rf /Users/runner/.fastlane/ci/*
 
+      - name: Clean DerivedData
+        run: rm -rf ~/Library/Developer/Xcode/DerivedData
+
       - name: Select Xcode 16.2
         run: sudo xcode-select -s /Applications/Xcode_16.2.app
+
+      - name: Verify Xcode version
+        run: |
+          xcode-select -p
+          xcodebuild -version
 
       - name: 🛠️ Install Fastlane
         working-directory: ios
