@@ -9,8 +9,6 @@ on:
 jobs:
   build-ios:
     runs-on: macos-latest
-    env:
-      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
 
     steps:
       - name: ⬇️ Checkout code
