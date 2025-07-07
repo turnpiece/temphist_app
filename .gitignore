@@ -49,8 +49,8 @@ app.*.map.json
 /local.properties
 
 # Xcode
-ios/Flutter/Flutter.framework
-ios/Flutter/Flutter.podspec
+.metadata
+ios/Flutter.xcframework
 ios/.symlinks/
 ios/Pods/
 ios/Runner.xcworkspace
