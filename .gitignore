@@ -50,7 +50,6 @@ app.*.map.json
 
 # Xcode
 .metadata
-ios/Flutter.xcframework
 ios/.symlinks/
 ios/Pods/
 ios/Runner.xcworkspace
