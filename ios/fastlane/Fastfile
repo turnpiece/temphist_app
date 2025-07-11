@@ -68,7 +68,11 @@ platform :ios do
           signingCertificate: "Apple Distribution",
           teamID: ENV["APP_STORE_TEAM_ID"]
         },
-        workspace: "Runner.xcworkspace"
+        workspace: "Runner.xcworkspace",
+        build_settings: {
+          "FLUTTER_BUILD_NAME" => "1.0.0",
+          "FLUTTER_BUILD_NUMBER" => "1"
+        }
       )
     end
 
