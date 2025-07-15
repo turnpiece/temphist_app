@@ -52,7 +52,6 @@ app.*.map.json
 .metadata
 ios/.symlinks/
 ios/Pods/
-ios/Runner.xcworkspace
 ios/build/
 ios/DerivedData/
 ios/.dart_tool/
