@@ -56,15 +56,9 @@ jobs:
         working-directory: ios
         run: bundle install
 
-      - name: 🛠 Install CocoaPods
-        run: |
-          sudo gem uninstall cocoapods -aIx || true          # clean up any half-installed copy
-          sudo gem install cocoapods -v 1.15.2 --no-document # pick a known-good version
-
       - name: 📦 Install CocoaPods dependencies
         working-directory: ios
-        run: |
-          pod install
+        run: bundle exec pod install
 
       - name: 🚀 Upload to TestFlight with Fastlane
         working-directory: ios
