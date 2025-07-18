@@ -37,7 +37,8 @@ platform :ios do
     # 2 – development profile (same bundle ID)
     match(
       api_key: api_key,
-      type:    "development"
+      type:    "development",
+      readonly: false 
     )
 
     # Build with Flutter
