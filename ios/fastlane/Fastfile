@@ -35,6 +35,12 @@ platform :ios do
     # Build with Flutter
     sh("cd .. && bundle exec flutter build ios --release --no-codesign")
 
+    # 2. Package and sign IPA
+    build_app(
+      scheme: "Runner",
+      export_method: "app-store"
+    )
+
     upload_to_testflight(api_key: api_key)
   end
 end
