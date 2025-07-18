@@ -27,11 +27,6 @@ jobs:
       - name: 📦 Install dependencies
         run: flutter pub get
 
-      - name: 🕵️‍♂️ Debug: Check firebase_options.dart
-        run: |
-          ls -l lib/
-          cat lib/firebase_options.dart || echo "firebase_options.dart not found"
-
       - name: 🔐 Decode GoogleService-Info.plist
         run: |
           echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_B64 }}" | base64 --decode > ios/Runner/GoogleService-Info.plist
