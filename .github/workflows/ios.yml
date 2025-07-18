@@ -72,11 +72,6 @@ jobs:
         env:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
 
-      - name: 📦 Install Gems & run Fastlane
-        run: bundle exec fastlane ios beta
-        env:
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-
       - name: 🚀 Upload to TestFlight with Fastlane
         working-directory: ios
         run: bundle exec fastlane beta --verbose
