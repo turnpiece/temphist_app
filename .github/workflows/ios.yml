@@ -56,6 +56,27 @@ jobs:
         working-directory: ios
         run: bundle exec pod install
 
+      - name: 🔑 Create temporary keychain
+        run: |
+          KEYCHAIN=build.keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -t 3600 -u "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+
+      - name: 🔐 Test keychain password
+        run: |
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$HOME/Library/Keychains/login.keychain-db"
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+
+      - name: 📦 Install Gems & run Fastlane
+        run: bundle exec fastlane ios beta
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+
       - name: 🚀 Upload to TestFlight with Fastlane
         working-directory: ios
         run: bundle exec fastlane beta --verbose

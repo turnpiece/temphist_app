@@ -32,7 +32,9 @@ platform :ios do
       type: "appstore",
       readonly: false,
       git_branch: "master",
-      app_identifier: ENV["APP_IDENTIFIER"]
+      app_identifier: ENV["APP_IDENTIFIER"],
+      keychain_name: "build.keychain",
+      keychain_password: ENV['KEYCHAIN_PASSWORD'],
     )
 
     # Build with Flutter
