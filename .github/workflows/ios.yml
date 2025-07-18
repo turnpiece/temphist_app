@@ -27,9 +27,10 @@ jobs:
       - name: 📦 Install dependencies
         run: flutter pub get
 
-      - name: 🔐 Decode firebase_options.dart from base64
+      - name: 🕵️‍♂️ Debug: Check firebase_options.dart
         run: |
-          echo "${{ secrets.FIREBASE_OPTIONS_B64 }}" | base64 --decode > lib/firebase_options.dart
+          ls -l lib/
+          cat lib/firebase_options.dart || echo "firebase_options.dart not found"
 
       - name: 🔐 Decode GoogleService-Info.plist
         run: |
