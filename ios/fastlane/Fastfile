@@ -44,19 +44,16 @@ platform :ios do
     # Build with Flutter
     sh("cd .. && bundle exec flutter build ios --release --no-codesign")
 
-    # 🔑  Grab the profile name that match just installed
-    profile_specifier = lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING][ENV['APP_IDENTIFIER']]
-
-    # Package and sign IPA
+    profile_specifier =
+    lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING][ENV['APP_IDENTIFIER']]
+  
     build_app(
       scheme:        "Runner",
       configuration: "Release",
       export_method: "app-store",
-      xcargs: %Q(
-        CODE_SIGN_STYLE=Manual
-        CODE_SIGN_IDENTITY="Apple Distribution"
-        PROVISIONING_PROFILE_SPECIFIER="#{profile_specifier}"
-      ).squeeze(" ")
+      xcargs: %Q(CODE_SIGN_STYLE=Manual \
+                CODE_SIGN_IDENTITY="Apple Distribution" \
+                PROVISIONING_PROFILE_SPECIFIER="#{profile_specifier}")
     )
 
     upload_to_testflight(api_key: api_key)
