@@ -54,9 +54,8 @@ platform :ios do
       export_options: {
         signingStyle: "manual",
         provisioningProfiles: {
-          ENV["APP_IDENTIFIER"] =>
-            ENV["MATCH_PROVISIONING_PROFILE_MAPPING"]
-              .split("=>").last.strip.tr('"', '')   # "match AppStore …"
+          # use the profile name straight from match
+          ENV['APP_IDENTIFIER'] => ENV['SIGH_PROFILE_SPECIFIER']
         }
       }
     )
