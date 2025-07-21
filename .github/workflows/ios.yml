@@ -66,9 +66,9 @@ jobs:
           APP_IDENTIFIER: ${{ secrets.APP_IDENTIFIER }}
           APP_STORE_TEAM_ID: ${{ secrets.APP_STORE_TEAM_ID }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          MATCH_GIT_URL: https://github.com/turnpiece/apple-certs.git
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
           MATCH_GIT_USER: x-access-token
-          MATCH_GIT_PASSWORD: ${{ secrets.MATCH_GITHUB_PAT }}
+          MATCH_GIT_PASSWORD: ${{ secrets.MATCH_GIT_PAT }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
           FASTLANE_DISABLE_COLORS: 1
 
