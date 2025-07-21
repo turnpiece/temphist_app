@@ -44,11 +44,21 @@ platform :ios do
     # Build with Flutter
     sh("cd .. && bundle exec flutter build ios --release --no-codesign")
 
-    # 2. Package and sign IPA
+    # Package and sign IPA
     build_app(
-      scheme: "Runner",
+      scheme:        "Runner",
       configuration: "Release",
-      export_method: "app-store"
+      export_method: "app-store",
+
+      # 🔽 force Xcode to use the App-Store profile that match just installed
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: {
+          ENV["APP_IDENTIFIER"] =>
+            ENV["MATCH_PROVISIONING_PROFILE_MAPPING"]
+              .split("=>").last.strip.tr('"', '')   # "match AppStore …"
+        }
+      }
     )
 
     upload_to_testflight(api_key: api_key)
