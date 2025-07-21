@@ -1,58 +1,20 @@
-platform :ios, '12.0'
+platform :ios, '13.0'
 
-# Force all pods to use modular headers
-$FirebasePods = [
-  'FirebaseCore',
-  'FirebaseAuth'
-]
+flutter_sdk_root = ENV['FLUTTER_ROOT'] or
+  raise 'FLUTTER_ROOT env-var is not set; run `flutter` once or set it manually'
 
-$FirebasePods.each do |pod|
-  pod pod, :modular_headers => true
-end
-
-# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
-ENV['COCOAPODS_DISABLE_STATS'] = 'true'
-
-project 'Runner', {
-  'Debug' => :debug,
-  'Profile' => :release,
-  'Release' => :release,
-}
-
-def flutter_root
-  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
-  unless File.exist?(generated_xcode_build_settings_path)
-    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
-  end
-
-  File.foreach(generated_xcode_build_settings_path) do |line|
-    matches = line.match(/FLUTTER_ROOT\=(.*)/)
-    return matches[1].strip if matches
-  end
-  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
-end
-
-require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
-
-flutter_ios_podfile_setup
+require File.join(flutter_sdk_root, 'packages', 'flutter_tools', 'bin', 'podhelper')
 
 target 'Runner' do
-  use_frameworks!
-
+  use_frameworks!                       # or use_modular_headers!
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
-  target 'RunnerTests' do
-    inherit! :search_paths
-  end
 end
 
-post_install do |installer|
-  installer.pods_project.targets.each do |target|
-    target.build_configurations.each do |config|
-      # Raise anything below 12.0 to 12.0 so Xcode 15+ is happy
-      if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 12.0
-        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
-      end
+post_install do |installer|    # or your loop + flutter_additional…
+  installer.pods_project.targets.each do |t|
+    t.build_configurations.each do |c|
+      c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
     end
-    flutter_additional_ios_build_settings(target)
+    flutter_additional_ios_build_settings(t)
   end
 end
