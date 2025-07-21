@@ -41,23 +41,21 @@ platform :ios do
       type: "appstore",
     )
 
-    # patch Release signing settings in the project
-    update_project_provisioning(
-      xcodeproj:        "Runner.xcodeproj",
-      target_filter:    "Runner",            # only the main app target
-      build_configuration: "Release",
-      profile:             lane_context[:SIGH_PROFILE_PATH],
-      code_signing_identity: "Apple Distribution"
-    )
-
     # Build with Flutter
     sh("cd .. && bundle exec flutter build ios --release --no-codesign")
+
+    # 🔑  Grab the profile name that match just installed
+    profile_specifier = lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING][ENV['APP_IDENTIFIER']]
 
     # Package and sign IPA
     build_app(
       scheme:        "Runner",
       configuration: "Release",
       export_method: "app-store",
+      export_options: {
+        signingStyle:        "manual",
+        provisioningProfiles:{ ENV['APP_IDENTIFIER'] => profile_specifier }
+      }
     )
 
     upload_to_testflight(api_key: api_key)
