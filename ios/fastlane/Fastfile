@@ -47,6 +47,7 @@ platform :ios do
     # 2. Package and sign IPA
     build_app(
       scheme: "Runner",
+      configuration: "Release",
       export_method: "app-store"
     )
 
