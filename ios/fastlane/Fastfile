@@ -28,17 +28,17 @@ platform :ios do
       is_key_content_base64: true
     )
 
-    # Code signing with match (optional, but recommended for CI)
-    match(
-      api_key: api_key,
-      type: "appstore",
-    )
-
-    # 2 – development profile (same bundle ID)
+    # development profile (same bundle ID)
     match(
       api_key: api_key,
       type:    "development",
       readonly: false 
+    )
+
+    # Code signing with match
+    match(
+      api_key: api_key,
+      type: "appstore",
     )
 
     # Build with Flutter
