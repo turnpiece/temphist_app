@@ -43,7 +43,7 @@ platform :ios do
 
     # patch Release signing settings in the project
     update_project_provisioning(
-      xcodeproj:        "ios/Runner.xcodeproj",
+      xcodeproj:        "../Runner.xcodeproj",
       target_filter:    "Runner",            # only the main app target
       build_configuration: "Release",
       profile:          ENV['SIGH_PROFILE_SPECIFIER'],  # "match AppStore …"
