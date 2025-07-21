@@ -47,8 +47,7 @@ platform :ios do
       target_filter:    "Runner",            # only the main app target
       build_configuration: "Release",
       profile:          ENV['SIGH_PROFILE_SPECIFIER'],  # "match AppStore …"
-      code_signing_identity: "Apple Distribution",
-      signing_style:    "manual"
+      code_signing_identity: "Apple Distribution"
     )
 
     # Build with Flutter
