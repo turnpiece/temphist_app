@@ -46,7 +46,7 @@ platform :ios do
       xcodeproj:        "Runner.xcodeproj",
       target_filter:    "Runner",            # only the main app target
       build_configuration: "Release",
-      profile:             ENV['SIGH_PROFILE_PATH'],
+      profile:             lane_context[:SIGH_PROFILE_PATH],
       code_signing_identity: "Apple Distribution"
     )
 
