@@ -1,3 +1,5 @@
+platform :ios, '12.0'
+
 # Force all pods to use modular headers
 $FirebasePods = [
   'FirebaseCore',
@@ -45,6 +47,12 @@ end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      # Raise anything below 12.0 to 12.0 so Xcode 15+ is happy
+      if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 12.0
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+      end
+    end
     flutter_additional_ios_build_settings(target)
   end
 end
