@@ -370,6 +370,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       'summary': data['summary'],
       'displayDate': data['displayDate'],
       'city': data['city'],
+      'cachedDate': DateFormat('yyyy-MM-dd').format(DateTime.now()), // Store current date
     });
     await prefs.setString('cachedChartData', cache);
   }
@@ -378,12 +379,30 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     final prefs = await SharedPreferences.getInstance();
     final cache = prefs.getString('cachedChartData');
     if (cache == null) return null;
+    
     final decoded = jsonDecode(cache);
+    
+    // Check if the date has changed since the data was cached
+    final cachedDate = decoded['cachedDate'] as String?;
+    final now = DateTime.now();
+    final useYesterday = now.hour < 1;
+    final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+    final currentDate = DateFormat('yyyy-MM-dd').format(dateToUse);
+    
+    if (cachedDate != null && cachedDate != currentDate) {
+      // Date has changed, don't use cached data
+      if (DEBUGGING) {
+        print('DEBUG: Date changed from $cachedDate to $currentDate, refreshing data');
+      }
+      return null;
+    }
+    
     final chartDataList = (decoded['chartData'] as List).map((e) => TemperatureChartData(
       year: e['year'],
       temperature: (e['temperature'] is num) ? (e['temperature'] as num).toDouble() : 0.0,
       isCurrentYear: e['isCurrentYear'],
     )).toList();
+    
     return {
       'chartData': chartDataList,
       'averageTemperature': decoded['averageTemperature'],
