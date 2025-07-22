@@ -671,7 +671,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                                                 child: Text(
                                                   (trendSlope.abs() < 0.01)
                                                     ? 'Trend: stable'
-                                                    : 'Trend: ${trendSlope > 0 ? 'rising' : 'falling'} at ${trendSlope.abs().toStringAsFixed(2)}°C/decade',
+                                                    : 'Trend: ${trendSlope > 0 ? 'rising' : 'falling'} at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
                                                   style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
                                                   textAlign: TextAlign.left,
                                                 ),
