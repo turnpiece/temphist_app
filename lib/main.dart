@@ -207,8 +207,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           }
         }
       }
-    } catch (_) {
-      // Ignore and fall back to London
+    } catch (e) {
+      debugPrintIfDebugging('Geolocation failed, falling back to London: $e');
     }
     final currentYear = dateToUse.year;
 
@@ -230,17 +230,19 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
             temperature: tempData.temperature ?? tempData.average?.temperature ?? 0.0,
             isCurrentYear: year == currentYear,
           ));
-        } catch (_) {}
+        } catch (e) {
+          debugPrintIfDebugging('Failed to fetch temperature for year $year: $e');
+        }
       }
     }
 
     // Try main /data/ endpoint first
     try {
-              debugPrintIfDebugging('Starting /data/ fetch for $city, $formattedDate');
+      debugPrintIfDebugging('Starting /data/ fetch for $city, $formattedDate');
       final tempData = await service
           .fetchCompleteData(city, '$currentYear-${formattedDate.substring(5)}')
           .timeout(const Duration(seconds: 30));
-              debugPrintIfDebugging('/data/ response: ${tempData.toString()}');
+        debugPrintIfDebugging('/data/ response: ${tempData.toString()}');
         debugPrintIfDebugging('tempData.series?.data?.length: ${tempData.series?.data.length}');
       if (tempData.series?.data.isNotEmpty == true) {
         _hasFreshData = true;
@@ -277,8 +279,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         throw Exception('No series data in /data/ endpoint response');
       }
     } catch (e, stack) {
-              debugPrintIfDebugging('Exception in /data/ fetch: $e');
-        debugPrintIfDebugging('Stack trace: $stack');
+        debugPrintIfDebugging('Exception in /data/ fetch: $e');
       if (_hasFreshData) {
         debugPrintIfDebugging('Skipping fallback update because fresh data arrived.');
         return Future.value();
@@ -286,10 +287,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       // Fallback: try /average/, /trend/, /summary/ endpoints
       try {
         debugPrintIfDebugging('Calling /average/ endpoint...');
-                  debugPrintIfDebugging('formattedDate = '
-              '$formattedDate');
-          debugPrintIfDebugging('formattedDate.substring(5) = '
-              '${formattedDate.length >= 5 ? formattedDate.substring(5) : 'INVALID'}');
         final mmdd = (formattedDate.length >= 5) ? formattedDate.substring(5) : '';
         if (mmdd.isEmpty) {
           throw Exception('Invalid date format for /average/ endpoint: $formattedDate');
@@ -315,7 +312,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
               .timeout(const Duration(seconds: 30));
           final slope = trendData['slope'];
           trendSlope = (slope is num) ? slope.toDouble() : null;
-        } catch (_) {
+        } catch (e) {
+          debugPrintIfDebugging('Failed to fetch trend data: $e');
           trendSlope = null;
         }
         debugPrintIfDebugging('Calling /summary/ endpoint...');
@@ -324,7 +322,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
               .fetchSummaryData(city, mmdd)
               .timeout(const Duration(seconds: 30));
           summaryText = summaryData['summary'] as String?;
-        } catch (_) {
+        } catch (e) {
+          debugPrintIfDebugging('Failed to fetch summary data: $e');
           summaryText = null;
         }
         await fetchYearlyData(startYear, endYear);
@@ -343,7 +342,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         };
         await _cacheChartData(result);
         return result;
-      } catch (_) {
+      } catch (e) {
+        debugPrintIfDebugging('Fallback endpoints failed, using year-by-year only: $e');
         // Final fallback: just fetch year-by-year
         await fetchYearlyData(startYear, endYear);
         // No summary, average, or trend available in this fallback
@@ -406,7 +406,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     
     if (cachedDate != null && cachedDate != currentDate) {
       // Date has changed, don't use cached data
-              debugPrintIfDebugging('Date changed from $cachedDate to $currentDate, refreshing data');
+      debugPrintIfDebugging('Date changed from $cachedDate to $currentDate, refreshing data');
       return null;
     }
     
@@ -446,7 +446,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     if (_lastCheckedDate!.year != currentDate.year ||
         _lastCheckedDate!.month != currentDate.month ||
         _lastCheckedDate!.day != currentDate.day) {
-              debugPrintIfDebugging('Date changed from ${_lastCheckedDate} to $currentDate, reloading data');
+      debugPrintIfDebugging('Date changed from ${_lastCheckedDate} to $currentDate, reloading data');
       setState(() {
         futureChartData = _loadChartData();
       });
