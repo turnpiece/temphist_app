@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -70,7 +71,11 @@ void main() async {
 }
 
 void _setSystemUIOverlayStyle() {
-  if (Platform.isIOS) {
+  if (kIsWeb) {
+    // Web-specific configuration - minimal setup since web doesn't have system UI overlays
+    // No need to set SystemUIOverlayStyle on web
+    return;
+  } else if (Platform.isIOS) {
     // iOS-specific configuration
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -90,9 +95,8 @@ void _setSystemUIOverlayStyle() {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
-  }
-  // For web and other platforms, use a default configuration
-  else {
+  } else {
+    // For other platforms, use a default configuration
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -174,11 +178,18 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     // Only try to fetch fresh data in the background if we used the cache
     if (usedCache) {
       Future.delayed(Duration.zero, () async {
-        final freshFuture = _loadChartData();
-        final fresh = await freshFuture;
-        setState(() {
-          futureChartData = Future.value(fresh);
-        });
+        try {
+          final freshFuture = _loadChartData();
+          final fresh = await freshFuture;
+          if (fresh != null) {
+            setState(() {
+              futureChartData = Future.value(fresh);
+            });
+          }
+        } catch (e) {
+          debugPrintIfDebugging('Background data refresh failed: $e');
+          // Don't update the UI if background refresh fails
+        }
       });
     }
   }
@@ -282,7 +293,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         debugPrintIfDebugging('Exception in /data/ fetch: $e');
       if (_hasFreshData) {
         debugPrintIfDebugging('Skipping fallback update because fresh data arrived.');
-        return Future.value();
+        throw Exception('Fresh data arrived, skipping fallback');
       }
       // Fallback: try /average/, /trend/, /summary/ endpoints
       try {
@@ -301,8 +312,15 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           throw Exception('No average temperature available');
         }
         if (averageData['year_range'] != null) {
-          startYear = averageData['year_range']['start'];
-          endYear = averageData['year_range']['end'];
+          final yearRange = averageData['year_range'];
+          if (yearRange is Map<String, dynamic>) {
+            final start = yearRange['start'];
+            final end = yearRange['end'];
+            if (start is int && end is int) {
+              startYear = start;
+              endYear = end;
+            }
+          }
         }
         // Try to get trend and summary, but don't fail if they are missing
         debugPrintIfDebugging('Calling /trend/ endpoint...');
@@ -321,7 +339,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           final summaryData = await service
               .fetchSummaryData(city, mmdd)
               .timeout(const Duration(seconds: 30));
-          summaryText = summaryData['summary'] as String?;
+          // Safely extract summary text
+          final summaryRaw = summaryData['summary'];
+          summaryText = summaryRaw?.toString();
         } catch (e) {
           debugPrintIfDebugging('Failed to fetch summary data: $e');
           summaryText = null;
@@ -329,7 +349,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         await fetchYearlyData(startYear, endYear);
         if (_hasFreshData) {
           debugPrintIfDebugging('Skipping fallback update because fresh data arrived.');
-          return Future.value();
+          throw Exception('Fresh data arrived, skipping fallback');
         }
         debugPrintIfDebugging('Fallback result: averageTemperature=$averageTemperature, trendSlope=$trendSlope, summaryText=$summaryText');
         final result = {
@@ -372,22 +392,35 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   }
 
   Future<void> _cacheChartData(Map<String, dynamic> data) async {
-    final prefs = await SharedPreferences.getInstance();
-    // Only cache the minimal necessary data
-    final cache = jsonEncode({
-      'chartData': (data['chartData'] as List<TemperatureChartData>).map((e) => {
-        'year': e.year,
-        'temperature': e.temperature,
-        'isCurrentYear': e.isCurrentYear,
-      }).toList(),
-      'averageTemperature': data['averageTemperature'],
-      'trendSlope': data['trendSlope'],
-      'summary': data['summary'],
-      'displayDate': data['displayDate'],
-      'city': data['city'],
-      'cachedDate': DateFormat('yyyy-MM-dd').format(DateTime.now()), // Store current date
-    });
-    await prefs.setString('cachedChartData', cache);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Validate that chartData exists and is a List
+      final chartData = data['chartData'];
+      if (chartData == null || chartData is! List<TemperatureChartData>) {
+        debugPrintIfDebugging('Invalid chartData for caching, skipping cache');
+        return;
+      }
+      
+      // Only cache the minimal necessary data
+      final cache = jsonEncode({
+        'chartData': chartData.map((e) => {
+          'year': e.year,
+          'temperature': e.temperature,
+          'isCurrentYear': e.isCurrentYear,
+        }).toList(),
+        'averageTemperature': data['averageTemperature'],
+        'trendSlope': data['trendSlope'],
+        'summary': data['summary'],
+        'displayDate': data['displayDate'],
+        'city': data['city'],
+        'cachedDate': DateFormat('yyyy-MM-dd').format(DateTime.now()), // Store current date
+      });
+      await prefs.setString('cachedChartData', cache);
+    } catch (e) {
+      debugPrintIfDebugging('Error caching data: $e');
+      // Don't throw, just log the error
+    }
   }
 
   Future<Map<String, dynamic>?> _loadCachedChartData() async {
@@ -395,35 +428,64 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     final cache = prefs.getString('cachedChartData');
     if (cache == null) return null;
     
-    final decoded = jsonDecode(cache);
-    
-    // Check if the date has changed since the data was cached
-    final cachedDate = decoded['cachedDate'] as String?;
-    final now = DateTime.now();
-    final useYesterday = now.hour < 1;
-    final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
-    final currentDate = DateFormat('yyyy-MM-dd').format(dateToUse);
-    
-    if (cachedDate != null && cachedDate != currentDate) {
-      // Date has changed, don't use cached data
-      debugPrintIfDebugging('Date changed from $cachedDate to $currentDate, refreshing data');
+    try {
+      final decoded = jsonDecode(cache);
+      
+      // Validate that decoded is a Map
+      if (decoded == null || decoded is! Map<String, dynamic>) {
+        debugPrintIfDebugging('Cached data is not a valid Map, clearing cache');
+        await prefs.remove('cachedChartData');
+        return null;
+      }
+      
+      // Check if the date has changed since the data was cached
+      final cachedDate = decoded['cachedDate'] as String?;
+      final now = DateTime.now();
+      final useYesterday = now.hour < 1;
+      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+      final currentDate = DateFormat('yyyy-MM-dd').format(dateToUse);
+      
+      if (cachedDate != null && cachedDate != currentDate) {
+        // Date has changed, don't use cached data
+        debugPrintIfDebugging('Date changed from $cachedDate to $currentDate, refreshing data');
+        return null;
+      }
+      
+      // Safely extract chartData
+      final chartDataRaw = decoded['chartData'];
+      if (chartDataRaw == null || chartDataRaw is! List) {
+        debugPrintIfDebugging('Cached chartData is invalid, clearing cache');
+        await prefs.remove('cachedChartData');
+        return null;
+      }
+      
+      final chartDataList = chartDataRaw.map((e) {
+        // Validate each chart data item
+        if (e == null || e is! Map<String, dynamic>) {
+          throw Exception('Invalid chart data item in cache');
+        }
+        
+        return TemperatureChartData(
+          year: e['year']?.toString() ?? '',
+          temperature: (e['temperature'] is num) ? (e['temperature'] as num).toDouble() : 0.0,
+          isCurrentYear: e['isCurrentYear'] == true,
+        );
+      }).toList();
+      
+      return {
+        'chartData': chartDataList,
+        'averageTemperature': decoded['averageTemperature'],
+        'trendSlope': decoded['trendSlope'],
+        'summary': decoded['summary'],
+        'displayDate': decoded['displayDate'],
+        'city': decoded['city'],
+      };
+    } catch (e) {
+      debugPrintIfDebugging('Error loading cached data: $e');
+      // Clear corrupted cache
+      await prefs.remove('cachedChartData');
       return null;
     }
-    
-    final chartDataList = (decoded['chartData'] as List).map((e) => TemperatureChartData(
-      year: e['year'],
-      temperature: (e['temperature'] is num) ? (e['temperature'] as num).toDouble() : 0.0,
-      isCurrentYear: e['isCurrentYear'],
-    )).toList();
-    
-    return {
-      'chartData': chartDataList,
-      'averageTemperature': decoded['averageTemperature'],
-      'trendSlope': decoded['trendSlope'],
-      'summary': decoded['summary'],
-      'displayDate': decoded['displayDate'],
-      'city': decoded['city'],
-    };
   }
 
   void _startDateCheckTimer() {
@@ -462,22 +524,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     
     final double chartHeight = 800;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: Platform.isIOS
-        ? const SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            statusBarBrightness: Brightness.dark,
-            systemNavigationBarColor: Colors.transparent,
-            systemNavigationBarIconBrightness: Brightness.light,
-          )
-        : const SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            statusBarIconBrightness: Brightness.light,
-            systemNavigationBarColor: Colors.transparent,
-            systemNavigationBarIconBrightness: Brightness.light,
-          ),
-      child: Scaffold(
-        body: Stack(
+    Widget appContent = Scaffold(
+      body: Stack(
         children: [
           // Gradient background fills the whole screen including system areas
           SizedBox.expand(
@@ -824,8 +872,29 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           ),
         ],
       ),
-      ),
     );
+
+    // Only wrap with AnnotatedRegion on mobile platforms
+    if (kIsWeb) {
+      return appContent;
+    } else {
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: Platform.isIOS
+          ? const SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarBrightness: Brightness.dark,
+              systemNavigationBarColor: Colors.transparent,
+              systemNavigationBarIconBrightness: Brightness.light,
+            )
+          : const SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: Brightness.light,
+              systemNavigationBarColor: Colors.transparent,
+              systemNavigationBarIconBrightness: Brightness.light,
+            ),
+        child: appContent,
+      );
+    }
   }
 }
 
