@@ -18,7 +18,7 @@ import 'dart:async';
 import 'services/temperature_service.dart';
 
 // App color constants
-const bool DEBUGGING = true;
+const bool DEBUGGING = false;
 const kBackgroundColour = Color(0xFF242456);
 const kAccentColour = Color(0xFFFF6B6B);
 const kTextPrimaryColour = Color(0xFFECECEC);
@@ -162,21 +162,19 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       return;
     }
     
+    // Initialize with loading state immediately
+    setState(() {
+      futureChartData = _loadChartData();
+    });
+    
     // First, try to load cached data and show it immediately if available
     final cached = await _loadCachedChartData();
-    bool usedCache = false;
     if (cached != null) {
       setState(() {
         futureChartData = Future.value(cached);
       });
-      usedCache = true;
-    } else {
-      setState(() {
-        futureChartData = _loadChartData();
-      });
-    }
-    // Only try to fetch fresh data in the background if we used the cache
-    if (usedCache) {
+      
+      // Try to fetch fresh data in the background
       Future.delayed(Duration.zero, () async {
         try {
           final freshFuture = _loadChartData();
@@ -275,26 +273,22 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           startYear = tempData.average!.yearRange.start;
           endYear = tempData.average!.yearRange.end;
         }
-        final result = {
-          'chartData': chartData,
-          'averageTemperature': averageTemperature,
-          'trendSlope': trendSlope,
-          'summary': summaryText,
-          'displayDate': _formatDayMonth(dateToUse),
-          'city': city,
-        };
-        await _cacheChartData(result);
-        return result;
+        final result = _createResultMap(
+          chartData: chartData,
+          averageTemperature: averageTemperature,
+          trendSlope: trendSlope,
+          summaryText: summaryText,
+          dateToUse: dateToUse,
+          city: city,
+        );
+        return await _cacheAndReturnResult(result);
       } else {
         debugPrintIfDebugging('/data/ returned empty or missing series');
         throw Exception('No series data in /data/ endpoint response');
       }
     } catch (e, stack) {
         debugPrintIfDebugging('Exception in /data/ fetch: $e');
-      if (_hasFreshData) {
-        debugPrintIfDebugging('Skipping fallback update because fresh data arrived.');
-        throw Exception('Fresh data arrived, skipping fallback');
-      }
+      _checkFreshDataAndThrow();
       // Fallback: try /average/, /trend/, /summary/ endpoints
       try {
         debugPrintIfDebugging('Calling /average/ endpoint...');
@@ -347,21 +341,17 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           summaryText = null;
         }
         await fetchYearlyData(startYear, endYear);
-        if (_hasFreshData) {
-          debugPrintIfDebugging('Skipping fallback update because fresh data arrived.');
-          throw Exception('Fresh data arrived, skipping fallback');
-        }
+        _checkFreshDataAndThrow();
         debugPrintIfDebugging('Fallback result: averageTemperature=$averageTemperature, trendSlope=$trendSlope, summaryText=$summaryText');
-        final result = {
-          'chartData': chartData,
-          'averageTemperature': averageTemperature,
-          'trendSlope': trendSlope,
-          'summary': summaryText,
-          'displayDate': _formatDayMonth(dateToUse),
-          'city': city,
-        };
-        await _cacheChartData(result);
-        return result;
+        final result = _createResultMap(
+          chartData: chartData,
+          averageTemperature: averageTemperature,
+          trendSlope: trendSlope,
+          summaryText: summaryText,
+          dateToUse: dateToUse,
+          city: city,
+        );
+        return await _cacheAndReturnResult(result);
       } catch (e) {
         debugPrintIfDebugging('Fallback endpoints failed, using year-by-year only: $e');
         // Final fallback: just fetch year-by-year
@@ -371,16 +361,15 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         trendSlope = null;
         summaryText = null;
         debugPrintIfDebugging('Final fallback (year-by-year only): averageTemperature=$averageTemperature, trendSlope=$trendSlope, summaryText=$summaryText');
-        final result = {
-          'chartData': chartData,
-          'averageTemperature': averageTemperature,
-          'trendSlope': trendSlope,
-          'summary': summaryText,
-          'displayDate': _formatDayMonth(dateToUse),
-          'city': city,
-        };
-        await _cacheChartData(result);
-        return result;
+        final result = _createResultMap(
+          chartData: chartData,
+          averageTemperature: averageTemperature,
+          trendSlope: trendSlope,
+          summaryText: summaryText,
+          dateToUse: dateToUse,
+          city: city,
+        );
+        return await _cacheAndReturnResult(result);
       }
     }
     // If all above fails, try to load from cache
@@ -488,6 +477,18 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     }
   }
 
+  Future<Map<String, dynamic>> _cacheAndReturnResult(Map<String, dynamic> result) async {
+    await _cacheChartData(result);
+    return result;
+  }
+
+  void _checkFreshDataAndThrow() {
+    if (_hasFreshData) {
+      debugPrintIfDebugging('Skipping fallback update because fresh data arrived.');
+      throw Exception('Fresh data arrived, skipping fallback');
+    }
+  }
+
   void _startDateCheckTimer() {
     _dateCheckTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       _checkDateChange();
@@ -565,35 +566,63 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // --- Title/logo row: always visible and scrolls with content ---
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: kTitleRowHorizontalMargin),
-                          child: Row(
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
+                        double horizontalOffset = (constraints.maxWidth - contentWidth) / 2;
+                        
+                        debugPrintIfDebugging('Title area - Screen width: ${constraints.maxWidth}, contentWidth: $contentWidth, horizontalOffset: $horizontalOffset, isWideScreen: ${constraints.maxWidth >= 600}');
+                        
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                          child: Stack(
                             children: [
-                              Padding(
-                                padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
-                                child: SvgPicture.asset(
-                                  'assets/logo.svg',
-                                  width: 40,
-                                  height: 40,
+                              // Logo positioned to the left of content area
+                              if (horizontalOffset > 0)
+                                Positioned(
+                                  left: horizontalOffset - 60, // Position logo 60px to the left of content (50px + 10px for bar alignment)
+                                  child: SvgPicture.asset(
+                                    'assets/logo.svg',
+                                    width: 40,
+                                    height: 40,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                'TempHist',
-                                style: TextStyle(
-                                  color: kAccentColour,
-                                  fontSize: kFontSizeTitle,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.2,
+                              // Title text aligned with content left edge
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Container(
+                                  margin: EdgeInsets.only(
+                                    left: horizontalOffset > 0 ? horizontalOffset : kTitleRowHorizontalMargin,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      // Only show logo inline on narrow screens
+                                      if (horizontalOffset <= 0)
+                                        Padding(
+                                          padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
+                                          child: SvgPicture.asset(
+                                            'assets/logo.svg',
+                                            width: 40,
+                                            height: 40,
+                                          ),
+                                        ),
+                                      Text(
+                                        'TempHist',
+                                        style: TextStyle(
+                                          color: kAccentColour,
+                                          fontSize: kFontSizeTitle,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                     // --- The rest of your UI, including the FutureBuilder ---
                     FutureBuilder<Map<String, dynamic>>(
@@ -613,20 +642,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                                   textAlign: TextAlign.center,
                                 ),
                                 const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      futureChartData = _loadChartData();
-                                    });
-                                  },
-                                  child: const Text(
-                                    'Retry',
-                                    style: TextStyle(color: kTextPrimaryColour),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: kAccentColour,
-                                  ),
-                                ),
+                                _buildRetryButton(() {
+                                  setState(() {
+                                    futureChartData = _loadChartData();
+                                  });
+                                }),
                               ],
                             ),
                           );
@@ -641,20 +661,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                                   textAlign: TextAlign.center,
                                 ),
                                 const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      futureChartData = _loadChartData();
-                                    });
-                                  },
-                                  child: const Text(
-                                    'Retry',
-                                    style: TextStyle(color: kTextPrimaryColour),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: kAccentColour,
-                                  ),
-                                ),
+                                _buildRetryButton(() {
+                                  setState(() {
+                                    futureChartData = _loadChartData();
+                                  });
+                                }),
                               ],
                             ),
                           );
@@ -673,20 +684,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                                   textAlign: TextAlign.center,
                                 ),
                                 const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      futureChartData = _loadChartData();
-                                    });
-                                  },
-                                  child: const Text(
-                                    'Retry',
-                                    style: TextStyle(color: kTextPrimaryColour),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: kAccentColour,
-                                  ),
-                                ),
+                                _buildRetryButton(() {
+                                  setState(() {
+                                    futureChartData = _loadChartData();
+                                  });
+                                }),
                               ],
                             ),
                           );
@@ -711,6 +713,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                             child: LayoutBuilder(
                               builder: (context, constraints) {
                                 double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
+                                debugPrintIfDebugging('Main content - Screen width: ${constraints.maxWidth}, contentWidth: $contentWidth, isWideScreen: ${constraints.maxWidth >= 600}');
                                 return Center(
                                   child: Container(
                                     width: contentWidth,
@@ -970,6 +973,37 @@ String _formatDayMonth(DateTime date) {
     }
   }
   return '$day$suffix $month';
+}
+
+Map<String, dynamic> _createResultMap({
+  required List<TemperatureChartData> chartData,
+  required double? averageTemperature,
+  required double? trendSlope,
+  required String? summaryText,
+  required DateTime dateToUse,
+  required String city,
+}) {
+  return {
+    'chartData': chartData,
+    'averageTemperature': averageTemperature,
+    'trendSlope': trendSlope,
+    'summary': summaryText,
+    'displayDate': _formatDayMonth(dateToUse),
+    'city': city,
+  };
+}
+
+Widget _buildRetryButton(VoidCallback onPressed) {
+  return ElevatedButton(
+    onPressed: onPressed,
+    child: const Text(
+      'Retry',
+      style: TextStyle(color: kTextPrimaryColour),
+    ),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: kAccentColour,
+    ),
+  );
 }
 
 // Sign up
