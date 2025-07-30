@@ -18,7 +18,7 @@ import 'dart:async';
 import 'services/temperature_service.dart';
 
 // App color constants
-const bool DEBUGGING = true;
+const bool DEBUGGING = false;
 const kBackgroundColour = Color(0xFF242456);
 const kAccentColour = Color(0xFFFF6B6B);
 const kTextPrimaryColour = Color(0xFFECECEC);
@@ -533,6 +533,99 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     );
   }
 
+  Widget _buildFutureBuilder() {
+    final double chartHeight = 800;
+    return FutureBuilder<Map<String, dynamic>>(
+      future: futureChartData,
+      builder: (context, snapshot) {
+        final effectiveSnapshot = widget.testSnapshot ?? snapshot;
+        if (effectiveSnapshot.connectionState == ConnectionState.waiting) {
+          // Don't show loading indicator during pull-to-refresh
+          // The RefreshIndicator will show its own indicator
+          return const SizedBox.shrink();
+        } else if (effectiveSnapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Error loading data: ${effectiveSnapshot.error}',
+                  style: const TextStyle(color: kTextPrimaryColour),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                _buildRetryButton(() {
+                  setState(() {
+                    futureChartData = _loadChartData();
+                  });
+                }),
+              ],
+            ),
+          );
+        } else if (!effectiveSnapshot.hasData || effectiveSnapshot.data!.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'No temperature data available.',
+                  style: TextStyle(color: kTextPrimaryColour),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                _buildRetryButton(() {
+                  setState(() {
+                    futureChartData = _loadChartData();
+                  });
+                }),
+              ],
+            ),
+          );
+        }
+
+        final data = effectiveSnapshot.data!;
+        final chartData = data['chartData'] as List<TemperatureChartData>;
+        if (chartData.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'No temperature data available.',
+                  style: TextStyle(color: kTextPrimaryColour),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                _buildRetryButton(() {
+                  setState(() {
+                    futureChartData = _loadChartData();
+                  });
+                }),
+              ],
+            ),
+          );
+        }
+        final averageTemperature = data['averageTemperature'] as double?;
+        final trendSlope = data['trendSlope'] as double?;
+        final summaryText = data['summary'] as String?;
+        final displayDate = data['displayDate'] as String?;
+        final city = data['city'] as String?;
+        
+        debugPrintIfDebugging('Average temperature for plot band: $averageTemperature°C');
+
+        return _buildChartContent(
+          chartData: chartData,
+          averageTemperature: averageTemperature,
+          trendSlope: trendSlope,
+          summaryText: summaryText,
+          displayDate: displayDate,
+          city: city,
+          chartHeight: chartHeight,
+        );
+      },
+    );
+  }
+
   void _startDateCheckTimer() {
     _dateCheckTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       _checkDateChange();
@@ -586,95 +679,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                     // --- Title/logo row: always visible and scrolls with content ---
                     _buildTitleLogoSection(),
                     // --- The rest of the UI, including the FutureBuilder ---
-                    FutureBuilder<Map<String, dynamic>>(
-                      future: futureChartData,
-                      builder: (context, snapshot) {
-                        final effectiveSnapshot = widget.testSnapshot ?? snapshot;
-                        if (effectiveSnapshot.connectionState == ConnectionState.waiting) {
-                          // Don't show loading indicator during pull-to-refresh
-                          // The RefreshIndicator will show its own indicator
-                          return const SizedBox.shrink();
-                        } else if (effectiveSnapshot.hasError) {
-                          return Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Error loading data: ${effectiveSnapshot.error}',
-                                  style: const TextStyle(color: kTextPrimaryColour),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 16),
-                                _buildRetryButton(() {
-                                  setState(() {
-                                    futureChartData = _loadChartData();
-                                  });
-                                }),
-                              ],
-                            ),
-                          );
-                        } else if (!effectiveSnapshot.hasData || effectiveSnapshot.data!.isEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'No temperature data available.',
-                                  style: TextStyle(color: kTextPrimaryColour),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 16),
-                                _buildRetryButton(() {
-                                  setState(() {
-                                    futureChartData = _loadChartData();
-                                  });
-                                }),
-                              ],
-                            ),
-                          );
-                        }
-
-                        final data = effectiveSnapshot.data!;
-                        final chartData = data['chartData'] as List<TemperatureChartData>;
-                        if (chartData.isEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'No temperature data available.',
-                                  style: TextStyle(color: kTextPrimaryColour),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 16),
-                                _buildRetryButton(() {
-                                  setState(() {
-                                    futureChartData = _loadChartData();
-                                  });
-                                }),
-                              ],
-                            ),
-                          );
-                        }
-                        final averageTemperature = data['averageTemperature'] as double?;
-                        final trendSlope = data['trendSlope'] as double?;
-                        final summaryText = data['summary'] as String?;
-                        final displayDate = data['displayDate'] as String?;
-                        final city = data['city'] as String?;
-                        
-                        debugPrintIfDebugging('Average temperature for plot band: $averageTemperature°C');
-
-                        return _buildChartContent(
-                          chartData: chartData,
-                          averageTemperature: averageTemperature,
-                          trendSlope: trendSlope,
-                          summaryText: summaryText,
-                          displayDate: displayDate,
-                          city: city,
-                          chartHeight: chartHeight,
-                        );
-                      },
-                    ),
+                    _buildFutureBuilder(),
                   ],
                 ),
               ),
