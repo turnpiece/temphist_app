@@ -18,7 +18,7 @@ import 'dart:async';
 import 'services/temperature_service.dart';
 
 // App color constants
-const bool DEBUGGING = false;
+const bool DEBUGGING = true;
 const kBackgroundColour = Color(0xFF242456);
 const kAccentColour = Color(0xFFFF6B6B);
 const kTextPrimaryColour = Color(0xFFECECEC);
@@ -156,8 +156,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   }
 
   void _loadInitialData() async {
+    debugPrintIfDebugging('_loadInitialData: Starting data load');
+    
     // Use test data if provided
     if (widget.testFuture != null) {
+      debugPrintIfDebugging('_loadInitialData: Using test data');
       futureChartData = widget.testFuture!;
       return;
     }
@@ -168,18 +171,22 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     });
     
     // First, try to load cached data and show it immediately if available
+    debugPrintIfDebugging('_loadInitialData: Checking for cached data');
     final cached = await _loadCachedChartData();
     if (cached != null) {
+      debugPrintIfDebugging('_loadInitialData: Found cached data, using it');
       setState(() {
         futureChartData = Future.value(cached);
       });
       
       // Try to fetch fresh data in the background
+      debugPrintIfDebugging('_loadInitialData: Fetching fresh data in background');
       Future.delayed(Duration.zero, () async {
         try {
           final freshFuture = _loadChartData();
           final fresh = await freshFuture;
           if (fresh != null) {
+            debugPrintIfDebugging('_loadInitialData: Fresh data received, updating UI');
             setState(() {
               futureChartData = Future.value(fresh);
             });
@@ -189,36 +196,59 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           // Don't update the UI if background refresh fails
         }
       });
+    } else {
+      debugPrintIfDebugging('_loadInitialData: No cached data found, using fresh load');
     }
   }
 
   Future<Map<String, dynamic>> _loadChartData() async {
+    debugPrintIfDebugging('_loadChartData: Starting chart data load');
     final now = DateTime.now();
     final useYesterday = now.hour < 3;
     final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
     final formattedDate = DateFormat('yyyy-MM-dd').format(dateToUse);
+    debugPrintIfDebugging('_loadChartData: Using date $formattedDate');
 
     final service = TemperatureService();
     String city = 'London';
+    debugPrintIfDebugging('_loadChartData: Starting geolocation check');
     // Try to get user's city via geolocation
     try {
       bool serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
+      debugPrintIfDebugging('_loadChartData: Location service enabled: $serviceEnabled');
       if (serviceEnabled) {
         geo.LocationPermission permission = await geo.Geolocator.checkPermission();
+        debugPrintIfDebugging('_loadChartData: Initial permission: $permission');
         if (permission == geo.LocationPermission.denied) {
           permission = await geo.Geolocator.requestPermission();
+          debugPrintIfDebugging('_loadChartData: After request, permission: $permission');
         }
         if (permission == geo.LocationPermission.whileInUse || permission == geo.LocationPermission.always) {
-          geo.Position position = await geo.Geolocator.getCurrentPosition(desiredAccuracy: geo.LocationAccuracy.low);
-          List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
-          if (placemarks.isNotEmpty && placemarks.first.locality != null && placemarks.first.locality!.isNotEmpty) {
-            city = placemarks.first.locality!;
+          debugPrintIfDebugging('_loadChartData: Getting current position');
+          try {
+            geo.Position position = await geo.Geolocator.getCurrentPosition(
+              desiredAccuracy: geo.LocationAccuracy.low,
+            ).timeout(const Duration(seconds: 10));
+            debugPrintIfDebugging('_loadChartData: Got position: ${position.latitude}, ${position.longitude}');
+            debugPrintIfDebugging('_loadChartData: Getting placemarks');
+                        List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+            if (placemarks.isNotEmpty && placemarks.first.locality != null && placemarks.first.locality!.isNotEmpty) {
+              city = placemarks.first.locality!;
+              debugPrintIfDebugging('_loadChartData: Using city: $city');
+            } else {
+              debugPrintIfDebugging('_loadChartData: No locality found in placemarks');
+            }
+          } catch (e) {
+            debugPrintIfDebugging('_loadChartData: Geolocation timeout or error: $e');
           }
+        } else {
+          debugPrintIfDebugging('_loadChartData: Location permission denied');
         }
       }
     } catch (e) {
       debugPrintIfDebugging('Geolocation failed, falling back to London: $e');
     }
+    debugPrintIfDebugging('_loadChartData: Final city: $city');
     final currentYear = dateToUse.year;
 
     List<TemperatureChartData> chartData = [];
@@ -247,12 +277,12 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
 
     // Try main /data/ endpoint first
     try {
-      debugPrintIfDebugging('Starting /data/ fetch for $city, $formattedDate');
+      debugPrintIfDebugging('_loadChartData: Starting /data/ fetch for $city, $formattedDate');
       final tempData = await service
           .fetchCompleteData(city, '$currentYear-${formattedDate.substring(5)}')
           .timeout(const Duration(seconds: 30));
-        debugPrintIfDebugging('/data/ response: ${tempData.toString()}');
-        debugPrintIfDebugging('tempData.series?.data?.length: ${tempData.series?.data.length}');
+        debugPrintIfDebugging('_loadChartData: /data/ response: ${tempData.toString()}');
+        debugPrintIfDebugging('_loadChartData: tempData.series?.data?.length: ${tempData.series?.data.length}');
       if (tempData.series?.data.isNotEmpty == true) {
         _hasFreshData = true;
         averageTemperature = tempData.average?.temperature;
@@ -542,75 +572,13 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
             backgroundColor: kBackgroundColour,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              child: Padding(
-                padding: EdgeInsets.only(
-                  top: MediaQuery.of(context).padding.top + kContentVerticalPadding,
-                  bottom: MediaQuery.of(context).padding.bottom + kContentVerticalPadding,
-                  left: kScreenPadding,
-                  right: kScreenPadding,
-                ),
-                child: Column(
+              child: _buildContentPadding(
+                context,
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // --- Title/logo row: always visible and scrolls with content ---
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
-                        double horizontalOffset = (constraints.maxWidth - contentWidth) / 2;
-                        
-                        debugPrintIfDebugging('Title area - Screen width: ${constraints.maxWidth}, contentWidth: $contentWidth, horizontalOffset: $horizontalOffset, isWideScreen: ${constraints.maxWidth >= 600}');
-                        
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                          child: Stack(
-                            children: [
-                              // Logo positioned to the left of content area
-                              if (horizontalOffset > 0)
-                                Positioned(
-                                  left: horizontalOffset - 60, // Position logo 60px to the left of content (50px + 10px for bar alignment)
-                                  child: SvgPicture.asset(
-                                    'assets/logo.svg',
-                                    width: 40,
-                                    height: 40,
-                                  ),
-                                ),
-                              // Title text aligned with content left edge
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Container(
-                                  margin: EdgeInsets.only(
-                                    left: horizontalOffset > 0 ? horizontalOffset : kTitleRowHorizontalMargin,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      // Only show logo inline on narrow screens
-                                      if (horizontalOffset <= 0)
-                                        Padding(
-                                          padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
-                                          child: SvgPicture.asset(
-                                            'assets/logo.svg',
-                                            width: 40,
-                                            height: 40,
-                                          ),
-                                        ),
-                                      Text(
-                                        'TempHist',
-                                        style: TextStyle(
-                                          color: kAccentColour,
-                                          fontSize: kFontSizeTitle,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 1.2,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                    _buildTitleLogoSection(),
                     // --- The rest of your UI, including the FutureBuilder ---
                     FutureBuilder<Map<String, dynamic>>(
                       future: futureChartData,
@@ -1009,6 +977,79 @@ Map<String, dynamic> _createResultMap({
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTitleLogoSection() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
+        double horizontalOffset = (constraints.maxWidth - contentWidth) / 2;
+        
+        debugPrintIfDebugging('Title area - Screen width: ${constraints.maxWidth}, contentWidth: $contentWidth, horizontalOffset: $horizontalOffset, isWideScreen: ${constraints.maxWidth >= 600}');
+        
+        return Padding(
+          padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+          child: Stack(
+            children: [
+              // Logo positioned to the left of content area
+              if (horizontalOffset > 0)
+                Positioned(
+                  left: horizontalOffset - 60, // Position logo 60px to the left of content (50px + 10px for bar alignment)
+                  child: SvgPicture.asset(
+                    'assets/logo.svg',
+                    width: 40,
+                    height: 40,
+                  ),
+                ),
+              // Title text aligned with content left edge
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  margin: EdgeInsets.only(
+                    left: horizontalOffset > 0 ? horizontalOffset : kTitleRowHorizontalMargin,
+                  ),
+                  child: Row(
+                    children: [
+                      // Only show logo inline on narrow screens
+                      if (horizontalOffset <= 0)
+                        Padding(
+                          padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
+                          child: SvgPicture.asset(
+                            'assets/logo.svg',
+                            width: 40,
+                            height: 40,
+                          ),
+                        ),
+                      Text(
+                        'TempHist',
+                        style: TextStyle(
+                          color: kAccentColour,
+                          fontSize: kFontSizeTitle,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildContentPadding(BuildContext context, Widget child) {
+    return Padding(
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + kContentVerticalPadding,
+        bottom: MediaQuery.of(context).padding.bottom + kContentVerticalPadding,
+        left: kScreenPadding,
+        right: kScreenPadding,
+      ),
+      child: child,
     );
   }
 
