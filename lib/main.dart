@@ -246,7 +246,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         }
       }
     } catch (e) {
-      debugPrintIfDebugging('Geolocation failed, falling back to London: $e');
+      debugPrintIfDebugging('Geolocation failed, falling back to $city: $e');
     }
     debugPrintIfDebugging('_loadChartData: Final city: $city');
     final currentYear = dateToUse.year;
@@ -544,65 +544,35 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           // The RefreshIndicator will show its own indicator
           return const SizedBox.shrink();
         } else if (effectiveSnapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Error loading data: ${effectiveSnapshot.error}',
-                  style: const TextStyle(color: kTextPrimaryColour),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                _buildRetryButton(() {
-                  setState(() {
-                    futureChartData = _loadChartData();
-                  });
-                }),
-              ],
-            ),
+          return _buildRetrySection(
+            'Error loading data: ${effectiveSnapshot.error}',
+            () {
+              setState(() {
+                futureChartData = _loadChartData();
+              });
+            },
           );
         } else if (!effectiveSnapshot.hasData || effectiveSnapshot.data!.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'No temperature data available.',
-                  style: TextStyle(color: kTextPrimaryColour),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                _buildRetryButton(() {
-                  setState(() {
-                    futureChartData = _loadChartData();
-                  });
-                }),
-              ],
-            ),
+          return _buildRetrySection(
+            'No temperature data available.',
+            () {
+              setState(() {
+                futureChartData = _loadChartData();
+              });
+            },
           );
         }
 
         final data = effectiveSnapshot.data!;
         final chartData = data['chartData'] as List<TemperatureChartData>;
         if (chartData.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'No temperature data available.',
-                  style: TextStyle(color: kTextPrimaryColour),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                _buildRetryButton(() {
-                  setState(() {
-                    futureChartData = _loadChartData();
-                  });
-                }),
-              ],
-            ),
+          return _buildRetrySection(
+            'No temperature data available.',
+            () {
+              setState(() {
+                futureChartData = _loadChartData();
+              });
+            },
           );
         }
         final averageTemperature = data['averageTemperature'] as double?;
@@ -814,6 +784,23 @@ Map<String, dynamic> _createResultMap({
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: kAccentColour,
+      ),
+    );
+  }
+
+  Widget _buildRetrySection(String message, VoidCallback onRetry) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            message,
+            style: const TextStyle(color: kTextPrimaryColour),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          _buildRetryButton(onRetry),
+        ],
       ),
     );
   }
