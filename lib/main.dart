@@ -529,20 +529,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       body: Stack(
         children: [
           // Gradient background fills the whole screen including system areas
-          SizedBox.expand(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFF242456), // Top color
-                    Color(0xFF343499), // Bottom color
-                  ],
-                ),
-              ),
-            ),
-          ),
+          _buildGradientBackground(),
           // Foreground content scrolls above the background
           RefreshIndicator(
             onRefresh: () async {
@@ -630,7 +617,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                       builder: (context, snapshot) {
                         final effectiveSnapshot = widget.testSnapshot ?? snapshot;
                         if (effectiveSnapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                          // Don't show loading indicator during pull-to-refresh
+                          // The RefreshIndicator will show its own indicator
+                          return const SizedBox.shrink();
                         } else if (effectiveSnapshot.hasError) {
                           return Center(
                             child: Column(
@@ -993,18 +982,35 @@ Map<String, dynamic> _createResultMap({
   };
 }
 
-Widget _buildRetryButton(VoidCallback onPressed) {
-  return ElevatedButton(
-    onPressed: onPressed,
-    child: const Text(
-      'Retry',
-      style: TextStyle(color: kTextPrimaryColour),
-    ),
-    style: ElevatedButton.styleFrom(
-      backgroundColor: kAccentColour,
-    ),
-  );
-}
+  Widget _buildRetryButton(VoidCallback onPressed) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      child: const Text(
+        'Retry',
+        style: TextStyle(color: kTextPrimaryColour),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: kAccentColour,
+      ),
+    );
+  }
+
+  Widget _buildGradientBackground() {
+    return SizedBox.expand(
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF242456), // Top color
+              Color(0xFF343499), // Bottom color
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
 // Sign up
 Future<UserCredential> signUp(String email, String password) async {
