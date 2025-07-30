@@ -519,6 +519,20 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     }
   }
 
+  Widget _buildRefreshIndicator(Widget child) {
+    return RefreshIndicator(
+      onRefresh: () async {
+        setState(() {
+          futureChartData = _loadChartData();
+        });
+        await futureChartData;
+      },
+      color: kAccentColour,
+      backgroundColor: kBackgroundColour,
+      child: child,
+    );
+  }
+
   void _startDateCheckTimer() {
     _dateCheckTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       _checkDateChange();
@@ -561,16 +575,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           // Gradient background fills the whole screen including system areas
           _buildGradientBackground(),
           // Foreground content scrolls above the background
-          RefreshIndicator(
-            onRefresh: () async {
-              setState(() {
-                futureChartData = _loadChartData();
-              });
-              await futureChartData;
-            },
-            color: kAccentColour,
-            backgroundColor: kBackgroundColour,
-            child: SingleChildScrollView(
+          _buildRefreshIndicator(
+            SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               child: _buildContentPadding(
                 context,
@@ -579,7 +585,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                   children: [
                     // --- Title/logo row: always visible and scrolls with content ---
                     _buildTitleLogoSection(),
-                    // --- The rest of your UI, including the FutureBuilder ---
+                    // --- The rest of the UI, including the FutureBuilder ---
                     FutureBuilder<Map<String, dynamic>>(
                       future: futureChartData,
                       builder: (context, snapshot) {
@@ -658,170 +664,14 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                         
                         debugPrintIfDebugging('Average temperature for plot band: $averageTemperature°C');
 
-                        // Calculate minimum and maximum temperature for Y-axis
-                        final minTemp = chartData.map((data) => data.temperature).reduce((a, b) => a < b ? a : b);
-                        final maxTemp = chartData.map((data) => data.temperature).reduce((a, b) => a > b ? a : b);
-                        final yAxisMin = (minTemp - 2).floorToDouble(); // Start 2 degrees below minimum
-                        final yAxisMax = (maxTemp + 2).ceilToDouble(); // End 2 degrees above maximum
-
-                        return SingleChildScrollView(
-                          child: Padding(
-                            padding: const EdgeInsets.all(kChartInnerPadding),
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
-                                debugPrintIfDebugging('Main content - Screen width: ${constraints.maxWidth}, contentWidth: $contentWidth, isWideScreen: ${constraints.maxWidth >= 600}');
-                                return Center(
-                                  child: Container(
-                                    width: contentWidth,
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        // Date and location above summary
-                                        if (displayDate != null)
-                                          Padding(
-                                            padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                                            child: Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: Container(
-                                                margin: const EdgeInsets.symmetric(horizontal: kSectionHorizontalMargin),
-                                                child: Text(
-                                                  displayDate,
-                                                  style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                                                  textAlign: TextAlign.left,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        if (city != null)
-                                          Padding(
-                                            padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                                            child: Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: Container(
-                                                margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                                                child: Text(
-                                                  city,
-                                                  style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                                                  textAlign: TextAlign.left,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        if (summaryText?.isNotEmpty == true)
-                                          Padding(
-                                            padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                                            child: Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: Container(
-                                                margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                                                child: Text(
-                                                  summaryText!,
-                                                  style: TextStyle(color: kSummaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                                                  textAlign: TextAlign.left,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        SizedBox(
-                                          height: chartHeight,
-                                          child: SfCartesianChart(
-                                            margin: EdgeInsets.symmetric(horizontal: kChartHorizontalMargin),
-                                            tooltipBehavior: TooltipBehavior(
-                                              enable: true,
-                                              format: 'point.x: point.y',
-                                              canShowMarker: false,
-                                              header: '',
-                                              textStyle: TextStyle(fontSize: kFontSizeBody),
-                                            ),
-                                            series: [
-                                              BarSeries<TemperatureChartData, String>(
-                                                dataSource: chartData,
-                                                xValueMapper: (TemperatureChartData data, int index) => data.year,
-                                                yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                                                pointColorMapper: (TemperatureChartData data, int index) =>
-                                                    data.isCurrentYear ? kBarCurrentYearColour : kBarOtherYearColour,
-                                                width: 0.8,
-                                                name: 'Yearly Temperature',
-                                                enableTooltip: true,
-                                              ),
-                                              if (averageTemperature != null)
-                                                LineSeries<TemperatureChartData, String>(
-                                                  dataSource: _generateAverageData(chartData, averageTemperature!),
-                                                  xValueMapper: (TemperatureChartData data, int index) => data.year,
-                                                  yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                                                  color: kAverageColour,
-                                                  width: 2,
-                                                  name: 'Average Temperature',
-                                                  markerSettings: MarkerSettings(isVisible: false),
-                                                ),
-                                              if (trendSlope != null)
-                                                LineSeries<TemperatureChartData, String>(
-                                                  dataSource: _generateTrendData(chartData, trendSlope!),
-                                                  xValueMapper: (TemperatureChartData data, int index) => data.year,
-                                                  yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                                                  color: kTrendColour,
-                                                  width: 2,
-                                                  name: 'Trend',
-                                                  markerSettings: MarkerSettings(isVisible: false),
-                                                ),
-                                            ],
-                                            primaryXAxis: CategoryAxis(
-                                              labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
-                                              majorGridLines: MajorGridLines(width: 0),
-                                              labelIntersectAction: AxisLabelIntersectAction.hide,
-                                            ),
-                                            primaryYAxis: NumericAxis(
-                                              labelFormat: '{value}°C',
-                                              numberFormat: NumberFormat('0'),
-                                              minimum: yAxisMin,
-                                              maximum: yAxisMax,
-                                              majorGridLines: MajorGridLines(width: 0),
-                                              labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
-                                            ),
-                                            plotAreaBorderWidth: 0,
-                                          ),
-                                        ),
-                                        // Add average and trend info below the chart
-                                        if (averageTemperature != null)
-                                          Padding(
-                                            padding: const EdgeInsets.only(top: kSectionTopPadding),
-                                            child: Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: Container(
-                                                margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                                                child: Text(
-                                                  'Average: ${averageTemperature.toStringAsFixed(1)}°C',
-                                                  style: TextStyle(color: kAverageColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                                                  textAlign: TextAlign.left,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        if (trendSlope != null)
-                                          Padding(
-                                            padding: const EdgeInsets.only(top: kSectionTopPadding),
-                                            child: Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: Container(
-                                                margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                                                child: Text(
-                                                  (trendSlope.abs() < 0.01)
-                                                    ? 'Trend: Stable'
-                                                    : 'Trend: ${trendSlope > 0 ? 'Rising' : 'Falling'} at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
-                                                  style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                                                  textAlign: TextAlign.left,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
+                        return _buildChartContent(
+                          chartData: chartData,
+                          averageTemperature: averageTemperature,
+                          trendSlope: trendSlope,
+                          summaryText: summaryText,
+                          displayDate: displayDate,
+                          city: city,
+                          chartHeight: chartHeight,
                         );
                       },
                     ),
@@ -1053,7 +903,149 @@ Map<String, dynamic> _createResultMap({
     );
   }
 
-// Sign up
+  Widget _buildChartContent({
+    required List<TemperatureChartData> chartData,
+    required double? averageTemperature,
+    required double? trendSlope,
+    required String? summaryText,
+    required String? displayDate,
+    required String? city,
+    required double chartHeight,
+  }) {
+    // Calculate minimum and maximum temperature for Y-axis
+    final minTemp = chartData.map((data) => data.temperature).reduce((a, b) => a < b ? a : b);
+    final maxTemp = chartData.map((data) => data.temperature).reduce((a, b) => a > b ? a : b);
+    final yAxisMin = (minTemp - 2).floorToDouble(); // Start 2 degrees below minimum
+    final yAxisMax = (maxTemp + 2).ceilToDouble(); // End 2 degrees above maximum
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(kChartInnerPadding),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
+            debugPrintIfDebugging('Main content - Screen width: ${constraints.maxWidth}, contentWidth: $contentWidth, isWideScreen: ${constraints.maxWidth >= 600}');
+            return Center(
+              child: Container(
+                width: contentWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Date and location above summary
+                    if (displayDate != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: kSectionHorizontalMargin),
+                            child: Text(
+                              displayDate,
+                              style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (city != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
+                            child: Text(
+                              city,
+                              style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (summaryText?.isNotEmpty == true)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
+                            child: Text(
+                              summaryText!,
+                              style: TextStyle(color: kSummaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                        ),
+                      ),
+                    SizedBox(
+                      height: chartHeight,
+                      child: SfCartesianChart(
+                        margin: EdgeInsets.symmetric(horizontal: kChartHorizontalMargin),
+                        tooltipBehavior: TooltipBehavior(
+                          enable: true,
+                          format: 'point.x: point.y',
+                          canShowMarker: false,
+                          header: '',
+                          textStyle: TextStyle(fontSize: kFontSizeBody),
+                        ),
+                        series: [
+                          BarSeries<TemperatureChartData, String>(
+                            dataSource: chartData,
+                            xValueMapper: (TemperatureChartData data, int index) => data.year,
+                            yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                            pointColorMapper: (TemperatureChartData data, int index) =>
+                                data.isCurrentYear ? kBarCurrentYearColour : kBarOtherYearColour,
+                            width: 0.8,
+                            name: 'Yearly Temperature',
+                            enableTooltip: true,
+                          ),
+                          if (averageTemperature != null)
+                            LineSeries<TemperatureChartData, String>(
+                              dataSource: _generateAverageData(chartData, averageTemperature!),
+                              xValueMapper: (TemperatureChartData data, int index) => data.year,
+                              yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                              color: kAverageColour,
+                              width: 2,
+                              name: 'Average Temperature',
+                              markerSettings: MarkerSettings(isVisible: false),
+                            ),
+                          if (trendSlope != null)
+                            LineSeries<TemperatureChartData, String>(
+                              dataSource: _generateTrendData(chartData, trendSlope!),
+                              xValueMapper: (TemperatureChartData data, int index) => data.year,
+                              yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                              color: kTrendColour,
+                              width: 2,
+                              name: 'Trend',
+                              markerSettings: MarkerSettings(isVisible: false),
+                            ),
+                        ],
+                        primaryXAxis: CategoryAxis(
+                          labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
+                          majorGridLines: MajorGridLines(width: 0),
+                          labelIntersectAction: AxisLabelIntersectAction.hide,
+                        ),
+                        primaryYAxis: NumericAxis(
+                          labelFormat: '{value}°C',
+                          numberFormat: NumberFormat('0'),
+                          minimum: yAxisMin,
+                          maximum: yAxisMax,
+                          majorGridLines: MajorGridLines(width: 0),
+                          labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
+                        ),
+                        plotAreaBorderWidth: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+    // Sign up
 Future<UserCredential> signUp(String email, String password) async {
   return await FirebaseAuth.instance.createUserWithEmailAndPassword(
     email: email,
