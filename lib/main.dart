@@ -283,6 +283,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           .timeout(const Duration(seconds: 30));
         debugPrintIfDebugging('_loadChartData: /data/ response: ${tempData.toString()}');
         debugPrintIfDebugging('_loadChartData: tempData.series?.data?.length: ${tempData.series?.data.length}');
+        debugPrintIfDebugging('_loadChartData: tempData.summary: ${tempData.summary}');
+        debugPrintIfDebugging('_loadChartData: tempData.average?.temperature: ${tempData.average?.temperature}');
+        debugPrintIfDebugging('_loadChartData: tempData.trend?.slope: ${tempData.trend?.slope}');
       if (tempData.series?.data.isNotEmpty == true) {
         _hasFreshData = true;
         averageTemperature = tempData.average?.temperature;
@@ -366,6 +369,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           // Safely extract summary text
           final summaryRaw = summaryData['summary'];
           summaryText = summaryRaw?.toString();
+          debugPrintIfDebugging('Summary endpoint response: $summaryData');
+          debugPrintIfDebugging('Summary raw value: $summaryRaw');
+          debugPrintIfDebugging('Summary text extracted: $summaryText');
         } catch (e) {
           debugPrintIfDebugging('Failed to fetch summary data: $e');
           summaryText = null;
@@ -582,6 +588,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         final city = data['city'] as String?;
         
         debugPrintIfDebugging('Average temperature for plot band: $averageTemperature°C');
+        debugPrintIfDebugging('Summary text for UI: $summaryText');
+        debugPrintIfDebugging('Summary text is empty: ${summaryText?.isEmpty}');
+        debugPrintIfDebugging('Summary text is null: ${summaryText == null}');
 
         return _buildChartContent(
           chartData: chartData,
@@ -909,6 +918,11 @@ Map<String, dynamic> _createResultMap({
     final maxTemp = chartData.map((data) => data.temperature).reduce((a, b) => a > b ? a : b);
     final yAxisMin = (minTemp - 2).floorToDouble(); // Start 2 degrees below minimum
     final yAxisMax = (maxTemp + 2).ceilToDouble(); // End 2 degrees above maximum
+    
+    debugPrintIfDebugging('_buildChartContent: summaryText = "$summaryText"');
+    debugPrintIfDebugging('_buildChartContent: summaryText?.isNotEmpty = ${summaryText?.isNotEmpty}');
+    debugPrintIfDebugging('_buildChartContent: kSummaryColour = $kSummaryColour');
+    
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(kChartInnerPadding),
@@ -1027,6 +1041,40 @@ Map<String, dynamic> _createResultMap({
                         plotAreaBorderWidth: 0,
                       ),
                     ),
+                    // Average temperature text below chart
+                    if (averageTemperature != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: kSectionTopPadding, bottom: kSectionBottomPadding),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
+                            child: Text(
+                              'Average: ${averageTemperature.toStringAsFixed(1)}°C',
+                              style: TextStyle(color: kAverageColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                        ),
+                      ),
+                    // Trend text below chart
+                    if (trendSlope != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
+                            child: Text(
+                              trendSlope > 0 
+                                ? 'Trend: Rising at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
+                                : 'Trend: Falling at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
+                              style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
