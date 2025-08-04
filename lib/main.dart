@@ -49,6 +49,9 @@ const double kFontSizeTitle = 20.0;
 const double kFontSizeBody = 14.0;
 const double kFontSizeAxisLabel = 12.0;
 
+// Time constants
+const int kUseYesterdayHourThreshold = 3; // Use yesterday's data if current hour is before this
+
 void debugPrintIfDebugging(Object? message) {
   if (DEBUGGING) {
     // ignore: avoid_print
@@ -193,18 +196,20 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           }
         } catch (e) {
           debugPrintIfDebugging('Background data refresh failed: $e');
-          // Don't update the UI if background refresh fails
+          // Don't update the UI if background refresh fails - keep showing cached data
         }
       });
     } else {
       debugPrintIfDebugging('_loadInitialData: No cached data found, using fresh load');
+      // If no cached data is available, we're already loading fresh data
+      // The FutureBuilder will handle the loading state and any errors
     }
   }
 
   Future<Map<String, dynamic>> _loadChartData() async {
     debugPrintIfDebugging('_loadChartData: Starting chart data load');
     final now = DateTime.now();
-    final useYesterday = now.hour < 3;
+    final useYesterday = now.hour < kUseYesterdayHourThreshold;
     final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
     final formattedDate = DateFormat('yyyy-MM-dd').format(dateToUse);
     debugPrintIfDebugging('_loadChartData: Using date $formattedDate');
@@ -408,9 +413,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         return await _cacheAndReturnResult(result);
       }
     }
-    // If all above fails, try to load from cache
+    // If all above fails, try to load from cache (even if date changed)
     final cached = await _loadCachedChartData();
     if (cached != null) {
+      debugPrintIfDebugging('Using cached data as fallback after fresh data load failed');
       return cached;
     }
     throw Exception('Failed to load data and no cached data available.');
@@ -427,6 +433,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         return;
       }
       
+      // Calculate the date that was used for this data (same logic as _loadChartData)
+      final now = DateTime.now();
+      final useYesterday = now.hour < kUseYesterdayHourThreshold;
+      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+      
       // Only cache the minimal necessary data
       final cache = jsonEncode({
         'chartData': chartData.map((e) => {
@@ -439,7 +450,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         'summary': data['summary'],
         'displayDate': data['displayDate'],
         'city': data['city'],
-        'cachedDate': DateFormat('yyyy-MM-dd').format(DateTime.now()), // Store current date
+        'cachedDate': DateFormat('yyyy-MM-dd').format(dateToUse), // Store the date that was actually used for the data
       });
       await prefs.setString('cachedChartData', cache);
     } catch (e) {
@@ -466,14 +477,15 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       // Check if the date has changed since the data was cached
       final cachedDate = decoded['cachedDate'] as String?;
       final now = DateTime.now();
-      final useYesterday = now.hour < 1;
+      final useYesterday = now.hour < kUseYesterdayHourThreshold; // Use same logic as _loadChartData
       final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
       final currentDate = DateFormat('yyyy-MM-dd').format(dateToUse);
       
       if (cachedDate != null && cachedDate != currentDate) {
-        // Date has changed, don't use cached data
-        debugPrintIfDebugging('Date changed from $cachedDate to $currentDate, refreshing data');
-        return null;
+        // Date has changed, but we'll still use cached data as fallback
+        // The fresh data load will be attempted first, and if it fails, we'll fall back to cached
+        debugPrintIfDebugging('Date changed from $cachedDate to $currentDate, but keeping cached data as fallback');
+        // Don't return null here - let the caller decide whether to use cached data
       }
       
       // Safely extract chartData
@@ -613,7 +625,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
 
   void _checkDateChange() {
     final now = DateTime.now();
-    final useYesterday = now.hour < 3;
+    final useYesterday = now.hour < kUseYesterdayHourThreshold;
     final currentDate = useYesterday ? now.subtract(Duration(days: 1)) : now;
     
     if (_lastCheckedDate == null) {
