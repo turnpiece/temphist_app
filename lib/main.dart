@@ -62,7 +62,7 @@ void debugPrintIfDebugging(Object? message) {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Configure system UI overlay to extend app background over R bar and navigation bar
+  // Configure system UI overlay to extend app background over status bar and navigation bar
   _setSystemUIOverlayStyle();
   
   await Firebase.initializeApp(
@@ -130,8 +130,8 @@ class MyApp extends StatelessWidget {
 }
 
 class TemperatureScreen extends StatefulWidget {
-  final Future<Map<String, dynamic>>? testFuture;
-  final AsyncSnapshot<Map<String, dynamic>>? testSnapshot;
+  final Future<Map<String, dynamic>?>? testFuture;
+  final AsyncSnapshot<Map<String, dynamic>?>? testSnapshot;
 
   TemperatureScreen({this.testFuture, this.testSnapshot});
 
@@ -140,8 +140,9 @@ class TemperatureScreen extends StatefulWidget {
 }
 
 class _TemperatureScreenState extends State<TemperatureScreen> {
-  late Future<Map<String, dynamic>> futureChartData;
+  late Future<Map<String, dynamic>?> futureChartData;
   bool _hasFreshData = false;
+  bool _isShowingCachedData = false;
   Timer? _dateCheckTimer;
   DateTime? _lastCheckedDate;
 
@@ -177,28 +178,47 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     debugPrintIfDebugging('_loadInitialData: Checking for cached data');
     final cached = await _loadCachedChartData();
     if (cached != null) {
-      debugPrintIfDebugging('_loadInitialData: Found cached data, using it');
-      setState(() {
-        futureChartData = Future.value(cached);
-      });
+      // Check if cached data has at least some chart data
+      final hasChartData = cached['chartData'] != null && 
+                          (cached['chartData'] as List).isNotEmpty;
       
-      // Try to fetch fresh data in the background
-      debugPrintIfDebugging('_loadInitialData: Fetching fresh data in background');
-      Future.delayed(Duration.zero, () async {
-        try {
-          final freshFuture = _loadChartData();
-          final fresh = await freshFuture;
-          if (fresh != null) {
-            debugPrintIfDebugging('_loadInitialData: Fresh data received, updating UI');
-            setState(() {
-              futureChartData = Future.value(fresh);
-            });
+      if (hasChartData) {
+        debugPrintIfDebugging('_loadInitialData: Found cached data with chart data, using it');
+        setState(() {
+          futureChartData = Future.value(cached);
+          _isShowingCachedData = true;
+        });
+        
+        // Try to fetch fresh data in the background
+        debugPrintIfDebugging('_loadInitialData: Fetching fresh data in background');
+        Future.delayed(Duration.zero, () async {
+          try {
+            final freshFuture = _loadChartData();
+            final fresh = await freshFuture;
+            if (fresh != null) {
+              debugPrintIfDebugging('_loadInitialData: Fresh data received, updating UI');
+              setState(() {
+                futureChartData = Future.value(fresh);
+                _isShowingCachedData = false;
+              });
+            } else {
+              debugPrintIfDebugging('_loadInitialData: Fresh data load returned null (fresh data arrived), keeping cached data');
+            }
+          } catch (e) {
+            debugPrintIfDebugging('Background data refresh failed: $e');
+            // If background refresh fails, we should still try to show the cached data
+            // but log that it might be incomplete
+            debugPrintIfDebugging('Background refresh failed, showing cached data (may be incomplete)');
           }
-        } catch (e) {
-          debugPrintIfDebugging('Background data refresh failed: $e');
-          // Don't update the UI if background refresh fails - keep showing cached data
-        }
-      });
+        });
+      } else {
+        debugPrintIfDebugging('_loadInitialData: Found cached data but no chart data, loading fresh data');
+        // If cached data has no chart data, don't show it and load fresh data instead
+        setState(() {
+          futureChartData = _loadChartData();
+          _isShowingCachedData = false;
+        });
+      }
     } else {
       debugPrintIfDebugging('_loadInitialData: No cached data found, using fresh load');
       // If no cached data is available, we're already loading fresh data
@@ -206,7 +226,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     }
   }
 
-  Future<Map<String, dynamic>> _loadChartData() async {
+  Future<Map<String, dynamic>?> _loadChartData() async {
     debugPrintIfDebugging('_loadChartData: Starting chart data load');
     final now = DateTime.now();
     final useYesterday = now.hour < kUseYesterdayHourThreshold;
@@ -324,9 +344,12 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         debugPrintIfDebugging('/data/ returned empty or missing series');
         throw Exception('No series data in /data/ endpoint response');
       }
-    } catch (e, stack) {
+    } catch (e) {
         debugPrintIfDebugging('Exception in /data/ fetch: $e');
-      _checkFreshDataAndThrow();
+      if (_shouldSkipFallback()) {
+        // If fresh data arrived, skip fallback and return null to trigger cache fallback
+        return null;
+      }
       // Fallback: try /average/, /trend/, /summary/ endpoints
       try {
         debugPrintIfDebugging('Calling /average/ endpoint...');
@@ -382,7 +405,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           summaryText = null;
         }
         await fetchYearlyData(startYear, endYear);
-        _checkFreshDataAndThrow();
+        if (_shouldSkipFallback()) {
+          // If fresh data arrived, skip fallback and return null to trigger cache fallback
+          return null;
+        }
         debugPrintIfDebugging('Fallback result: averageTemperature=$averageTemperature, trendSlope=$trendSlope, summaryText=$summaryText');
         final result = _createResultMap(
           chartData: chartData,
@@ -419,7 +445,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       debugPrintIfDebugging('Using cached data as fallback after fresh data load failed');
       return cached;
     }
-    throw Exception('Failed to load data and no cached data available.');
+    throw Exception('Unable to load temperature data. Please check your internet connection and try again.');
   }
 
   Future<void> _cacheChartData(Map<String, dynamic> data) async {
@@ -477,7 +503,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       // Check if the date has changed since the data was cached
       final cachedDate = decoded['cachedDate'] as String?;
       final now = DateTime.now();
-      final useYesterday = now.hour < kUseYesterdayHourThreshold; // Use same logic as _loadChartData
+      final useYesterday = now.hour < kUseYesterdayHourThreshold; // Use same logic as _loadChartDataR
       final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
       final currentDate = DateFormat('yyyy-MM-dd').format(dateToUse);
       
@@ -516,6 +542,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         'summary': decoded['summary'],
         'displayDate': decoded['displayDate'],
         'city': decoded['city'],
+        'cachedDate': cachedDate, // Include the cached date for reference
       };
     } catch (e) {
       debugPrintIfDebugging('Error loading cached data: $e');
@@ -530,11 +557,12 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     return result;
   }
 
-  void _checkFreshDataAndThrow() {
+  bool _shouldSkipFallback() {
     if (_hasFreshData) {
       debugPrintIfDebugging('Skipping fallback update because fresh data arrived.');
-      throw Exception('Fresh data arrived, skipping fallback');
+      return true;
     }
+    return false;
   }
 
   Widget _buildRefreshIndicator(Widget child) {
@@ -542,6 +570,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       onRefresh: () async {
         setState(() {
           futureChartData = _loadChartData();
+          _isShowingCachedData = false;
         });
         await futureChartData;
       },
@@ -551,9 +580,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     );
   }
 
-  Widget _buildFutureBuilder() {
-    final double chartHeight = 800;
-    return FutureBuilder<Map<String, dynamic>>(
+  Widget _buildFutureBuilder({required double chartHeight}) {
+    return FutureBuilder<Map<String, dynamic>?>(
       future: futureChartData,
       builder: (context, snapshot) {
         final effectiveSnapshot = widget.testSnapshot ?? snapshot;
@@ -567,15 +595,17 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
             () {
               setState(() {
                 futureChartData = _loadChartData();
+                _isShowingCachedData = false;
               });
             },
           );
-        } else if (!effectiveSnapshot.hasData || effectiveSnapshot.data!.isEmpty) {
+        } else if (!effectiveSnapshot.hasData || effectiveSnapshot.data == null || effectiveSnapshot.data!.isEmpty) {
           return _buildRetrySection(
-            'No temperature data available.',
+            'No temperature data available. Please check your internet connection and try again.',
             () {
               setState(() {
                 futureChartData = _loadChartData();
+                _isShowingCachedData = false;
               });
             },
           );
@@ -585,10 +615,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         final chartData = data['chartData'] as List<TemperatureChartData>;
         if (chartData.isEmpty) {
           return _buildRetrySection(
-            'No temperature data available.',
+            'No temperature data available. Please check your internet connection and try again.',
             () {
               setState(() {
                 futureChartData = _loadChartData();
+                _isShowingCachedData = false;
               });
             },
           );
@@ -612,6 +643,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           displayDate: displayDate,
           city: city,
           chartHeight: chartHeight,
+          isCachedData: _isShowingCachedData,
+          cachedDate: data['cachedDate'] as String?,
         );
       },
     );
@@ -640,6 +673,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       debugPrintIfDebugging('Date changed from ${_lastCheckedDate} to $currentDate, reloading data');
       setState(() {
         futureChartData = _loadChartData();
+        _isShowingCachedData = false;
       });
     }
     
@@ -670,7 +704,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                     // --- Title/logo row: always visible and scrolls with content ---
                     _buildTitleLogoSection(),
                     // --- The rest of the UI, including the FutureBuilder ---
-                    _buildFutureBuilder(),
+                    _buildFutureBuilder(chartHeight: chartHeight),
                   ],
                 ),
               ),
@@ -810,19 +844,31 @@ Map<String, dynamic> _createResultMap({
   }
 
   Widget _buildRetrySection(String message, VoidCallback onRetry) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            message,
-            style: const TextStyle(color: kTextPrimaryColour),
-            textAlign: TextAlign.center,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
+        double horizontalOffset = (constraints.maxWidth - contentWidth) / 2;
+        
+        return Center(
+          child: Container(
+            width: contentWidth,
+            margin: EdgeInsets.symmetric(horizontal: horizontalOffset > 0 ? horizontalOffset : kScreenPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  message,
+                  style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody),
+                  textAlign: TextAlign.left,
+                ),
+                const SizedBox(height: 16),
+                _buildRetryButton(onRetry),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
-          _buildRetryButton(onRetry),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -924,6 +970,8 @@ Map<String, dynamic> _createResultMap({
     required String? displayDate,
     required String? city,
     required double chartHeight,
+    bool isCachedData = false,
+    String? cachedDate,
   }) {
     // Calculate minimum and maximum temperature for Y-axis
     final minTemp = chartData.map((data) => data.temperature).reduce((a, b) => a < b ? a : b);
@@ -957,7 +1005,9 @@ Map<String, dynamic> _createResultMap({
                           child: Container(
                             margin: const EdgeInsets.symmetric(horizontal: kSectionHorizontalMargin),
                             child: Text(
-                              displayDate,
+                              isCachedData && cachedDate != null 
+                                ? _formatDayMonth(DateFormat('yyyy-MM-dd').parse(cachedDate))
+                                : displayDate,
                               style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
                               textAlign: TextAlign.left,
                             ),
@@ -971,10 +1021,23 @@ Map<String, dynamic> _createResultMap({
                           alignment: Alignment.centerLeft,
                           child: Container(
                             margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                            child: Text(
-                              city,
-                              style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                              textAlign: TextAlign.left,
+                            child: Row(
+                              children: [
+                                Text(
+                                  city,
+                                  style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                                  textAlign: TextAlign.left,
+                                ),
+                                if (isCachedData)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 8.0),
+                                    child: Text(
+                                      '(cached)',
+                                      style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
+                                      textAlign: TextAlign.left,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         ),
