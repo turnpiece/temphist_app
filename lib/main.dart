@@ -235,7 +235,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     debugPrintIfDebugging('_loadChartData: Using date $formattedDate');
 
     final service = TemperatureService();
-    String city = 'London';
+    String city = 'London, UK';
     debugPrintIfDebugging('_loadChartData: Starting geolocation check');
     // Try to get user's city via geolocation
     try {
@@ -257,11 +257,27 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
             debugPrintIfDebugging('_loadChartData: Got position: ${position.latitude}, ${position.longitude}');
             debugPrintIfDebugging('_loadChartData: Getting placemarks');
                         List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
-            if (placemarks.isNotEmpty && placemarks.first.locality != null && placemarks.first.locality!.isNotEmpty) {
-              city = placemarks.first.locality!;
-              debugPrintIfDebugging('_loadChartData: Using city: $city');
+            debugPrintIfDebugging('_loadChartData: Found ${placemarks.length} placemarks');
+            if (placemarks.isNotEmpty) {
+              final placemark = placemarks.first;
+              debugPrintIfDebugging('_loadChartData: Placemark details - locality: ${placemark.locality}, country: ${placemark.country}, administrativeArea: ${placemark.administrativeArea}');
+              if (placemark.locality != null && placemark.locality!.isNotEmpty) {
+                // Build a more specific location string
+                final locality = placemark.locality!;
+                final country = placemark.country;
+                
+                if (country != null && country.isNotEmpty) {
+                  city = '$locality, $country';
+                  debugPrintIfDebugging('_loadChartData: Using city with country: $city');
+                } else {
+                  city = locality;
+                  debugPrintIfDebugging('_loadChartData: Using city without country: $city');
+                }
+              } else {
+                debugPrintIfDebugging('_loadChartData: No locality found in placemarks');
+              }
             } else {
-              debugPrintIfDebugging('_loadChartData: No locality found in placemarks');
+              debugPrintIfDebugging('_loadChartData: No placemarks found');
             }
           } catch (e) {
             debugPrintIfDebugging('_loadChartData: Geolocation timeout or error: $e');
