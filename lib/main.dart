@@ -1157,22 +1157,9 @@ Map<String, dynamic> _createResultMap({
       minTemp = validData.map((data) => data.temperature).reduce((a, b) => a < b ? a : b);
       maxTemp = validData.map((data) => data.temperature).reduce((a, b) => a > b ? a : b);
       
-      // Ensure proper Y-axis range for both positive and negative temperatures
-      if (minTemp < 0) {
-        // For negative temperatures, extend the range below zero
-        yAxisMin = (minTemp - 3).floorToDouble(); // Start 3 degrees below minimum
-      } else {
-        // For positive temperatures, start from zero or slightly below
-        yAxisMin = 0.0;
-      }
-      
-      if (maxTemp > 0) {
-        // For positive temperatures, extend the range above maximum
-        yAxisMax = (maxTemp + 3).ceilToDouble(); // End 3 degrees above maximum
-      } else {
-        // For negative temperatures, end at zero or slightly above
-        yAxisMax = 0.0;
-      }
+      // Always start just below the lowest temperature and end just above the highest
+      yAxisMin = (minTemp - 2).floorToDouble(); // Start 2 degrees below minimum
+      yAxisMax = (maxTemp + 2).ceilToDouble(); // End 2 degrees above maximum
       
       // Ensure we have a reasonable range even for small temperature variations
       final range = maxTemp - minTemp;
