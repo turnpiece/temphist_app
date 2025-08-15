@@ -1297,7 +1297,7 @@ Map<String, dynamic> _createResultMap({
                           ),
                           if (averageTemperature != null)
                             LineSeries<TemperatureChartData, int>(
-                              dataSource: _generateAverageData(chartData.where((data) => data.hasData).toList(), averageTemperature!),
+                              dataSource: _generateAverageData(chartData.where((data) => data.hasData).toList(), averageTemperature),
                               xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
                               yValueMapper: (TemperatureChartData data, int index) => data.temperature,
                               color: kAverageColour,
@@ -1307,7 +1307,7 @@ Map<String, dynamic> _createResultMap({
                             ),
                           if (trendSlope != null)
                             LineSeries<TemperatureChartData, int>(
-                              dataSource: _generateTrendData(chartData.where((data) => data.hasData).toList(), trendSlope!),
+                              dataSource: _generateTrendData(chartData.where((data) => data.hasData).toList(), trendSlope),
                               xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
                               yValueMapper: (TemperatureChartData data, int index) => data.temperature,
                               color: kTrendColour,
