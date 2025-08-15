@@ -281,7 +281,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                   final locality = placemark.locality!;
                   final country = placemark.country;
                   final administrativeArea = placemark.administrativeArea;
-                  final subLocality = placemark.subLocality;
                   
                   // Build a more specific location string to avoid ambiguity
                   if (country != null && country.isNotEmpty) {
@@ -346,12 +345,33 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           List<TemperatureChartData> chartData = [];
           final seriesData = tempData.series!.data;
           
-          for (final dataPoint in seriesData) {
-            if (dataPoint.y != null) {
+          // Extract year range from the series data
+          int minYear = currentYear;
+          int maxYear = currentYear;
+          if (seriesData.isNotEmpty) {
+            minYear = seriesData.map((dp) => dp.x).reduce((a, b) => a < b ? a : b);
+            maxYear = seriesData.map((dp) => dp.x).reduce((a, b) => a > b ? a : b);
+          }
+          
+          // Fill in all years in the range, including gaps for missing data
+          for (int year = minYear; year <= maxYear; year++) {
+            final dataPoint = seriesData.where((dp) => dp.x == year).firstOrNull;
+            
+            if (dataPoint != null && dataPoint.y != null) {
+              // Year has data
               chartData.add(TemperatureChartData(
-                year: dataPoint.x.toString(),
+                year: year.toString(),
                 temperature: (dataPoint.y is num) ? (dataPoint.y as num).toDouble() : 0.0,
-                isCurrentYear: dataPoint.x == currentYear,
+                isCurrentYear: year == currentYear,
+                hasData: true,
+              ));
+            } else {
+              // Year is missing data - add gap
+              chartData.add(TemperatureChartData(
+                year: year.toString(),
+                temperature: 0.0, // Will be ignored in chart rendering
+                isCurrentYear: year == currentYear,
+                hasData: false,
               ));
             }
           }
@@ -430,9 +450,17 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
               year: year.toString(),
               temperature: tempData.temperature ?? tempData.average?.temperature ?? 0.0,
               isCurrentYear: year == currentYear,
+              hasData: true,
             ));
           } catch (e) {
             debugPrintIfDebugging('Failed to fetch temperature for year $year: $e');
+            // Add gap for missing year
+            chartData.add(TemperatureChartData(
+              year: year.toString(),
+              temperature: 0.0, // Will be ignored in chart rendering
+              isCurrentYear: year == currentYear,
+              hasData: false,
+            ));
           }
         }
         
@@ -803,11 +831,13 @@ class TemperatureChartData {
   final String year;
   final double temperature;
   final bool isCurrentYear;
+  final bool hasData; // Added for gap handling
 
   TemperatureChartData({
     required this.year,
     required this.temperature,
     required this.isCurrentYear,
+    this.hasData = true, // Default to true
   });
 }
 
@@ -832,6 +862,7 @@ List<TemperatureChartData> _generateTrendData(List<TemperatureChartData> chartDa
       year: data.year,
       temperature: trendTemp,
       isCurrentYear: data.isCurrentYear,
+      hasData: data.hasData,
     );
   }).toList();
 }
@@ -845,6 +876,7 @@ List<TemperatureChartData> _generateAverageData(List<TemperatureChartData> chart
       year: data.year,
       temperature: averageTemp,
       isCurrentYear: data.isCurrentYear,
+      hasData: data.hasData,
     );
   }).toList();
 }
@@ -1068,11 +1100,21 @@ Map<String, dynamic> _createResultMap({
     bool isCachedData = false,
     String? cachedDate,
   }) {
-    // Calculate minimum and maximum temperature for Y-axis
-    final minTemp = chartData.map((data) => data.temperature).reduce((a, b) => a < b ? a : b);
-    final maxTemp = chartData.map((data) => data.temperature).reduce((a, b) => a > b ? a : b);
-    final yAxisMin = (minTemp - 2).floorToDouble(); // Start 2 degrees below minimum
-    final yAxisMax = (maxTemp + 2).ceilToDouble(); // End 2 degrees above maximum
+    // Calculate minimum and maximum temperature for Y-axis (only from years with data)
+    final validData = chartData.where((data) => data.hasData).toList();
+    double yAxisMin;
+    double yAxisMax;
+    
+    if (validData.isEmpty) {
+      // Fallback if no valid data
+      yAxisMin = -10.0;
+      yAxisMax = 40.0;
+    } else {
+      final minTemp = validData.map((data) => data.temperature).reduce((a, b) => a < b ? a : b);
+      final maxTemp = validData.map((data) => data.temperature).reduce((a, b) => a > b ? a : b);
+      yAxisMin = (minTemp - 2).floorToDouble(); // Start 2 degrees below minimum
+      yAxisMax = (maxTemp + 2).ceilToDouble(); // End 2 degrees above maximum
+    }
     
     debugPrintIfDebugging('_buildChartContent: summaryText = "$summaryText"');
     debugPrintIfDebugging('_buildChartContent: summaryText?.isNotEmpty = ${summaryText?.isNotEmpty}');
@@ -1171,20 +1213,23 @@ Map<String, dynamic> _createResultMap({
                           textStyle: TextStyle(fontSize: kFontSizeBody),
                         ),
                         series: [
-                          BarSeries<TemperatureChartData, String>(
-                            dataSource: chartData,
-                            xValueMapper: (TemperatureChartData data, int index) => data.year,
+                          BarSeries<TemperatureChartData, int>(
+                            dataSource: chartData.where((data) => data.hasData).toList(),
+                            xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
                             yValueMapper: (TemperatureChartData data, int index) => data.temperature,
                             pointColorMapper: (TemperatureChartData data, int index) =>
                                 data.isCurrentYear ? kBarCurrentYearColour : kBarOtherYearColour,
-                            width: 0.8,
+                            width: 0.8, // Restored to proper thickness
                             name: 'Yearly Temperature',
                             enableTooltip: true,
+                            // Ensure consistent spacing and prevent edge cropping
+                            spacing: 0.1, // Reduced spacing to maintain bar thickness
+                            borderRadius: BorderRadius.circular(2),
                           ),
                           if (averageTemperature != null)
-                            LineSeries<TemperatureChartData, String>(
-                              dataSource: _generateAverageData(chartData, averageTemperature!),
-                              xValueMapper: (TemperatureChartData data, int index) => data.year,
+                            LineSeries<TemperatureChartData, int>(
+                              dataSource: _generateAverageData(chartData.where((data) => data.hasData).toList(), averageTemperature!),
+                              xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
                               yValueMapper: (TemperatureChartData data, int index) => data.temperature,
                               color: kAverageColour,
                               width: 2,
@@ -1192,9 +1237,9 @@ Map<String, dynamic> _createResultMap({
                               markerSettings: MarkerSettings(isVisible: false),
                             ),
                           if (trendSlope != null)
-                            LineSeries<TemperatureChartData, String>(
-                              dataSource: _generateTrendData(chartData, trendSlope!),
-                              xValueMapper: (TemperatureChartData data, int index) => data.year,
+                            LineSeries<TemperatureChartData, int>(
+                              dataSource: _generateTrendData(chartData.where((data) => data.hasData).toList(), trendSlope!),
+                              xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
                               yValueMapper: (TemperatureChartData data, int index) => data.temperature,
                               color: kTrendColour,
                               width: 2,
@@ -1202,10 +1247,17 @@ Map<String, dynamic> _createResultMap({
                               markerSettings: MarkerSettings(isVisible: false),
                             ),
                         ],
-                        primaryXAxis: CategoryAxis(
+                        primaryXAxis: NumericAxis(
                           labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
                           majorGridLines: MajorGridLines(width: 0),
                           labelIntersectAction: AxisLabelIntersectAction.hide,
+                          // Add margins to prevent cropping of first and last bars
+                          minimum: chartData.map((data) => int.parse(data.year)).reduce((a, b) => a < b ? a : b).toDouble(),
+                          maximum: chartData.map((data) => int.parse(data.year)).reduce((a, b) => a > b ? a : b).toDouble(),
+                          interval: 1, // Show every year
+                          labelFormat: '{value}',
+                          // Ensure proper spacing and prevent cropping
+                          plotOffset: 20,
                         ),
                         primaryYAxis: NumericAxis(
                           labelFormat: '{value}°C',
@@ -1216,6 +1268,8 @@ Map<String, dynamic> _createResultMap({
                           labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
                         ),
                         plotAreaBorderWidth: 0,
+                        enableAxisAnimation: true,
+                        // Ensure proper spacing for bars
                       ),
                     ),
                     // Average temperature text below chart
@@ -1252,6 +1306,8 @@ Map<String, dynamic> _createResultMap({
                           ),
                         ),
                       ),
+                    // Data completeness indicator
+                    _buildDataCompletenessIndicator(chartData),
                   ],
                 ),
               ),
@@ -1260,6 +1316,86 @@ Map<String, dynamic> _createResultMap({
         ),
       ),
     );
+  }
+
+  Widget _buildDataCompletenessIndicator(List<TemperatureChartData> chartData) {
+    final missingYears = chartData.where((data) => !data.hasData).map((data) => int.parse(data.year)).toList();
+    final hasGaps = missingYears.isNotEmpty;
+    
+    if (hasGaps) {
+      // Sort missing years for better display
+      missingYears.sort();
+      
+      // Group consecutive missing years for cleaner display
+      final missingRanges = _groupConsecutiveYears(missingYears);
+      
+      String missingText;
+      if (missingRanges.length == 1 && missingRanges.first.length == 1) {
+        // Single year missing
+        missingText = 'Year ${missingRanges.first.first} is missing';
+      } else if (missingRanges.length == 1) {
+        // Consecutive years missing
+        missingText = 'Years ${missingRanges.first.first}-${missingRanges.first.last} are missing';
+      } else {
+        // Multiple ranges missing
+        final ranges = missingRanges.map((range) {
+          if (range.length == 1) return range.first.toString();
+          return '${range.first}-${range.last}';
+        }).join(', ');
+        missingText = 'Years $ranges are missing';
+      }
+      
+      return Padding(
+        padding: const EdgeInsets.only(top: kSectionTopPadding, bottom: kSectionBottomPadding),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Note: $missingText. This may affect the accuracy of the trend and average lines.',
+                  style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
+                  textAlign: TextAlign.left,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Data completeness: ${((chartData.where((data) => data.hasData).length / chartData.length) * 100).toStringAsFixed(0)}%',
+                  style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
+                  textAlign: TextAlign.left,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  /// Group consecutive years into ranges for cleaner display
+  List<List<int>> _groupConsecutiveYears(List<int> years) {
+    if (years.isEmpty) return [];
+    
+    final sortedYears = List<int>.from(years)..sort();
+    final ranges = <List<int>>[];
+    List<int> currentRange = [sortedYears.first];
+    
+    for (int i = 1; i < sortedYears.length; i++) {
+      if (sortedYears[i] == sortedYears[i - 1] + 1) {
+        // Consecutive year, add to current range
+        currentRange.add(sortedYears[i]);
+      } else {
+        // Gap found, save current range and start new one
+        ranges.add(List<int>.from(currentRange));
+        currentRange = [sortedYears[i]];
+      }
+    }
+    
+    // Add the last range
+    ranges.add(currentRange);
+    return ranges;
   }
 
     // Sign up
