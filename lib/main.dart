@@ -1104,18 +1104,45 @@ Map<String, dynamic> _createResultMap({
     final validData = chartData.where((data) => data.hasData).toList();
     double yAxisMin;
     double yAxisMax;
+    double minTemp = 0.0;
+    double maxTemp = 0.0;
     
     if (validData.isEmpty) {
       // Fallback if no valid data
       yAxisMin = -10.0;
       yAxisMax = 40.0;
     } else {
-      final minTemp = validData.map((data) => data.temperature).reduce((a, b) => a < b ? a : b);
-      final maxTemp = validData.map((data) => data.temperature).reduce((a, b) => a > b ? a : b);
-      yAxisMin = (minTemp - 2).floorToDouble(); // Start 2 degrees below minimum
-      yAxisMax = (maxTemp + 2).ceilToDouble(); // End 2 degrees above maximum
+      minTemp = validData.map((data) => data.temperature).reduce((a, b) => a < b ? a : b);
+      maxTemp = validData.map((data) => data.temperature).reduce((a, b) => a > b ? a : b);
+      
+      // Ensure proper Y-axis range for both positive and negative temperatures
+      if (minTemp < 0) {
+        // For negative temperatures, extend the range below zero
+        yAxisMin = (minTemp - 3).floorToDouble(); // Start 3 degrees below minimum
+      } else {
+        // For positive temperatures, start from zero or slightly below
+        yAxisMin = 0.0;
+      }
+      
+      if (maxTemp > 0) {
+        // For positive temperatures, extend the range above maximum
+        yAxisMax = (maxTemp + 3).ceilToDouble(); // End 3 degrees above maximum
+      } else {
+        // For negative temperatures, end at zero or slightly above
+        yAxisMax = 0.0;
+      }
+      
+      // Ensure we have a reasonable range even for small temperature variations
+      final range = maxTemp - minTemp;
+      if (range < 5) {
+        // For small ranges, ensure we have at least 5 degrees of scale
+        final midPoint = (maxTemp + minTemp) / 2;
+        yAxisMin = (midPoint - 2.5).floorToDouble();
+        yAxisMax = (midPoint + 2.5).ceilToDouble();
+      }
     }
     
+    debugPrintIfDebugging('Y-axis calculation - minTemp: $minTemp, maxTemp: $maxTemp, yAxisMin: $yAxisMin, yAxisMax: $yAxisMax');
     debugPrintIfDebugging('_buildChartContent: summaryText = "$summaryText"');
     debugPrintIfDebugging('_buildChartContent: summaryText?.isNotEmpty = ${summaryText?.isNotEmpty}');
     debugPrintIfDebugging('_buildChartContent: kSummaryColour = $kSummaryColour');
@@ -1266,6 +1293,10 @@ Map<String, dynamic> _createResultMap({
                           maximum: yAxisMax,
                           majorGridLines: MajorGridLines(width: 0),
                           labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
+                          // Ensure bars start at the axis regardless of temperature values
+                          plotOffset: 0,
+                          // Force the axis to respect the exact minimum and maximum values
+                          desiredIntervals: 5,
                         ),
                         plotAreaBorderWidth: 0,
                         enableAxisAnimation: true,
