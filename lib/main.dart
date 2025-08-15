@@ -51,6 +51,75 @@ const double kFontSizeAxisLabel = 12.0;
 // Time constants
 const int kUseYesterdayHourThreshold = 3; // Use yesterday's data if current hour is before this
 
+/// Clean up and validate location strings for better API compatibility
+String _cleanupLocationString(String location) {
+  if (location.isEmpty) return 'London, UK';
+  
+  // Remove extra whitespace and normalize commas
+  String cleaned = location.trim();
+  
+  // Replace multiple spaces with single space
+  cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ');
+  
+  // Normalize comma spacing (ensure space after comma)
+  cleaned = cleaned.replaceAll(RegExp(r',\s*'), ', ');
+  
+  // Remove trailing comma if present
+  cleaned = cleaned.replaceAll(RegExp(r',\s*$'), '');
+  
+  // Ensure we have at least a city and country
+  if (!cleaned.contains(',')) {
+    // If no comma, assume it's just a city, add default country
+    cleaned = '$cleaned, UK';
+  }
+  
+  return cleaned;
+}
+
+/// Detect suspicious or obviously incorrect location strings
+bool _isLocationSuspicious(String location) {
+  if (location.isEmpty) return true;
+  
+  final lowerLocation = location.toLowerCase();
+  
+  // Check for street addresses (which are usually wrong for city-level queries)
+  if (lowerLocation.contains('street') || 
+      lowerLocation.contains('st,') ||
+      lowerLocation.contains('ave,') ||
+      lowerLocation.contains('road') ||
+      lowerLocation.contains('rd,') ||
+      lowerLocation.contains('drive') ||
+      lowerLocation.contains('dr,') ||
+      lowerLocation.contains('lane') ||
+      lowerLocation.contains('ln,') ||
+      lowerLocation.contains('blvd') ||
+      lowerLocation.contains('boulevard')) {
+    return true;
+  }
+  
+  // Check for postal codes (which are usually wrong for city-level queries)
+  if (RegExp(r'\d{5}').hasMatch(location) || // US ZIP codes
+      RegExp(r'[A-Z]\d[A-Z]\s?\d[A-Z]\d').hasMatch(location)) { // Canadian postal codes
+    return true;
+  }
+  
+  // Check for coordinates (which are obviously wrong)
+  if (lowerLocation.contains('°') || 
+      lowerLocation.contains('north') ||
+      lowerLocation.contains('south') ||
+      lowerLocation.contains('east') ||
+      lowerLocation.contains('west')) {
+    return true;
+  }
+  
+  // Check for very short or very long location strings
+  if (location.length < 3 || location.length > 100) {
+    return true;
+  }
+  
+  return false;
+}
+
 void debugPrintIfDebugging(Object? message) {
   if (DEBUGGING) {
     // ignore: avoid_print
@@ -211,11 +280,36 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                 if (placemark.locality != null && placemark.locality!.isNotEmpty) {
                   final locality = placemark.locality!;
                   final country = placemark.country;
+                  final administrativeArea = placemark.administrativeArea;
+                  final subLocality = placemark.subLocality;
                   
+                  // Build a more specific location string to avoid ambiguity
                   if (country != null && country.isNotEmpty) {
-                    city = '$locality, $country';
+                    if (administrativeArea != null && administrativeArea.isNotEmpty) {
+                      // Use full administrative area name for better global compatibility
+                      // This avoids hardcoding specific countries and works worldwide
+                      city = '$locality, $administrativeArea, $country';
+                    } else {
+                      city = '$locality, $country';
+                    }
+                  } else if (administrativeArea != null && administrativeArea.isNotEmpty) {
+                    // Fallback to locality + administrative area if no country
+                    city = '$locality, $administrativeArea';
                   } else {
                     city = locality;
+                  }
+                  
+                  debugPrintIfDebugging('Geolocation result - Locality: $locality, Admin: $administrativeArea, Country: $country, Final: $city');
+                } else {
+                  // If no locality, try to use administrative area + country
+                  if (placemark.administrativeArea != null && placemark.administrativeArea!.isNotEmpty) {
+                    if (placemark.country != null && placemark.country!.isNotEmpty) {
+                      city = '${placemark.administrativeArea}, ${placemark.country}';
+                    } else {
+                      city = placemark.administrativeArea!;
+                    }
+                  } else if (placemark.country != null && placemark.country!.isNotEmpty) {
+                    city = placemark.country!;
                   }
                 }
               }
@@ -226,6 +320,15 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         }
       } catch (e) {
         debugPrintIfDebugging('Geolocation failed, falling back to $city: $e');
+      }
+      
+      // Validate and clean up the city string
+      city = _cleanupLocationString(city);
+      
+      // Additional validation to catch obviously wrong locations
+      if (_isLocationSuspicious(city)) {
+        debugPrintIfDebugging('Suspicious location detected: $city, falling back to default');
+        city = 'London, UK';
       }
       
       debugPrintIfDebugging('_loadChartData: Final city: $city');
