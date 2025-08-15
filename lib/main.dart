@@ -971,31 +971,73 @@ Map<String, dynamic> _createResultMap({
         double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
         double horizontalOffset = (constraints.maxWidth - contentWidth) / 2;
         
-        return Center(
-          child: Container(
-            width: contentWidth,
-            margin: EdgeInsets.symmetric(horizontal: horizontalOffset > 0 ? horizontalOffset : kScreenPadding),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(color: kAccentColour),
-                const SizedBox(height: 16),
-                Text(
-                  'Loading temperature data...',
-                  style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'This may take a few moments',
-                  style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+        return Container(
+          width: contentWidth,
+          margin: EdgeInsets.symmetric(horizontal: horizontalOffset > 0 ? horizontalOffset : kScreenPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, // Left align like other content
+            children: [
+              // Date section - show as soon as we have it
+              _buildLoadingDateSection(),
+              
+              // Location section - show while geolocation is in progress
+              _buildLoadingLocationSection(),
+            ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildLoadingDateSection() {
+    // Calculate the date that will be used (same logic as _loadChartData)
+    final now = DateTime.now();
+    final useYesterday = now.hour < kUseYesterdayHourThreshold;
+    final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+    final displayDate = _formatDayMonth(dateToUse);
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+      child: Text(
+        displayDate,
+        style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+        textAlign: TextAlign.left,
+      ),
+    );
+  }
+
+  Widget _buildLoadingLocationSection() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: kGreyLabelColour,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Determining your location...',
+                style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
+                textAlign: TextAlign.left,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Once we know your location, we\'ll fetch temperature data for your area.',
+            style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2),
+            textAlign: TextAlign.left,
+          ),
+        ],
+      ),
     );
   }
 
