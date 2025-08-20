@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -142,11 +141,7 @@ void main() async {
 }
 
 void _setSystemUIOverlayStyle() {
-  if (kIsWeb) {
-    // Web-specific configuration - minimal setup since web doesn't have system UI overlays
-    // No need to set SystemUIOverlayStyle on web
-    return;
-  } else if (Platform.isIOS) {
+  if (Platform.isIOS) {
     // iOS-specific configuration
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -215,8 +210,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   Timer? _loadingMessageTimer;
   int _loadingElapsedSeconds = 0;
   String _currentLoadingMessage = '';
-  String _determinedLocation = '';
+  String _determinedLocation = ''; // Full location for API
+  String _displayLocation = ''; // Short location for display
   bool _isLocationDetermined = false;
+  bool _isDataLoading = false;
 
   @override
   void initState() {
@@ -251,6 +248,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     setState(() {
       futureChartData = _loadChartData();
       _isShowingCachedData = false;
+      _isDataLoading = true;
     });
     
     // Start the loading message timer after location is determined
@@ -261,8 +259,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     try {
       String city = 'London, UK';
       
-      // Try to get user's city via geolocation
+            // Try to get user's city via geolocation
       try {
+        debugPrintIfDebugging('_determineLocation: Starting geolocation');
+        
         bool serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
         if (serviceEnabled) {
           geo.LocationPermission permission = await geo.Geolocator.checkPermission();
@@ -274,6 +274,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
               geo.Position position = await geo.Geolocator.getCurrentPosition(
                 desiredAccuracy: geo.LocationAccuracy.low,
               ).timeout(const Duration(seconds: 10));
+              
+              debugPrintIfDebugging('_determineLocation: Position obtained - lat: ${position.latitude}, lon: ${position.longitude}');
               
               List<Placemark> placemarks = await placemarkFromCoordinates(
                 position.latitude, 
@@ -290,14 +292,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                   // Build a more specific location string to avoid ambiguity
                   if (country != null && country.isNotEmpty) {
                     if (administrativeArea != null && administrativeArea.isNotEmpty) {
-                      // Use full administrative area name for better global compatibility
-                      // This avoids hardcoding specific countries and works worldwide
                       city = '$locality, $administrativeArea, $country';
                     } else {
                       city = '$locality, $country';
                     }
                   } else if (administrativeArea != null && administrativeArea.isNotEmpty) {
-                    // Fallback to locality + administrative area if no country
                     city = '$locality, $administrativeArea';
                   } else {
                     city = locality;
@@ -339,7 +338,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       
       // Update the UI with the determined location
       setState(() {
-        _determinedLocation = city;
+        _determinedLocation = city; // Full location for API
+        _displayLocation = _extractDisplayLocation(city); // Short location for display
         _isLocationDetermined = true;
       });
       
@@ -348,6 +348,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       // Set default location if everything fails
       setState(() {
         _determinedLocation = 'London, UK';
+        _displayLocation = _extractDisplayLocation('London, UK');
         _isLocationDetermined = true;
       });
     }
@@ -376,6 +377,18 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     _dateCheckTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       _checkDateChange();
     });
+  }
+
+  String _extractDisplayLocation(String fullLocation) {
+    if (fullLocation.isEmpty) return '';
+    
+    // Split by comma and take the first part (city)
+    final parts = fullLocation.split(',');
+    if (parts.isNotEmpty) {
+      return parts.first.trim();
+    }
+    
+    return fullLocation;
   }
 
   void _checkDateChange() {
@@ -421,8 +434,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       final friendlyDate = _formatDayMonth(dateToUse);
       newMessage = 'Getting temperatures on $friendlyDate over the past 50 years.';
     } else if (_loadingElapsedSeconds < 45) {
-      // Use the determined location if available
-      final locationText = _determinedLocation.isNotEmpty ? _determinedLocation : 'your area';
+      // Use the display location if available
+      final locationText = _displayLocation.isNotEmpty ? _displayLocation : 'your area';
       newMessage = 'Is today warmer than average in $locationText?';
     } else if (_loadingElapsedSeconds < 60) {
       newMessage = 'Once we have the data we\'ll know.';
@@ -727,6 +740,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   }
 
   Widget _buildRefreshIndicator(Widget child) {
+    // Only show RefreshIndicator when we're not loading data
+    if (futureChartData == null || !_isLocationDetermined || _isDataLoading) {
+      return child;
+    }
+    
     return RefreshIndicator(
       onRefresh: () async {
         debugPrintIfDebugging('Pull-to-refresh triggered');
@@ -740,6 +758,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         setState(() {
           _isLocationDetermined = false;
           _determinedLocation = '';
+          _displayLocation = '';
         });
         
         // First determine location again
@@ -748,6 +767,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         // Then start loading data
         setState(() {
           futureChartData = _loadChartData();
+          _isDataLoading = true;
         });
         
         // Restart loading message timer for refresh
@@ -780,6 +800,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         // Stop loading message timer when data loading completes or fails
         if (effectiveSnapshot.connectionState != ConnectionState.waiting) {
           _stopLoadingMessageTimer();
+          _isDataLoading = false;
         }
         
         // Show loading state with spinner and message
@@ -796,6 +817,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
               setState(() {
                 futureChartData = _loadChartData();
                 _isShowingCachedData = false;
+                _isDataLoading = true;
               });
               // Restart loading message timer for retry
               _startLoadingMessageTimer();
@@ -812,6 +834,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
               setState(() {
                 futureChartData = _loadChartData();
                 _isShowingCachedData = false;
+                _isDataLoading = true;
               });
               // Restart loading message timer for retry
               _startLoadingMessageTimer();
@@ -831,6 +854,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
               setState(() {
                 futureChartData = _loadChartData();
                 _isShowingCachedData = false;
+                _isDataLoading = true;
               });
               // Restart loading message timer for retry
               _startLoadingMessageTimer();
@@ -852,6 +876,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
               setState(() {
                 futureChartData = _loadChartData();
                 _isShowingCachedData = false;
+                _isDataLoading = true;
               });
               // Restart loading message timer for retry
               _startLoadingMessageTimer();
@@ -863,7 +888,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         final trendSlope = data['trendSlope'] as double?;
         final summaryText = data['summary'] as String?;
         final displayDate = data['displayDate'] as String?;
-        final city = data['city'] as String?;
+        // Use display location instead of full location from API data
+        final city = _displayLocation.isNotEmpty ? _displayLocation : (data['city'] as String?);
         
         debugPrintIfDebugging('Average temperature for plot band: $averageTemperature°C');
         debugPrintIfDebugging('Summary text for UI: $summaryText');
@@ -983,7 +1009,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
           child: Text(
-            _determinedLocation,
+            _displayLocation,
             style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
             textAlign: TextAlign.left,
           ),
@@ -1036,12 +1062,27 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         alignment: Alignment.centerLeft,
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-          child: Text(
-            _currentLoadingMessage.isNotEmpty 
-              ? _currentLoadingMessage 
-              : 'Loading temperature data...',
-            style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
-            textAlign: TextAlign.left,
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: kGreyLabelColour,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _currentLoadingMessage.isNotEmpty 
+                    ? _currentLoadingMessage 
+                    : 'Loading temperature data...',
+                  style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
+                  textAlign: TextAlign.left,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1499,27 +1540,23 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       ),
     );
 
-    // Only wrap with AnnotatedRegion on mobile platforms
-    if (kIsWeb) {
-      return appContent;
-    } else {
-      return AnnotatedRegion<SystemUiOverlayStyle>(
-        value: Platform.isIOS
-          ? const SystemUiOverlayStyle(
-              statusBarColor: Colors.transparent,
-              statusBarBrightness: Brightness.dark,
-              systemNavigationBarColor: Colors.transparent,
-              systemNavigationBarIconBrightness: Brightness.light,
-            )
-          : const SystemUiOverlayStyle(
-              statusBarColor: Colors.transparent,
-              statusBarIconBrightness: Brightness.light,
-              systemNavigationBarColor: Colors.transparent,
-              systemNavigationBarIconBrightness: Brightness.light,
-            ),
-        child: appContent,
-      );
-    }
+    // Wrap with AnnotatedRegion for mobile platforms
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: Platform.isIOS
+        ? const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarBrightness: Brightness.dark,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarIconBrightness: Brightness.light,
+          )
+        : const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarIconBrightness: Brightness.light,
+          ),
+      child: appContent,
+    );
   }
 }
 
