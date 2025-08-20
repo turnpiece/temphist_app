@@ -739,47 +739,50 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     return result;
   }
 
+  Future<void> _handleRefresh() async {
+    debugPrintIfDebugging('Pull-to-refresh triggered');
+    
+    // Cancel any existing background refresh to prevent race conditions
+    if (_isShowingCachedData) {
+      _isShowingCachedData = false;
+    }
+    
+    // Reset location determination state
+    setState(() {
+      _isLocationDetermined = false;
+      _determinedLocation = '';
+      _displayLocation = '';
+    });
+    
+    // First determine location again
+    await _determineLocation();
+    
+    // Then start loading data
+    setState(() {
+      futureChartData = _loadChartData();
+      _isDataLoading = true;
+    });
+    
+    // Restart loading message timer for refresh
+    _startLoadingMessageTimer();
+    
+    // Don't await the future here - let the FutureBuilder handle it
+    // This allows the RefreshIndicator to complete its animation
+  }
+
   Widget _buildRefreshIndicator(Widget child) {
-    // Only show RefreshIndicator when we're not loading data
-    if (futureChartData == null || !_isLocationDetermined || _isDataLoading) {
+    debugPrintIfDebugging('_buildRefreshIndicator: futureChartData=${futureChartData != null}, _isDataLoading=$_isDataLoading');
+    
+    // Always show RefreshIndicator when we have data
+    if (futureChartData == null) {
+      debugPrintIfDebugging('_buildRefreshIndicator: No data, returning child without RefreshIndicator');
       return child;
     }
     
+    // Show RefreshIndicator with refresh function
+    debugPrintIfDebugging('_buildRefreshIndicator: Showing RefreshIndicator');
     return RefreshIndicator(
-      onRefresh: () async {
-        debugPrintIfDebugging('Pull-to-refresh triggered');
-        
-        // Cancel any existing background refresh to prevent race conditions
-        if (_isShowingCachedData) {
-          _isShowingCachedData = false;
-        }
-        
-        // Reset location determination state
-        setState(() {
-          _isLocationDetermined = false;
-          _determinedLocation = '';
-          _displayLocation = '';
-        });
-        
-        // First determine location again
-        await _determineLocation();
-        
-        // Then start loading data
-        setState(() {
-          futureChartData = _loadChartData();
-          _isDataLoading = true;
-        });
-        
-        // Restart loading message timer for refresh
-        _startLoadingMessageTimer();
-        
-        try {
-          await futureChartData;
-        } catch (e) {
-          debugPrintIfDebugging('Pull-to-refresh failed: $e');
-          // Don't rethrow, let the FutureBuilder handle the error
-        }
-      },
+      onRefresh: _handleRefresh,
       color: kAccentColour,
       backgroundColor: kBackgroundColour,
       child: child,
@@ -1531,6 +1534,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                     _buildTitleLogoSection(),
                     // --- The rest of the UI, including the FutureBuilder ---
                     _buildFutureBuilder(chartHeight: chartHeight),
+                    // Add extra space to ensure content is always scrollable
+                    const SizedBox(height: 100),
                   ],
                 ),
               ),
