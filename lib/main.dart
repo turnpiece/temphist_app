@@ -208,10 +208,15 @@ class TemperatureScreen extends StatefulWidget {
 }
 
 class _TemperatureScreenState extends State<TemperatureScreen> {
-  late Future<Map<String, dynamic>?> futureChartData;
+  Future<Map<String, dynamic>?>? futureChartData;
   bool _isShowingCachedData = false;
   Timer? _dateCheckTimer;
   DateTime? _lastCheckedDate;
+  Timer? _loadingMessageTimer;
+  int _loadingElapsedSeconds = 0;
+  String _currentLoadingMessage = '';
+  String _determinedLocation = '';
+  bool _isLocationDetermined = false;
 
   @override
   void initState() {
@@ -223,6 +228,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   @override
   void dispose() {
     _dateCheckTimer?.cancel();
+    _loadingMessageTimer?.cancel();
     super.dispose();
   }
 
@@ -232,28 +238,27 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     // Use test data if provided
     if (widget.testFuture != null) {
       debugPrintIfDebugging('_loadInitialData: Using test data');
-      futureChartData = widget.testFuture!;
+      setState(() {
+        futureChartData = widget.testFuture!;
+      });
       return;
     }
     
-    // Always start with fresh data loading to avoid blank screens
+    // First determine location
+    await _determineLocation();
+    
+    // Then start loading temperature data
     setState(() {
       futureChartData = _loadChartData();
       _isShowingCachedData = false;
     });
+    
+    // Start the loading message timer after location is determined
+    _startLoadingMessageTimer();
   }
 
-  Future<Map<String, dynamic>?> _loadChartData() async {
-    debugPrintIfDebugging('_loadChartData: Starting chart data load');
-    
+  Future<void> _determineLocation() async {
     try {
-      final now = DateTime.now();
-      final useYesterday = now.hour < kUseYesterdayHourThreshold;
-      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
-      final formattedDate = DateFormat('yyyy-MM-dd').format(dateToUse);
-      debugPrintIfDebugging('_loadChartData: Current time: ${now.hour}:${now.minute}, useYesterday: $useYesterday, dateToUse: $formattedDate');
-
-      final service = TemperatureService();
       String city = 'London, UK';
       
       // Try to get user's city via geolocation
@@ -330,7 +335,124 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         city = 'London, UK';
       }
       
-      debugPrintIfDebugging('_loadChartData: Final city: $city');
+      debugPrintIfDebugging('_determineLocation: Final city: $city');
+      
+      // Update the UI with the determined location
+      setState(() {
+        _determinedLocation = city;
+        _isLocationDetermined = true;
+      });
+      
+    } catch (e) {
+      debugPrintIfDebugging('_determineLocation failed: $e');
+      // Set default location if everything fails
+      setState(() {
+        _determinedLocation = 'London, UK';
+        _isLocationDetermined = true;
+      });
+    }
+  }
+
+  void _startLoadingMessageTimer() {
+    _loadingElapsedSeconds = 0;
+    _updateLoadingMessage();
+    
+    _loadingMessageTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _loadingElapsedSeconds++;
+      _updateLoadingMessage();
+    });
+  }
+
+  void _stopLoadingMessageTimer() {
+    _loadingMessageTimer?.cancel();
+    _loadingMessageTimer = null;
+  }
+
+  void _startDateCheckTimer() {
+    // Check immediately on startup
+    _checkDateChange();
+    
+    // Then check every minute
+    _dateCheckTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      _checkDateChange();
+    });
+  }
+
+  void _checkDateChange() {
+    final now = DateTime.now();
+    final useYesterday = now.hour < kUseYesterdayHourThreshold;
+    final currentDate = useYesterday ? now.subtract(Duration(days: 1)) : now;
+    
+    if (_lastCheckedDate == null) {
+      _lastCheckedDate = currentDate;
+      return;
+    }
+    
+    // Check if the date has changed (ignoring time)
+    if (_lastCheckedDate!.year != currentDate.year ||
+        _lastCheckedDate!.month != currentDate.month ||
+        _lastCheckedDate!.day != currentDate.day) {
+      debugPrintIfDebugging('Date changed from ${_lastCheckedDate} to $currentDate, reloading data');
+      
+      // Only reload if we're not already loading fresh data
+      if (!_isShowingCachedData) {
+        setState(() {
+          futureChartData = _loadChartData();
+        });
+        // Restart loading message timer for date change reload
+        _startLoadingMessageTimer();
+      }
+    }
+    
+    _lastCheckedDate = currentDate;
+  }
+
+  void _updateLoadingMessage() {
+    if (!mounted) return;
+    
+    String newMessage;
+    if (_loadingElapsedSeconds < 10) {
+      newMessage = 'Loading temperature data...';
+    } else if (_loadingElapsedSeconds < 25) {
+      // Calculate the date that will be used (same logic as _loadChartData)
+      final now = DateTime.now();
+      final useYesterday = now.hour < kUseYesterdayHourThreshold;
+      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+      final friendlyDate = _formatDayMonth(dateToUse);
+      newMessage = 'Getting temperatures on $friendlyDate over the past 50 years.';
+    } else if (_loadingElapsedSeconds < 45) {
+      // Use the determined location if available
+      final locationText = _determinedLocation.isNotEmpty ? _determinedLocation : 'your area';
+      newMessage = 'Is today warmer than average in $locationText?';
+    } else if (_loadingElapsedSeconds < 60) {
+      newMessage = 'Once we have the data we\'ll know.';
+    } else if (_loadingElapsedSeconds < 80) {
+      newMessage = 'Please be patient. It shouldn\'t be much longer.';
+    } else {
+      newMessage = 'The server is taking a while to respond.';
+    }
+    
+    if (newMessage != _currentLoadingMessage) {
+      setState(() {
+        _currentLoadingMessage = newMessage;
+      });
+    }
+  }
+
+  Future<Map<String, dynamic>?> _loadChartData() async {
+    debugPrintIfDebugging('_loadChartData: Starting chart data load');
+    
+    try {
+      final now = DateTime.now();
+      final useYesterday = now.hour < kUseYesterdayHourThreshold;
+      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+      final formattedDate = DateFormat('yyyy-MM-dd').format(dateToUse);
+      debugPrintIfDebugging('_loadChartData: Current time: ${now.hour}:${now.minute}, useYesterday: $useYesterday, dateToUse: $formattedDate');
+
+      final service = TemperatureService();
+      String city = _determinedLocation.isNotEmpty ? _determinedLocation : 'London, UK';
+      
+      debugPrintIfDebugging('_loadChartData: Using determined city: $city');
       final currentYear = dateToUse.year;
 
       // Try main /data/ endpoint first
@@ -614,9 +736,22 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           _isShowingCachedData = false;
         }
         
+        // Reset location determination state
+        setState(() {
+          _isLocationDetermined = false;
+          _determinedLocation = '';
+        });
+        
+        // First determine location again
+        await _determineLocation();
+        
+        // Then start loading data
         setState(() {
           futureChartData = _loadChartData();
         });
+        
+        // Restart loading message timer for refresh
+        _startLoadingMessageTimer();
         
         try {
           await futureChartData;
@@ -632,10 +767,20 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   }
 
   Widget _buildFutureBuilder({required double chartHeight}) {
+    // If no future is set yet, show loading section
+    if (futureChartData == null) {
+      return _buildLoadingSection();
+    }
+    
     return FutureBuilder<Map<String, dynamic>?>(
       future: futureChartData,
       builder: (context, snapshot) {
         final effectiveSnapshot = widget.testSnapshot ?? snapshot;
+        
+        // Stop loading message timer when data loading completes or fails
+        if (effectiveSnapshot.connectionState != ConnectionState.waiting) {
+          _stopLoadingMessageTimer();
+        }
         
         // Show loading state with spinner and message
         if (effectiveSnapshot.connectionState == ConnectionState.waiting) {
@@ -652,6 +797,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                 futureChartData = _loadChartData();
                 _isShowingCachedData = false;
               });
+              // Restart loading message timer for retry
+              _startLoadingMessageTimer();
             },
           );
         } 
@@ -666,6 +813,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                 futureChartData = _loadChartData();
                 _isShowingCachedData = false;
               });
+              // Restart loading message timer for retry
+              _startLoadingMessageTimer();
             },
           );
         }
@@ -683,6 +832,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                 futureChartData = _loadChartData();
                 _isShowingCachedData = false;
               });
+              // Restart loading message timer for retry
+              _startLoadingMessageTimer();
             },
           );
         }
@@ -702,6 +853,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                 futureChartData = _loadChartData();
                 _isShowingCachedData = false;
               });
+              // Restart loading message timer for retry
+              _startLoadingMessageTimer();
             },
           );
         }
@@ -731,197 +884,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       },
     );
   }
-
-  void _startDateCheckTimer() {
-    // Check immediately on startup
-    _checkDateChange();
-    
-    // Then check every minute
-    _dateCheckTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      _checkDateChange();
-    });
-  }
-
-  void _checkDateChange() {
-    final now = DateTime.now();
-    final useYesterday = now.hour < kUseYesterdayHourThreshold;
-    final currentDate = useYesterday ? now.subtract(Duration(days: 1)) : now;
-    
-    if (_lastCheckedDate == null) {
-      _lastCheckedDate = currentDate;
-      return;
-    }
-    
-    // Check if the date has changed (ignoring time)
-    if (_lastCheckedDate!.year != currentDate.year ||
-        _lastCheckedDate!.month != currentDate.month ||
-        _lastCheckedDate!.day != currentDate.day) {
-      debugPrintIfDebugging('Date changed from ${_lastCheckedDate} to $currentDate, reloading data');
-      
-      // Only reload if we're not already loading fresh data
-      if (!_isShowingCachedData) {
-        setState(() {
-          futureChartData = _loadChartData();
-        });
-      }
-    }
-    
-    _lastCheckedDate = currentDate;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Ensure system UI overlay is set correctly for this screen
-    _setSystemUIOverlayStyle();
-    
-    final double chartHeight = 800;
-
-    Widget appContent = Scaffold(
-      body: Stack(
-        children: [
-          // Gradient background fills the whole screen including system areas
-          _buildGradientBackground(),
-          // Foreground content scrolls above the background
-          _buildRefreshIndicator(
-            SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: _buildContentPadding(
-                context,
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // --- Title/logo row: always visible and scrolls with content ---
-                    _buildTitleLogoSection(),
-                    // --- The rest of the UI, including the FutureBuilder ---
-                    _buildFutureBuilder(chartHeight: chartHeight),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    // Only wrap with AnnotatedRegion on mobile platforms
-    if (kIsWeb) {
-      return appContent;
-    } else {
-      return AnnotatedRegion<SystemUiOverlayStyle>(
-        value: Platform.isIOS
-          ? const SystemUiOverlayStyle(
-              statusBarColor: Colors.transparent,
-              statusBarBrightness: Brightness.dark,
-              systemNavigationBarColor: Colors.transparent,
-              systemNavigationBarIconBrightness: Brightness.light,
-            )
-          : const SystemUiOverlayStyle(
-              statusBarColor: Colors.transparent,
-              statusBarIconBrightness: Brightness.light,
-              systemNavigationBarColor: Colors.transparent,
-              systemNavigationBarIconBrightness: Brightness.light,
-            ),
-        child: appContent,
-      );
-    }
-  }
-}
-
-class TemperatureChartData {
-  final String year;
-  final double temperature;
-  final bool isCurrentYear;
-  final bool hasData; // Added for gap handling
-
-  TemperatureChartData({
-    required this.year,
-    required this.temperature,
-    required this.isCurrentYear,
-    this.hasData = true, // Default to true
-  });
-}
-
-List<TemperatureChartData> _generateTrendData(List<TemperatureChartData> chartData, double slope) {
-  if (chartData.isEmpty) return [];
-  
-  // Find the middle year to use as reference point
-  final years = chartData.map((data) => int.parse(data.year)).toList();
-  years.sort();
-  final middleYear = years[years.length ~/ 2];
-  
-  // Calculate the middle temperature (average of all temperatures)
-  final middleTemp = chartData.map((data) => data.temperature).reduce((a, b) => a + b) / chartData.length;
-  
-  // Generate trend line points using only the actual years from chart data
-  return chartData.map((data) {
-    final year = int.parse(data.year);
-    final yearsFromMiddle = year - middleYear;
-    final trendTemp = middleTemp + (slope * yearsFromMiddle / 10); // Convert decade slope to yearly
-    
-    return TemperatureChartData(
-      year: data.year,
-      temperature: trendTemp,
-      isCurrentYear: data.isCurrentYear,
-      hasData: data.hasData,
-    );
-  }).toList();
-}
-
-List<TemperatureChartData> _generateAverageData(List<TemperatureChartData> chartData, double averageTemp) {
-  if (chartData.isEmpty) return [];
-  
-  // Generate average line points using only the actual years from chart data
-  return chartData.map((data) {
-    return TemperatureChartData(
-      year: data.year,
-      temperature: averageTemp,
-      isCurrentYear: data.isCurrentYear,
-      hasData: data.hasData,
-    );
-  }).toList();
-}
-
-String _formatDayMonth(DateTime date) {
-  final day = date.day;
-  final month = DateFormat('MMMM').format(date);
-  String suffix;
-  if (day >= 11 && day <= 13) {
-    suffix = 'th';
-  } else {
-    switch (day % 10) {
-      case 1:
-        suffix = 'st';
-        break;
-      case 2:
-        suffix = 'nd';
-        break;
-      case 3:
-        suffix = 'rd';
-        break;
-      default:
-        suffix = 'th';
-    }
-  }
-  return '$day$suffix $month';
-}
-
-Map<String, dynamic> _createResultMap({
-  required List<TemperatureChartData> chartData,
-  required double? averageTemperature,
-  required double? trendSlope,
-  required String? summaryText,
-  required DateTime dateToUse,
-  required String city,
-}) {
-  return {
-    'chartData': chartData,
-    'averageTemperature': averageTemperature,
-    'trendSlope': trendSlope,
-    'summary': summaryText,
-    'displayDate': _formatDayMonth(dateToUse),
-    'city': city,
-  };
-}
 
   Widget _buildRetryButton(VoidCallback onPressed) {
     return ElevatedButton(
@@ -980,8 +942,15 @@ Map<String, dynamic> _createResultMap({
               // Date section - show as soon as we have it
               _buildLoadingDateSection(),
               
-              // Location section - show while geolocation is in progress
-              _buildLoadingLocationSection(),
+              // Location section - show the determined location
+              if (_isLocationDetermined)
+                _buildDeterminedLocationSection()
+              else
+                _buildLocationDeterminingSection(),
+              
+              // Progressive loading messages - show below location
+              if (_isLocationDetermined)
+                _buildProgressiveLoadingSection(),
             ],
           ),
         );
@@ -1006,7 +975,24 @@ Map<String, dynamic> _createResultMap({
     );
   }
 
-  Widget _buildLoadingLocationSection() {
+  Widget _buildDeterminedLocationSection() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
+          child: Text(
+            _determinedLocation,
+            style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+            textAlign: TextAlign.left,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationDeterminingSection() {
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
       child: Column(
@@ -1023,10 +1009,12 @@ Map<String, dynamic> _createResultMap({
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                'Determining your location...',
-                style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
-                textAlign: TextAlign.left,
+              Expanded(
+                child: Text(
+                  'Determining your location...',
+                  style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
+                  textAlign: TextAlign.left,
+                ),
               ),
             ],
           ),
@@ -1037,6 +1025,25 @@ Map<String, dynamic> _createResultMap({
             textAlign: TextAlign.left,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildProgressiveLoadingSection() {
+    return Padding(
+      padding: const EdgeInsets.only(top: kSectionTopPadding, bottom: kSectionBottomPadding),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
+          child: Text(
+            _currentLoadingMessage.isNotEmpty 
+              ? _currentLoadingMessage 
+              : 'Loading temperature data...',
+            style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
+            textAlign: TextAlign.left,
+          ),
+        ),
       ),
     );
   }
@@ -1458,7 +1465,161 @@ Map<String, dynamic> _createResultMap({
     return ranges;
   }
 
-    // Sign up
+  @override
+  Widget build(BuildContext context) {
+    // Ensure system UI overlay is set correctly
+    _setSystemUIOverlayStyle();
+    
+    final double chartHeight = 800;
+
+    Widget appContent = Scaffold(
+      body: Stack(
+        children: [
+          // Gradient background fills the whole screen including system areas
+          _buildGradientBackground(),
+          // Foreground content scrolls above the background
+          _buildRefreshIndicator(
+            SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: _buildContentPadding(
+                context,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // --- Title/logo row: always visible and scrolls with content ---
+                    _buildTitleLogoSection(),
+                    // --- The rest of the UI, including the FutureBuilder ---
+                    _buildFutureBuilder(chartHeight: chartHeight),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // Only wrap with AnnotatedRegion on mobile platforms
+    if (kIsWeb) {
+      return appContent;
+    } else {
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: Platform.isIOS
+          ? const SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarBrightness: Brightness.dark,
+              systemNavigationBarColor: Colors.transparent,
+              systemNavigationBarIconBrightness: Brightness.light,
+            )
+          : const SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: Brightness.light,
+              systemNavigationBarColor: Colors.transparent,
+              systemNavigationBarIconBrightness: Brightness.light,
+            ),
+        child: appContent,
+      );
+    }
+  }
+}
+
+class TemperatureChartData {
+  final String year;
+  final double temperature;
+  final bool isCurrentYear;
+  final bool hasData; // Added for gap handling
+
+  TemperatureChartData({
+    required this.year,
+    required this.temperature,
+    required this.isCurrentYear,
+    this.hasData = true, // Default to true
+  });
+}
+
+List<TemperatureChartData> _generateTrendData(List<TemperatureChartData> chartData, double slope) {
+  if (chartData.isEmpty) return [];
+  
+  // Find the middle year to use as reference point
+  final years = chartData.map((data) => int.parse(data.year)).toList();
+  years.sort();
+  final middleYear = years[years.length ~/ 2];
+  
+  // Calculate the middle temperature (average of all temperatures)
+  final middleTemp = chartData.map((data) => data.temperature).reduce((a, b) => a + b) / chartData.length;
+  
+  // Generate trend line points using only the actual years from chart data
+  return chartData.map((data) {
+    final year = int.parse(data.year);
+    final yearsFromMiddle = year - middleYear;
+    final trendTemp = middleTemp + (slope * yearsFromMiddle / 10); // Convert decade slope to yearly
+    
+    return TemperatureChartData(
+      year: data.year,
+      temperature: trendTemp,
+      isCurrentYear: data.isCurrentYear,
+      hasData: data.hasData,
+    );
+  }).toList();
+}
+
+List<TemperatureChartData> _generateAverageData(List<TemperatureChartData> chartData, double averageTemp) {
+  if (chartData.isEmpty) return [];
+  
+  // Generate average line points using only the actual years from chart data
+  return chartData.map((data) {
+    return TemperatureChartData(
+      year: data.year,
+      temperature: averageTemp,
+      isCurrentYear: data.isCurrentYear,
+      hasData: data.hasData,
+    );
+  }).toList();
+}
+
+String _formatDayMonth(DateTime date) {
+  final day = date.day;
+  final month = DateFormat('MMMM').format(date);
+  String suffix;
+  if (day >= 11 && day <= 13) {
+    suffix = 'th';
+  } else {
+    switch (day % 10) {
+      case 1:
+        suffix = 'st';
+        break;
+      case 2:
+        suffix = 'nd';
+        break;
+      case 3:
+        suffix = 'rd';
+        break;
+      default:
+        suffix = 'th';
+    }
+  }
+  return '$day$suffix $month';
+}
+
+Map<String, dynamic> _createResultMap({
+  required List<TemperatureChartData> chartData,
+  required double? averageTemperature,
+  required double? trendSlope,
+  required String? summaryText,
+  required DateTime dateToUse,
+  required String city,
+}) {
+  return {
+    'chartData': chartData,
+    'averageTemperature': averageTemperature,
+    'trendSlope': trendSlope,
+    'summary': summaryText,
+    'displayDate': _formatDayMonth(dateToUse),
+    'city': city,
+  };
+}
+
+// Sign up
 Future<UserCredential> signUp(String email, String password) async {
   return await FirebaseAuth.instance.createUserWithEmailAndPassword(
     email: email,
@@ -1468,10 +1629,7 @@ Future<UserCredential> signUp(String email, String password) async {
 
 // Sign in
 Future<UserCredential> signIn(String email, String password) async {
-  return await FirebaseAuth.instance.signInWithEmailAndPassword(
-    email: email,
-    password: password,
-  );
+  return await FirebaseAuth.instance.signInAnonymously();
 }
 
 // Sign out
