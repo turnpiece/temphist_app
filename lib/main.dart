@@ -16,7 +16,8 @@ import 'dart:async';
 import 'services/temperature_service.dart';
 
 // App color constants
-const bool DEBUGGING = false;
+const bool DEBUGGING = true;
+const bool SIMULATE_ENDPOINT_FAILURES = true; // Set to true to simulate failures for testing
 const kBackgroundColour = Color(0xFF242456);
 const kAccentColour = Color(0xFFFF6B6B);
 const kTextPrimaryColour = Color(0xFFECECEC);
@@ -126,6 +127,8 @@ void debugPrintIfDebugging(Object? message) {
   }
 }
 
+
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -214,6 +217,28 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   String _displayLocation = ''; // Short location for display
   bool _isLocationDetermined = false;
   bool _isDataLoading = false;
+  
+  // Add error tracking for different data types
+  bool _averageDataFailed = false;
+  bool _trendDataFailed = false;
+  bool _summaryDataFailed = false;
+  bool _chartDataHasGaps = false;
+  
+  // Add automatic retry timer
+  Timer? _autoRetryTimer;
+  
+  // Store current data for updates
+  Map<String, dynamic>? _currentData;
+  
+  // Track retry loading states
+  bool _isRetryingAverage = false;
+  bool _isRetryingTrend = false;
+  bool _isRetryingSummary = false;
+  
+  // Simulation state for testing
+  bool _simulateAverageFailure = true;
+  bool _simulateTrendFailure = false;
+  bool _simulateSummaryFailure = false;
 
   @override
   void initState() {
@@ -226,11 +251,35 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   void dispose() {
     _dateCheckTimer?.cancel();
     _loadingMessageTimer?.cancel();
+    _autoRetryTimer?.cancel();
     super.dispose();
+  }
+
+  void _startAutoRetryTimer() {
+    // Cancel any existing timer
+    _autoRetryTimer?.cancel();
+    
+    // Start a new timer that will retry after 10 seconds
+    _autoRetryTimer = Timer(const Duration(seconds: 10), () {
+      if (mounted && (_averageDataFailed || _trendDataFailed || _summaryDataFailed)) {
+        _retryFailedData();
+      }
+    });
+  }
+
+  void _stopAutoRetryTimer() {
+    _autoRetryTimer?.cancel();
+    _autoRetryTimer = null;
   }
 
   void _loadInitialData() async {
     debugPrintIfDebugging('_loadInitialData: Starting data load');
+    
+    // Stop any existing auto-retry timer
+    _stopAutoRetryTimer();
+    
+    // Reset error states
+    _resetErrorStates();
     
     // Use test data if provided
     if (widget.testFuture != null) {
@@ -253,6 +302,338 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     
     // Start the loading message timer after location is determined
     _startLoadingMessageTimer();
+  }
+
+  void _resetErrorStates() {
+    setState(() {
+      _averageDataFailed = false;
+      _trendDataFailed = false;
+      _summaryDataFailed = false;
+      _chartDataHasGaps = false;
+      _isRetryingAverage = false;
+      _isRetryingTrend = false;
+      _isRetryingSummary = false;
+    });
+  }
+
+  Future<void> _clearCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('cachedChartData');
+      debugPrintIfDebugging('Cache cleared for simulation mode');
+    } catch (e) {
+      debugPrintIfDebugging('Error clearing cache: $e');
+    }
+  }
+
+  Future<void> _retryFailedData() async {
+    if (!_averageDataFailed && !_trendDataFailed && !_summaryDataFailed) {
+      return; // Nothing to retry
+    }
+    
+    debugPrintIfDebugging('Retrying failed data fetches...');
+    
+    try {
+      final now = DateTime.now();
+      final useYesterday = now.hour < kUseYesterdayHourThreshold;
+      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+      final mmdd = DateFormat('MM-dd').format(dateToUse);
+      final city = _determinedLocation.isNotEmpty ? _determinedLocation : 'London, UK';
+      
+      final service = TemperatureService();
+      
+      // Retry average data if it failed
+      if (_averageDataFailed) {
+        setState(() {
+          _isRetryingAverage = true;
+        });
+        
+        try {
+          final averageData = await _simulateEndpointFailure('average', () => 
+            service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: 30))
+          );
+          final newAverage = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
+          
+          if (newAverage != null) {
+            setState(() {
+              _averageDataFailed = false;
+              _isRetryingAverage = false;
+            });
+            // Update the current data with new average
+            if (futureChartData != null) {
+              // We need to rebuild the data with the new average
+              _rebuildDataWithNewAverage(newAverage);
+            }
+            // Stop auto-retry timer if no more failures
+            if (!_trendDataFailed && !_summaryDataFailed) {
+              _stopAutoRetryTimer();
+            }
+          } else {
+            setState(() {
+              _isRetryingAverage = false;
+            });
+          }
+        } catch (e) {
+          debugPrintIfDebugging('Retry of average data failed: $e');
+          setState(() {
+            _isRetryingAverage = false;
+          });
+        }
+      }
+      
+      // Retry trend data if it failed
+      if (_trendDataFailed) {
+        setState(() {
+          _isRetryingTrend = true;
+        });
+        
+        try {
+          final trendData = await _simulateEndpointFailure('trend', () => 
+            service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: 30))
+          );
+          final newSlope = trendData['slope'];
+          if (newSlope != null) {
+            setState(() {
+              _trendDataFailed = false;
+              _isRetryingTrend = false;
+            });
+            // Update the current data with new trend
+            if (futureChartData != null) {
+              _rebuildDataWithNewTrend((newSlope as num).toDouble());
+            }
+            // Stop auto-retry timer if no more failures
+            if (!_averageDataFailed && !_summaryDataFailed) {
+              _stopAutoRetryTimer();
+            }
+          } else {
+            setState(() {
+              _isRetryingTrend = false;
+            });
+          }
+        } catch (e) {
+          debugPrintIfDebugging('Retry of trend data failed: $e');
+          setState(() {
+            _isRetryingTrend = false;
+          });
+        }
+      }
+      
+      // Retry summary data if it failed
+      if (_summaryDataFailed) {
+        setState(() {
+          _isRetryingSummary = true;
+        });
+        
+        try {
+          final summaryData = await service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 30));
+          final newSummary = summaryData['summary']?.toString();
+          if (newSummary != null && newSummary.isNotEmpty) {
+            setState(() {
+              _summaryDataFailed = false;
+              _isRetryingSummary = false;
+            });
+            // Update the current data with new summary
+            if (futureChartData != null) {
+              _rebuildDataWithNewSummary(newSummary);
+            }
+            // Stop auto-retry timer if no more failures
+            if (!_averageDataFailed && !_trendDataFailed) {
+              _stopAutoRetryTimer();
+            }
+          } else {
+            setState(() {
+              _isRetryingSummary = false;
+            });
+          }
+        } catch (e) {
+          debugPrintIfDebugging('Retry of summary data failed: $e');
+          setState(() {
+            _isRetryingSummary = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrintIfDebugging('Error during retry: $e');
+    }
+  }
+
+  Future<void> _retryAverageData() async {
+    if (!_averageDataFailed) return;
+    
+    debugPrintIfDebugging('Retrying average data...');
+    
+    try {
+      final now = DateTime.now();
+      final useYesterday = now.hour < kUseYesterdayHourThreshold;
+      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+      final mmdd = DateFormat('MM-dd').format(dateToUse);
+      final city = _determinedLocation.isNotEmpty ? _determinedLocation : 'London, UK';
+      
+      final service = TemperatureService();
+      
+      setState(() {
+        _isRetryingAverage = true;
+      });
+      
+      try {
+        final averageData = await _simulateEndpointFailure('average', () => 
+          service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: 30))
+        );
+        final newAverage = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
+        
+        if (newAverage != null) {
+          setState(() {
+            _averageDataFailed = false;
+            _isRetryingAverage = false;
+          });
+          _rebuildDataWithNewAverage(newAverage);
+          // Stop auto-retry timer if no more failures
+          if (!_trendDataFailed && !_summaryDataFailed) {
+            _stopAutoRetryTimer();
+          }
+        } else {
+          setState(() {
+            _isRetryingAverage = false;
+          });
+        }
+      } catch (e) {
+        debugPrintIfDebugging('Retry of average data failed: $e');
+        setState(() {
+          _isRetryingAverage = false;
+        });
+      }
+    } catch (e) {
+      debugPrintIfDebugging('Error during average retry: $e');
+      setState(() {
+        _isRetryingAverage = false;
+      });
+    }
+  }
+
+  Future<void> _retryTrendData() async {
+    if (!_trendDataFailed) return;
+    
+    debugPrintIfDebugging('Retrying trend data...');
+    
+    try {
+      final now = DateTime.now();
+      final useYesterday = now.hour < kUseYesterdayHourThreshold;
+      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+      final mmdd = DateFormat('MM-dd').format(dateToUse);
+      final city = _determinedLocation.isNotEmpty ? _determinedLocation : 'London, UK';
+      
+      final service = TemperatureService();
+      
+      setState(() {
+        _isRetryingTrend = true;
+      });
+      
+      try {
+        final trendData = await service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: 30));
+        final newSlope = trendData['slope'];
+        if (newSlope != null) {
+          setState(() {
+            _trendDataFailed = false;
+            _isRetryingTrend = false;
+          });
+          _rebuildDataWithNewTrend((newSlope as num).toDouble());
+          // Stop auto-retry timer if no more failures
+          if (!_averageDataFailed && !_summaryDataFailed) {
+            _stopAutoRetryTimer();
+          }
+        } else {
+          setState(() {
+            _isRetryingTrend = false;
+          });
+        }
+      } catch (e) {
+        debugPrintIfDebugging('Retry of trend data failed: $e');
+        setState(() {
+          _isRetryingTrend = false;
+        });
+      }
+    } catch (e) {
+      debugPrintIfDebugging('Error during trend retry: $e');
+      setState(() {
+        _isRetryingTrend = false;
+      });
+    }
+  }
+
+  Future<void> _retrySummaryData() async {
+    if (!_summaryDataFailed) return;
+    
+    debugPrintIfDebugging('Retrying summary data...');
+    
+    try {
+      final now = DateTime.now();
+      final useYesterday = now.hour < kUseYesterdayHourThreshold;
+      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+      final mmdd = DateFormat('MM-dd').format(dateToUse);
+      final city = _determinedLocation.isNotEmpty ? _determinedLocation : 'London, UK';
+      
+      final service = TemperatureService();
+      
+      setState(() {
+        _isRetryingSummary = true;
+      });
+      
+      try {
+        final summaryData = await _simulateEndpointFailure('summary', () => 
+          service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 30))
+        );
+        final newSummary = summaryData['summary']?.toString();
+        if (newSummary != null && newSummary.isNotEmpty) {
+          setState(() {
+            _summaryDataFailed = false;
+            _isRetryingSummary = false;
+          });
+          _rebuildDataWithNewSummary(newSummary);
+          // Stop auto-retry timer if no more failures
+          if (!_averageDataFailed && !_trendDataFailed) {
+            _stopAutoRetryTimer();
+          }
+        } else {
+          setState(() {
+            _isRetryingSummary = false;
+          });
+        }
+      } catch (e) {
+        debugPrintIfDebugging('Retry of summary data failed: $e');
+        setState(() {
+          _isRetryingSummary = false;
+        });
+      }
+    } catch (e) {
+      debugPrintIfDebugging('Error during summary retry: $e');
+      setState(() {
+        _isRetryingSummary = false;
+      });
+    }
+  }
+
+  void _rebuildDataWithNewAverage(double newAverage) {
+    if (_currentData != null) {
+      setState(() {
+        _currentData!['averageTemperature'] = newAverage;
+      });
+    }
+  }
+
+  void _rebuildDataWithNewTrend(double newSlope) {
+    if (_currentData != null) {
+      setState(() {
+        _currentData!['trendSlope'] = newSlope;
+      });
+    }
+  }
+
+  void _rebuildDataWithNewSummary(String newSummary) {
+    if (_currentData != null) {
+      setState(() {
+        _currentData!['summary'] = newSummary;
+      });
+    }
   }
 
   Future<void> _determineLocation() async {
@@ -471,6 +852,12 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       // Try main /data/ endpoint first
       try {
         debugPrintIfDebugging('_loadChartData: Starting /data/ fetch for $city, $formattedDate');
+        
+        // In simulation mode, we'll simulate failures even for the main endpoint
+        if (SIMULATE_ENDPOINT_FAILURES) {
+          debugPrintIfDebugging('Simulation mode: will simulate failures for main endpoint data');
+        }
+        
         final tempData = await service
             .fetchCompleteData(city, '$currentYear-${formattedDate.substring(5)}')
             .timeout(const Duration(seconds: 30));
@@ -511,14 +898,66 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
             }
           }
           
+          // Check if there are gaps in the data
+          final hasGaps = chartData.any((data) => !data.hasData);
+          if (hasGaps) {
+            setState(() {
+              _chartDataHasGaps = true;
+            });
+          }
+          
+          // Check if average, trend, or summary data is missing from main endpoint
+          // In simulation mode, we'll simulate failures for specific data types
+          if (SIMULATE_ENDPOINT_FAILURES && _simulateAverageFailure) {
+            debugPrintIfDebugging('Simulation mode: simulating average data failure');
+            setState(() {
+              _averageDataFailed = true;
+            });
+          } else if (tempData.average?.temperature == null) {
+            setState(() {
+              _averageDataFailed = true;
+            });
+          }
+          
+          if (SIMULATE_ENDPOINT_FAILURES && _simulateTrendFailure) {
+            debugPrintIfDebugging('Simulation mode: simulating trend data failure');
+            setState(() {
+              _trendDataFailed = true;
+            });
+          } else if (tempData.trend?.slope == null) {
+            setState(() {
+              _trendDataFailed = true;
+            });
+          }
+          
+          if (SIMULATE_ENDPOINT_FAILURES && _simulateSummaryFailure) {
+            debugPrintIfDebugging('Simulation mode: simulating summary data failure');
+            setState(() {
+              _summaryDataFailed = true;
+            });
+          } else if (tempData.summary == null || tempData.summary!.isEmpty) {
+            setState(() {
+              _summaryDataFailed = true;
+            });
+          }
+
           final result = _createResultMap(
             chartData: chartData,
-            averageTemperature: tempData.average?.temperature,
-            trendSlope: tempData.trend?.slope,
-            summaryText: tempData.summary,
+            averageTemperature: (SIMULATE_ENDPOINT_FAILURES && _simulateAverageFailure) ? null : tempData.average?.temperature,
+            trendSlope: (SIMULATE_ENDPOINT_FAILURES && _simulateTrendFailure) ? null : tempData.trend?.slope,
+            summaryText: (SIMULATE_ENDPOINT_FAILURES && _simulateSummaryFailure) ? null : tempData.summary,
             dateToUse: dateToUse,
             city: city,
           );
+          
+          // Debug logging for simulation
+          if (SIMULATE_ENDPOINT_FAILURES) {
+            debugPrintIfDebugging('Simulation result - Average: ${result['averageTemperature']}, Trend: ${result['trendSlope']}, Summary: ${result['summary']}');
+            debugPrintIfDebugging('Simulation flags - Average: $_simulateAverageFailure, Trend: $_simulateTrendFailure, Summary: $_simulateSummaryFailure');
+          }
+          
+          // Store the current data for potential updates
+          _currentData = result;
           
           return await _cacheAndReturnResult(result);
         }
@@ -540,7 +979,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         
         // Get average data
         try {
-          final averageData = await service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: 30));
+          final averageData = await _simulateEndpointFailure('average', () => 
+            service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: 30))
+          );
           averageTemperature = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
           
           if (averageData['year_range'] != null) {
@@ -556,24 +997,37 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           }
         } catch (e) {
           debugPrintIfDebugging('Failed to fetch average data: $e');
+          setState(() {
+            _averageDataFailed = true;
+          });
         }
         
         // Get trend data
         try {
-          final trendData = await service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: 30));
+          final trendData = await _simulateEndpointFailure('trend', () => 
+            service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: 30))
+          );
           final slope = trendData['slope'];
           trendSlope = (slope is num) ? slope.toDouble() : null;
         } catch (e) {
           debugPrintIfDebugging('Failed to fetch trend data: $e');
+          setState(() {
+            _trendDataFailed = true;
+          });
         }
         
         // Get summary data
         try {
-          final summaryData = await service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 30));
+          final summaryData = await _simulateEndpointFailure('summary', () => 
+            service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 30))
+          );
           final summaryRaw = summaryData['summary'];
           summaryText = summaryRaw?.toString();
         } catch (e) {
           debugPrintIfDebugging('Failed to fetch summary data: $e');
+          setState(() {
+            _summaryDataFailed = true;
+          });
         }
         
         // Fetch year-by-year data
@@ -599,6 +1053,14 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           }
         }
         
+        // Check if there are gaps in the data
+        final hasGaps = chartData.any((data) => !data.hasData);
+        if (hasGaps) {
+          setState(() {
+            _chartDataHasGaps = true;
+          });
+        }
+        
         if (chartData.isNotEmpty) {
           final result = _createResultMap(
             chartData: chartData,
@@ -609,17 +1071,24 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
             city: city,
           );
           
+          // Store the current data for potential updates
+          _currentData = result;
+          
           return await _cacheAndReturnResult(result);
         }
       } catch (e) {
         debugPrintIfDebugging('Fallback endpoints failed: $e');
       }
       
-      // Final fallback: try cached data
-      final cached = await _loadCachedChartData();
-      if (cached != null) {
-        debugPrintIfDebugging('Using cached data as final fallback');
-        return cached;
+      // Final fallback: try cached data (but not in simulation mode)
+      if (!SIMULATE_ENDPOINT_FAILURES) {
+        final cached = await _loadCachedChartData();
+        if (cached != null) {
+          debugPrintIfDebugging('Using cached data as final fallback');
+          return cached;
+        }
+      } else {
+        debugPrintIfDebugging('Simulation mode: skipping cache to show failures');
       }
       
       throw Exception('Unable to load temperature data. Please check your internet connection and try again.');
@@ -747,6 +1216,17 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       _isShowingCachedData = false;
     }
     
+    // Stop any existing auto-retry timer
+    _stopAutoRetryTimer();
+    
+    // Reset error states
+    _resetErrorStates();
+    
+    // Clear cache in simulation mode to ensure fresh data loading
+    if (SIMULATE_ENDPOINT_FAILURES) {
+      await _clearCache();
+    }
+    
     // Reset location determination state
     setState(() {
       _isLocationDetermined = false;
@@ -804,6 +1284,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         if (effectiveSnapshot.connectionState != ConnectionState.waiting) {
           _stopLoadingMessageTimer();
           _isDataLoading = false;
+          
+          // Start auto-retry timer if there are failed endpoints
+          if (_averageDataFailed || _trendDataFailed || _summaryDataFailed) {
+            _startAutoRetryTimer();
+          }
         }
         
         // Show loading state with spinner and message
@@ -848,6 +1333,22 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         final data = effectiveSnapshot.data!;
         final chartData = data['chartData'] as List<TemperatureChartData>;
         
+        // Use stored data if available and more up-to-date
+        Map<String, dynamic> displayData = data;
+        if (_currentData != null) {
+          // Merge stored data with snapshot data, preferring stored data for updated fields
+          displayData = Map<String, dynamic>.from(data);
+          if (_currentData!['averageTemperature'] != null) {
+            displayData['averageTemperature'] = _currentData!['averageTemperature'];
+          }
+          if (_currentData!['trendSlope'] != null) {
+            displayData['trendSlope'] = _currentData!['trendSlope'];
+          }
+          if (_currentData!['summary'] != null) {
+            displayData['summary'] = _currentData!['summary'];
+          }
+        }
+        
         // Show no chart data state with retry button
         if (chartData.isEmpty) {
           return _buildRetrySection(
@@ -887,10 +1388,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           );
         }
         
-        final averageTemperature = data['averageTemperature'] as double?;
-        final trendSlope = data['trendSlope'] as double?;
-        final summaryText = data['summary'] as String?;
-        final displayDate = data['displayDate'] as String?;
+        final averageTemperature = displayData['averageTemperature'] as double?;
+        final trendSlope = displayData['trendSlope'] as double?;
+        final summaryText = displayData['summary'] as String?;
+        final displayDate = displayData['displayDate'] as String?;
         // Use display location instead of full location from API data
         final city = _displayLocation.isNotEmpty ? _displayLocation : (data['city'] as String?);
         
@@ -1170,6 +1671,163 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     );
   }
 
+  Widget _buildDebugToggleSection() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
+          double horizontalOffset = (constraints.maxWidth - contentWidth) / 2;
+          
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              margin: EdgeInsets.only(
+                left: horizontalOffset > 0 ? horizontalOffset : kTitleRowHorizontalMargin,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Debug Mode - Simulate Endpoint Failures:',
+                    style: TextStyle(
+                      color: kGreyLabelColour,
+                      fontSize: kFontSizeBody - 1,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _buildDebugToggleButton('Average', 'average'),
+                      const SizedBox(width: 8),
+                      _buildDebugToggleButton('Trend', 'trend'),
+                      const SizedBox(width: 8),
+                      _buildDebugToggleButton('Summary', 'summary'),
+                      const SizedBox(width: 16),
+                      _buildResetAllButton(),
+                    ],
+                  ),
+                  if (SIMULATE_ENDPOINT_FAILURES) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Simulation Active: ${_simulateAverageFailure ? "Average" : ""}${_simulateTrendFailure ? (_simulateAverageFailure ? ", " : "") + "Trend" : ""}${_simulateSummaryFailure ? ((_simulateAverageFailure || _simulateTrendFailure) ? ", " : "") + "Summary" : ""}',
+                      style: TextStyle(
+                        color: kAccentColour,
+                        fontSize: kFontSizeBody - 2,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDebugToggleButton(String label, String endpoint) {
+    bool isSimulating = false;
+    
+    switch (endpoint) {
+      case 'average':
+        isSimulating = _simulateAverageFailure;
+        break;
+      case 'trend':
+        isSimulating = _simulateTrendFailure;
+        break;
+      case 'summary':
+        isSimulating = _simulateSummaryFailure;
+        break;
+    }
+    
+    return GestureDetector(
+      onTap: () async {
+        setState(() {
+          switch (endpoint) {
+            case 'average':
+              _simulateAverageFailure = !_simulateAverageFailure;
+              break;
+            case 'trend':
+              _simulateTrendFailure = !_simulateTrendFailure;
+              break;
+            case 'summary':
+              _simulateSummaryFailure = !_simulateSummaryFailure;
+              break;
+          }
+        });
+        
+        // Show feedback
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${isSimulating ? 'Disabled' : 'Enabled'} $label failure simulation'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+        
+        // If we're enabling a simulation, trigger a refresh to see the failure
+        if (!isSimulating) {
+          // Clear cache when enabling simulation to ensure fresh data loading
+          await _clearCache();
+          _handleRefresh();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSimulating ? kAccentColour : kGreyLabelColour.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSimulating ? kAccentColour : kGreyLabelColour,
+            fontSize: kFontSizeBody - 2,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResetAllButton() {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _simulateAverageFailure = true;
+          _simulateTrendFailure = false;
+          _simulateSummaryFailure = false;
+        });
+        // Show feedback
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('All failure simulations reset'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+        // If we're enabling a simulation, trigger a refresh to see the failure
+        _handleRefresh();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: kGreyLabelColour.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          'Reset All',
+          style: TextStyle(
+            color: kGreyLabelColour,
+            fontSize: kFontSizeBody - 2,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildContentPadding(BuildContext context, Widget child) {
     return Padding(
       padding: EdgeInsets.only(
@@ -1383,10 +2041,12 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                         // Ensure proper spacing for bars
                       ),
                     ),
+                    // Consistent spacing below chart - always show this
+                    const SizedBox(height: kSectionTopPadding),
                     // Average temperature text below chart
                     if (averageTemperature != null)
                       Padding(
-                        padding: const EdgeInsets.only(top: kSectionTopPadding, bottom: kSectionBottomPadding),
+                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Container(
@@ -1395,6 +2055,56 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                               'Average: ${averageTemperature.toStringAsFixed(1)}°C',
                               style: TextStyle(color: kAverageColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
                               textAlign: TextAlign.left,
+                            ),
+                          ),
+                        ),
+                      )
+                    else if (_averageDataFailed)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _isRetryingAverage ? Icons.hourglass_empty : Icons.error_outline,
+                                  color: _isRetryingAverage ? kGreyLabelColour : kAccentColour,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _isRetryingAverage 
+                                      ? 'Retrying average temperature data...'
+                                      : 'Failed to load average temperature data',
+                                    style: TextStyle(
+                                      color: _isRetryingAverage ? kGreyLabelColour : kAccentColour, 
+                                      fontSize: kFontSizeBody - 1, 
+                                      fontWeight: FontWeight.w400
+                                    ),
+                                    textAlign: TextAlign.left,
+                                  ),
+                                ),
+                                if (!_isRetryingAverage) ...[
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: _retryAverageData,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: kAccentColour.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        'Retry',
+                                        style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
                         ),
@@ -1416,6 +2126,107 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                             ),
                           ),
                         ),
+                      )
+                    else if (_trendDataFailed)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _isRetryingTrend ? Icons.hourglass_empty : Icons.error_outline,
+                                  color: _isRetryingTrend ? kGreyLabelColour : kAccentColour,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _isRetryingTrend 
+                                      ? 'Retrying trend data...'
+                                      : 'Failed to load trend data',
+                                    style: TextStyle(
+                                      color: _isRetryingTrend ? kGreyLabelColour : kAccentColour, 
+                                      fontSize: kFontSizeBody - 1, 
+                                      fontWeight: FontWeight.w400
+                                    ),
+                                    textAlign: TextAlign.left,
+                                  ),
+                                ),
+                                if (!_isRetryingTrend) ...[
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: _retryTrendData,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: kAccentColour.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        'Retry',
+                                        style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    // Summary error message if it failed
+                    if (_summaryDataFailed)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _isRetryingSummary ? Icons.hourglass_empty : Icons.error_outline,
+                                  color: _isRetryingSummary ? kGreyLabelColour : kAccentColour,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _isRetryingSummary 
+                                      ? 'Retrying summary data...'
+                                      : 'Failed to load summary data',
+                                    style: TextStyle(
+                                      color: _isRetryingSummary ? kGreyLabelColour : kAccentColour, 
+                                      fontSize: kFontSizeBody - 1, 
+                                      fontWeight: FontWeight.w400
+                                    ),
+                                    textAlign: TextAlign.left,
+                                  ),
+                                ),
+                                if (!_isRetryingSummary) ...[
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: _retrySummaryData,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: kAccentColour.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        'Retry',
+                                        style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     // Data completeness indicator
                     _buildDataCompletenessIndicator(chartData),
@@ -1431,7 +2242,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
 
   Widget _buildDataCompletenessIndicator(List<TemperatureChartData> chartData) {
     final missingYears = chartData.where((data) => !data.hasData).map((data) => int.parse(data.year)).toList();
-    final hasGaps = missingYears.isNotEmpty;
+    final hasGaps = missingYears.isNotEmpty || _chartDataHasGaps;
     
     if (hasGaps) {
       // Sort missing years for better display
@@ -1532,6 +2343,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                   children: [
                     // --- Title/logo row: always visible and scrolls with content ---
                     _buildTitleLogoSection(),
+                    // Debug toggle for testing (only show when debugging)
+                    if (DEBUGGING || SIMULATE_ENDPOINT_FAILURES)
+                      _buildDebugToggleSection(),
                     // --- The rest of the UI, including the FutureBuilder ---
                     _buildFutureBuilder(chartHeight: chartHeight),
                     // Add extra space to ensure content is always scrollable
@@ -1562,6 +2376,35 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           ),
       child: appContent,
     );
+  }
+
+  /// Simulate endpoint failures for testing purposes
+  Future<T> _simulateEndpointFailure<T>(String endpointName, Future<T> Function() apiCall) async {
+    if (!SIMULATE_ENDPOINT_FAILURES) {
+      return await apiCall();
+    }
+    
+    // Simulate different failure scenarios based on state
+    if (endpointName == 'average' && _simulateAverageFailure) {
+      debugPrintIfDebugging('Simulating average endpoint failure');
+      await Future.delayed(const Duration(seconds: 2)); // Simulate delay
+      throw Exception('Simulated average endpoint failure for testing');
+    }
+    
+    if (endpointName == 'trend' && _simulateTrendFailure) {
+      debugPrintIfDebugging('Simulating trend endpoint failure');
+      await Future.delayed(const Duration(seconds: 2)); // Simulate delay
+      throw Exception('Simulated trend endpoint failure for testing');
+    }
+    
+    if (endpointName == 'summary' && _simulateSummaryFailure) {
+      debugPrintIfDebugging('Simulating summary endpoint failure');
+      await Future.delayed(const Duration(seconds: 2)); // Simulate delay
+      throw Exception('Simulated summary endpoint failure for testing');
+    }
+    
+    // If no failure is simulated, proceed with normal call
+    return await apiCall();
   }
 }
 
