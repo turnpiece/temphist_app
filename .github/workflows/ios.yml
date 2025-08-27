@@ -27,13 +27,26 @@ jobs:
       - name: 📦 Install dependencies
         run: flutter pub get
 
-      - name: 🔐 Decode firebase_options.dart from base64
-        run: |
-          echo "${{ secrets.FIREBASE_OPTIONS_B64 }}" | base64 --decode > lib/firebase_options.dart
-
       - name: 🔐 Decode GoogleService-Info.plist
         run: |
           echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_B64 }}" | base64 --decode > ios/Runner/GoogleService-Info.plist
+
+      - name: Clear match cache
+        run: rm -rf ~/Library/MobileDevice/Provisioning\ Profiles/*
+
+      - name: Remove old match repo
+        run: rm -rf /Users/runner/.fastlane/ci/*
+
+      - name: Clean DerivedData
+        run: rm -rf ~/Library/Developer/Xcode/DerivedData
+
+      - name: Select Xcode 16.2
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app
+
+      - name: Verify Xcode version
+        run: |
+          xcode-select -p
+          xcodebuild -version
 
       - name: 🛠️ Install Fastlane
         working-directory: ios
@@ -41,19 +54,11 @@ jobs:
 
       - name: 📦 Install CocoaPods dependencies
         working-directory: ios
-        run: |
-          pod install
-
-      - name: 🔍 Debug App Store Private Key
-        run: |
-          echo "$APP_STORE_PRIVATE_KEY" | od -c
-          echo "Lines: $(echo "$APP_STORE_PRIVATE_KEY" | wc -l)"
-        env:
-          APP_STORE_PRIVATE_KEY: ${{ secrets.APP_STORE_PRIVATE_KEY }}
+        run: bundle exec pod install
 
       - name: 🚀 Upload to TestFlight with Fastlane
         working-directory: ios
-        run: bundle exec fastlane beta
+        run: bundle exec fastlane beta --verbose
         env:
           APP_STORE_KEY_ID: ${{ secrets.APP_STORE_KEY_ID }}
           APP_STORE_ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}
@@ -61,13 +66,16 @@ jobs:
           APP_IDENTIFIER: ${{ secrets.APP_IDENTIFIER }}
           APP_STORE_TEAM_ID: ${{ secrets.APP_STORE_TEAM_ID }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_URL: https://x-access-token:${{ secrets.MATCH_GIT_PAT }}@github.com/turnpiece/apple-certs.git
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
           FASTLANE_DISABLE_COLORS: 1
 
       - name: ✅ Archive output
         run: |
           mkdir -p build-artifacts
-          cp -r build/ios/iphoneos/Runner.app build-artifacts/
+          IPA_PATH=$(find ios -name "*.ipa" | head -n 1)
+          echo "Found IPA at: $IPA_PATH"
+          cp "$IPA_PATH" build-artifacts/
 
       - name: 💾 Upload artifact
         uses: actions/upload-artifact@v4

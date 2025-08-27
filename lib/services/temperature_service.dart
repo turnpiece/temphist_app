@@ -3,6 +3,16 @@ import 'package:http/http.dart' as http;
 import '../models/temperature_data.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// Debug logging function that can be controlled globally
+void debugLog(String message) {
+  // This will be controlled by the DEBUGGING constant in main.dart
+  // For now, we'll use a simple approach that can be easily controlled
+  if (const bool.fromEnvironment('DEBUG', defaultValue: false)) {
+    // ignore: avoid_print
+    print('DEBUG: $message');
+  }
+}
+
 class TemperatureService {
   final String apiBaseUrl;
 
@@ -32,7 +42,7 @@ class TemperatureService {
 
     if (response.statusCode == 200) {
       final responseBody = response.body;
-      print('API Response for $city/$date: $responseBody'); // Debug log
+      debugLog('API Response for $city/$date: $responseBody');
       
       if (responseBody.isEmpty) {
         throw Exception('Empty response from API');
@@ -45,7 +55,7 @@ class TemperatureService {
       
       return TemperatureData.fromJson(json);
     } else {
-      print('API Error Response: ${response.statusCode} - ${response.body}'); // Debug log
+      debugLog('API Error Response: ${response.statusCode} - ${response.body}');
       throw Exception('Failed to fetch temperature data: ${response.statusCode}');
     }
   }
@@ -65,7 +75,7 @@ class TemperatureService {
 
     if (response.statusCode == 200) {
       final responseBody = response.body;
-      print('Complete API Response for $city/$monthDay: $responseBody'); // Debug log
+      debugLog('Complete API Response for $city/$monthDay: $responseBody');
       
       if (responseBody.isEmpty) {
         throw Exception('Empty response from API');
@@ -78,7 +88,7 @@ class TemperatureService {
       
       return TemperatureData.fromJson(json);
     } else {
-      print('Complete API Error Response: ${response.statusCode} - ${response.body}'); // Debug log
+      debugLog('Complete API Error Response: ${response.statusCode} - ${response.body}');
       throw Exception('Failed to fetch complete temperature data: ${response.statusCode}');
     }
   }
@@ -87,7 +97,7 @@ class TemperatureService {
     final token = await getAuthToken();
     final url = Uri.parse('$apiBaseUrl/average/$city/$date');
 
-    print('DEBUG: Fetching /average/ for city=$city, date=$date');
+    debugLog('Fetching /average/ for city=$city, date=$date');
 
     final response = await http.get(
       url,
@@ -98,7 +108,7 @@ class TemperatureService {
 
     if (response.statusCode == 200) {
       final responseBody = response.body;
-      print('Average API Response for $city/$date: $responseBody'); // Debug log
+      debugLog('Average API Response for $city/$date: $responseBody');
       
       if (responseBody.isEmpty) {
         throw Exception('Empty response from API');
@@ -111,7 +121,7 @@ class TemperatureService {
       
       return json;
     } else {
-      print('Average API Error Response: ${response.statusCode} - ${response.body}'); // Debug log
+      debugLog('Average API Error Response: ${response.statusCode} - ${response.body}');
       throw Exception('Failed to fetch average data: ${response.statusCode}');
     }
   }
@@ -129,7 +139,7 @@ class TemperatureService {
 
     if (response.statusCode == 200) {
       final responseBody = response.body;
-      print('Trend API Response for $city/$date: $responseBody'); // Debug log
+      debugLog('Trend API Response for $city/$date: $responseBody');
       
       if (responseBody.isEmpty) {
         throw Exception('Empty response from API');
@@ -142,7 +152,7 @@ class TemperatureService {
       
       return json;
     } else {
-      print('Trend API Error Response: ${response.statusCode} - ${response.body}'); // Debug log
+      debugLog('Trend API Error Response: ${response.statusCode} - ${response.body}');
       throw Exception('Failed to fetch trend data: ${response.statusCode}');
     }
   }
@@ -160,7 +170,7 @@ class TemperatureService {
 
     if (response.statusCode == 200) {
       final responseBody = response.body;
-      print('Summary API Response for $city/$date: $responseBody'); // Debug log
+      debugLog('Summary API Response for $city/$date: $responseBody');
       
       if (responseBody.isEmpty) {
         throw Exception('Empty response from API');
@@ -173,8 +183,8 @@ class TemperatureService {
       
       return json;
     } else {
-      print('Summary API Error Response: \\${response.statusCode} - \\${response.body}'); // Debug log
-      throw Exception('Failed to fetch summary data: \\${response.statusCode}');
+      debugLog('Summary API Error Response: ${response.statusCode} - ${response.body}');
+      throw Exception('Failed to fetch summary data: ${response.statusCode}');
     }
   }
 }

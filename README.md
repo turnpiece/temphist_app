@@ -22,8 +22,8 @@ TempHist is a simple Flutter application that visualizes historical average temp
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/turnpiece/TempHistApp.git
-cd TempHistApp
+git clone https://github.com/turnpiece/temphist_app.git
+cd temphist_app
 ```
 
 2. Get the dependencies:
@@ -50,11 +50,11 @@ _Add screenshots of the chart here once available._
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the MIT License.
 
 ---
 
-For more info or to contribute, please open an issue or submit a pull request at [github.com/turnpiece/TempHistApp](https://github.com/turnpiece/TempHistApp).
+For more info or to contribute, please open an issue or submit a pull request at [github.com/turnpiece/temphist_app](https://github.com/turnpiece/temphist_app).
 
 ## Firebase Configuration Setup
 

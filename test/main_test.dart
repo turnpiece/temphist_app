@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:temphist_app/main.dart';
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 
 void main() {
   testWidgets('Finds any text', (WidgetTester tester) async {
@@ -92,17 +91,22 @@ void main() {
   });
 
   testWidgets('Shows error and retry button on error', (WidgetTester tester) async {
-    final errorSnapshot = AsyncSnapshot<Map<String, dynamic>>.withError(
-      ConnectionState.done,
-      'Test error',
-    );
+    // Create a completer that we can control
+    final completer = Completer<Map<String, dynamic>>();
 
     await tester.pumpWidget(MaterialApp(
       home: TemperatureScreen(
-        testSnapshot: errorSnapshot,
+        testFuture: completer.future,
       ),
     ));
 
+    // Complete the future with an error
+    completer.completeError('Test error');
+
+    // Wait for the error to be displayed
+    await tester.pumpAndSettle();
+
+    // Verify that error message and retry button are shown
     expect(find.textContaining('Error loading data'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
   });

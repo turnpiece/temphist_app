@@ -1,4 +1,4 @@
-package com.turnpiece.temphist
+package com.turnpiece.temphist_app
 
 import io.flutter.embedding.android.FlutterActivity
 

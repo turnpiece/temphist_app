@@ -49,11 +49,9 @@ app.*.map.json
 /local.properties
 
 # Xcode
-ios/Flutter/Flutter.framework
-ios/Flutter/Flutter.podspec
+.metadata
 ios/.symlinks/
 ios/Pods/
-ios/Runner.xcworkspace
 ios/build/
 ios/DerivedData/
 ios/.dart_tool/
@@ -66,7 +64,6 @@ ios/.flutter-plugins-dependencies
 *.g.dart
 
 # Firebase configuration files
-lib/firebase_options.dart
 firebase_options_escaped.txt
 firebase_options.b64
 ios/Runner/GoogleService-Info.plist

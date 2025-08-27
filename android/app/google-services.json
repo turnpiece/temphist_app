@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:355243461054:android:060ef9771913a1bd9a51ef",
+        "mobilesdk_app_id": "1:355243461054:android:f3b6a6c685ece8779a51ef",
         "android_client_info": {
-          "package_name": "com.example.temphist_app"
+          "package_name": "com.turnpiece.temphist"
         }
       },
       "oauth_client": [],

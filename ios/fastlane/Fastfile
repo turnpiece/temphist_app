@@ -1,60 +1,67 @@
-# ios/fastlane/Fastfile
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#
+#     https://docs.fastlane.tools/actions
+#
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
 
 default_platform(:ios)
 
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
+    setup_ci 
+
+    # Set up API key for App Store Connect
     api_key = app_store_connect_api_key(
       key_id: ENV["APP_STORE_KEY_ID"],
       issuer_id: ENV["APP_STORE_ISSUER_ID"],
-      key_content: ENV["APP_STORE_PRIVATE_KEY"], # <-- this is the correct key
+      key_content: ENV["APP_STORE_PRIVATE_KEY"],
       is_key_content_base64: true
-    )      
+    )
 
+    # development profile (same bundle ID)
+    match(
+      api_key: api_key,
+      type:    "development",
+      readonly: false 
+    )
+
+    # Code signing with match
     match(
       api_key: api_key,
       type: "appstore",
-      app_identifier: ENV["APP_IDENTIFIER"],
-      readonly: false,
-      git_branch: "master",
-      generate_apple_certs: true
     )
 
-    # Fallback: scan the installed profiles for one matching the app identifier
-    profile_dir = File.join(ENV["HOME"], "Library/MobileDevice/Provisioning Profiles")
-    profile_path = Dir["#{profile_dir}/*.mobileprovision"].find do |path|
-      File.read(path).include?(ENV["APP_IDENTIFIER"])
-    end
+    # Build with Flutter
+    sh("cd .. && bundle exec flutter build ios --release --no-codesign")
 
-    UI.user_error!("Could not find provisioning profile for #{ENV["APP_IDENTIFIER"]}") if profile_path.nil?
-
-    UI.message("Using provisioning profile at path: #{profile_path}")
-
-    update_project_provisioning(
+    profile_specifier =
+    lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING][ENV['APP_IDENTIFIER']]
+  
+    # bump build number to current UTC timestamp YYYYMMDDHHMM
+    increment_build_number(
       xcodeproj: "Runner.xcodeproj",
-      build_configuration: "Release",
-      target_filter: "Runner",
-      code_signing_identity: "Apple Distribution",
-      profile: profile_path
+      build_number: Time.now.utc.strftime("%Y%m%d%H%M")
     )
 
     build_app(
-      scheme: "Runner",
+      scheme:        "Runner",
+      configuration: "Release",
       export_method: "app-store",
-      export_options: {
-        provisioningProfiles: {
-          ENV["APP_IDENTIFIER"] => "match AppStore #{ENV["APP_IDENTIFIER"]}"
-        },
-        signingStyle: "manual",
-        signingCertificate: "Apple Distribution",
-        teamID: ENV["APP_STORE_TEAM_ID"]
-      },
-      workspace: "Runner.xcworkspace"
+      xcargs: %Q(CODE_SIGN_STYLE=Manual \
+                CODE_SIGN_IDENTITY="Apple Distribution" \
+                PROVISIONING_PROFILE_SPECIFIER="#{profile_specifier}")
     )
 
-    upload_to_testflight(
-      api_key: api_key
-    )
+    upload_to_testflight(api_key: api_key)
   end
 end
