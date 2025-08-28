@@ -1699,14 +1699,14 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Row(
+                  // Use Wrap for responsive button layout
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       _buildDebugToggleButton('Average', 'average'),
-                      const SizedBox(width: 8),
                       _buildDebugToggleButton('Trend', 'trend'),
-                      const SizedBox(width: 8),
                       _buildDebugToggleButton('Summary', 'summary'),
-                      const SizedBox(width: 16),
                       _buildResetAllButton(),
                     ],
                   ),
@@ -1777,15 +1777,15 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         }
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: isSimulating ? kAccentColour : kGreyLabelColour.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSimulating ? kAccentColour : kGreyLabelColour,
+            color: isSimulating ? Colors.white : kGreyLabelColour,
             fontSize: kFontSizeBody - 2,
             fontWeight: FontWeight.w500,
           ),
@@ -1813,10 +1813,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         _handleRefresh();
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: kGreyLabelColour.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           'Reset All',
