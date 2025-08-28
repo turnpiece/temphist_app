@@ -244,6 +244,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   geo.Position? _lastPosition;
   StreamSubscription<geo.Position>? _positionStreamSubscription;
 
+  // Track chart data retry attempts
+  bool _isRetryingChartData = false;
+  int _chartDataRetryCount = 0;
+  static const int _maxChartDataRetries = 3;
+
   @override
   void initState() {
     super.initState();
@@ -315,6 +320,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       _isRetryingAverage = false;
       _isRetryingTrend = false;
       _isRetryingSummary = false;
+      _isRetryingChartData = false;
+      _chartDataRetryCount = 0;
     });
   }
 
@@ -581,9 +588,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       });
       
       try {
-        final summaryData = await _simulateEndpointFailure('summary', () => 
-          service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 30))
-        );
+        final summaryData = await service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 30));
         final newSummary = summaryData['summary']?.toString();
         if (newSummary != null && newSummary.isNotEmpty) {
           setState(() {
@@ -610,6 +615,36 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       debugPrintIfDebugging('Error during summary retry: $e');
       setState(() {
         _isRetryingSummary = false;
+      });
+    }
+  }
+
+  Future<void> _retryChartData() async {
+    if (_chartDataRetryCount >= _maxChartDataRetries) {
+      debugPrintIfDebugging('Max chart data retries reached, not retrying further');
+      return;
+    }
+    
+    debugPrintIfDebugging('Retrying chart data... (attempt ${_chartDataRetryCount + 1})');
+    
+    setState(() {
+      _isRetryingChartData = true;
+    });
+    
+    try {
+      // Increment retry count
+      _chartDataRetryCount++;
+      
+      // Trigger a refresh to reload chart data
+      await _handleRefresh();
+      
+      setState(() {
+        _isRetryingChartData = false;
+      });
+    } catch (e) {
+      debugPrintIfDebugging('Error during chart data retry: $e');
+      setState(() {
+        _isRetryingChartData = false;
       });
     }
   }
@@ -2279,7 +2314,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Note: $missingText. This may affect the accuracy of the trend and average lines.',
+                  'Note: $missingText.',
                   style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
                   textAlign: TextAlign.left,
                 ),
@@ -2289,6 +2324,80 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                   style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
                   textAlign: TextAlign.left,
                 ),
+                if (_chartDataRetryCount < _maxChartDataRetries) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        _isRetryingChartData ? Icons.hourglass_empty : Icons.refresh,
+                        color: _isRetryingChartData ? kGreyLabelColour : kAccentColour,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _isRetryingChartData 
+                            ? 'Retrying chart data...'
+                            : 'Missing data may be temporary. Try refreshing.',
+                          style: TextStyle(
+                            color: _isRetryingChartData ? kGreyLabelColour : kGreyLabelColour, 
+                            fontSize: kFontSizeBody - 2, 
+                            fontWeight: FontWeight.w400
+                          ),
+                          textAlign: TextAlign.left,
+                        ),
+                      ),
+                      if (!_isRetryingChartData) ...[
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: _retryChartData,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: kAccentColour.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Retry',
+                              style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (_chartDataRetryCount > 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Retry attempts: $_chartDataRetryCount/$_maxChartDataRetries',
+                      style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 3, fontWeight: FontWeight.w400),
+                      textAlign: TextAlign.left,
+                    ),
+                  ],
+                ] else ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: kGreyLabelColour,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Data appears to be genuinely incomplete for this location. Some years may not have historical data available.',
+                          style: TextStyle(
+                            color: kGreyLabelColour, 
+                            fontSize: kFontSizeBody - 2, 
+                            fontWeight: FontWeight.w400
+                          ),
+                          textAlign: TextAlign.left,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
