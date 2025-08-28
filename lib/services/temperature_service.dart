@@ -2,23 +2,20 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/temperature_data.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../config/app_config.dart';
+import '../utils/debug_utils.dart';
 
 // Debug logging function that can be controlled globally
 void debugLog(String message) {
-  // This will be controlled by the DEBUGGING constant in main.dart
-  // For now, we'll use a simple approach that can be easily controlled
-  if (const bool.fromEnvironment('DEBUG', defaultValue: false)) {
-    // ignore: avoid_print
-    print('DEBUG: $message');
-  }
+  DebugUtils.log(message);
 }
 
 class TemperatureService {
   final String apiBaseUrl;
 
   TemperatureService({
-    this.apiBaseUrl = 'https://api.temphist.com',
-  });
+    String? apiBaseUrl,
+  }) : apiBaseUrl = apiBaseUrl ?? AppConfig.apiBaseUrl;
 
   /// Retrieve Firebase ID token for authentication
   Future<String> getAuthToken() async {
