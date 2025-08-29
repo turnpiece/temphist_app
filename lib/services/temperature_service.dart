@@ -5,6 +5,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../config/app_config.dart';
 import '../utils/debug_utils.dart';
 
+/// Custom exception for rate limit errors
+class RateLimitException implements Exception {
+  final String detail;
+  final String message;
+  
+  RateLimitException(this.detail) : message = 'Rate limit exceeded: $detail';
+  
+  @override
+  String toString() => message;
+}
+
 // Debug logging function that can be controlled globally
 void debugLog(String message) {
   DebugUtils.log(message);
@@ -53,6 +64,18 @@ class TemperatureService {
       return TemperatureData.fromJson(json);
     } else {
       debugLog('API Error Response: ${response.statusCode} - ${response.body}');
+      
+      // Check if it's a rate limit error
+      if (response.statusCode == 429) {
+        try {
+          final errorJson = jsonDecode(response.body);
+          final detail = errorJson['detail']?.toString() ?? 'Rate limit exceeded';
+          throw RateLimitException(detail);
+        } catch (e) {
+          throw RateLimitException('Rate limit exceeded');
+        }
+      }
+      
       throw Exception('Failed to fetch temperature data: ${response.statusCode}');
     }
   }
@@ -86,6 +109,18 @@ class TemperatureService {
       return TemperatureData.fromJson(json);
     } else {
       debugLog('Complete API Error Response: ${response.statusCode} - ${response.body}');
+      
+      // Check if it's a rate limit error
+      if (response.statusCode == 429) {
+        try {
+          final errorJson = jsonDecode(response.body);
+          final detail = errorJson['detail']?.toString() ?? 'Rate limit exceeded';
+          throw RateLimitException(detail);
+        } catch (e) {
+          throw RateLimitException('Rate limit exceeded');
+        }
+      }
+      
       throw Exception('Failed to fetch complete temperature data: ${response.statusCode}');
     }
   }
@@ -119,6 +154,18 @@ class TemperatureService {
       return json;
     } else {
       debugLog('Average API Error Response: ${response.statusCode} - ${response.body}');
+      
+      // Check if it's a rate limit error
+      if (response.statusCode == 429) {
+        try {
+          final errorJson = jsonDecode(response.body);
+          final detail = errorJson['detail']?.toString() ?? 'Rate limit exceeded';
+          throw RateLimitException(detail);
+        } catch (e) {
+          throw RateLimitException('Rate limit exceeded');
+        }
+      }
+      
       throw Exception('Failed to fetch average data: ${response.statusCode}');
     }
   }
@@ -150,6 +197,18 @@ class TemperatureService {
       return json;
     } else {
       debugLog('Trend API Error Response: ${response.statusCode} - ${response.body}');
+      
+      // Check if it's a rate limit error
+      if (response.statusCode == 429) {
+        try {
+          final errorJson = jsonDecode(response.body);
+          final detail = errorJson['detail']?.toString() ?? 'Rate limit exceeded';
+          throw RateLimitException(detail);
+        } catch (e) {
+          throw RateLimitException('Rate limit exceeded');
+        }
+      }
+      
       throw Exception('Failed to fetch trend data: ${response.statusCode}');
     }
   }
@@ -181,6 +240,18 @@ class TemperatureService {
       return json;
     } else {
       debugLog('Summary API Error Response: ${response.statusCode} - ${response.body}');
+      
+      // Check if it's a rate limit error
+      if (response.statusCode == 429) {
+        try {
+          final errorJson = jsonDecode(response.body);
+          final detail = errorJson['detail']?.toString() ?? 'Rate limit exceeded';
+          throw RateLimitException(detail);
+        } catch (e) {
+          throw RateLimitException('Rate limit exceeded');
+        }
+      }
+      
       throw Exception('Failed to fetch summary data: ${response.statusCode}');
     }
   }

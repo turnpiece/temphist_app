@@ -5,8 +5,8 @@
 // For production: set isDebugBuild = true
 
 class BuildConfig {
-  // Set this to false when building for production
-  static const bool isDebugBuild = true;
+  // Build-time constant for conditional compilation
+  static const bool isDebugBuild = bool.fromEnvironment('DEBUG', defaultValue: true);
   
   // This will be used by app_config.dart to determine which config to import
   static bool get shouldUseDebugConfig => isDebugBuild;

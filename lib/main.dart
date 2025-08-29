@@ -227,6 +227,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   bool _summaryDataFailed = false;
   bool _chartDataHasGaps = false;
   
+  // Rate limit tracking
+  bool _averageDataRateLimited = false;
+  bool _trendDataRateLimited = false;
+  bool _summaryDataRateLimited = false;
+  
   // Add automatic retry timer
   Timer? _autoRetryTimer;
   
@@ -269,9 +274,16 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     _autoRetryTimer?.cancel();
     
     // Start a new timer that will retry after 10 seconds
+    // But only retry endpoints that aren't rate limited
     _autoRetryTimer = Timer(const Duration(seconds: 10), () {
-      if (mounted && (_averageDataFailed || _trendDataFailed || _summaryDataFailed)) {
-        _retryFailedData();
+      if (mounted) {
+        final shouldRetryAverage = _averageDataFailed && !_averageDataRateLimited;
+        final shouldRetryTrend = _trendDataFailed && !_trendDataRateLimited;
+        final shouldRetrySummary = _summaryDataFailed && !_summaryDataRateLimited;
+        
+        if (shouldRetryAverage || shouldRetryTrend || shouldRetrySummary) {
+          _retryFailedData();
+        }
       }
     });
   }
@@ -324,6 +336,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       _isRetryingSummary = false;
       _isRetryingChartData = false;
       _chartDataRetryCount = 0;
+      
+      // Reset rate limit flags
+      _averageDataRateLimited = false;
+      _trendDataRateLimited = false;
+      _summaryDataRateLimited = false;
     });
   }
 
@@ -386,9 +403,21 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           }
         } catch (e) {
           debugPrintIfDebugging('Retry of average data failed: $e');
-          setState(() {
-            _isRetryingAverage = false;
-          });
+          
+          // Check if it's a rate limit error - don't retry these
+          if (e is RateLimitException) {
+            setState(() {
+              _isRetryingAverage = false;
+              _averageDataFailed = true;
+              _averageDataRateLimited = true; // New flag for rate limiting
+            });
+            // Stop auto-retry timer for rate limit errors
+            _stopAutoRetryTimer();
+          } else {
+            setState(() {
+              _isRetryingAverage = false;
+            });
+          }
         }
       }
       
@@ -2137,8 +2166,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                             child: Row(
                               children: [
                                 Icon(
-                                  _isRetryingAverage ? Icons.hourglass_empty : Icons.error_outline,
-                                  color: _isRetryingAverage ? kGreyLabelColour : kAccentColour,
+                                  _isRetryingAverage ? Icons.hourglass_empty : 
+                                  _averageDataRateLimited ? Icons.timer : Icons.error_outline,
+                                  color: _isRetryingAverage ? kGreyLabelColour : 
+                                         _averageDataRateLimited ? kGreyLabelColour : kAccentColour,
                                   size: 16,
                                 ),
                                 const SizedBox(width: 8),
@@ -2146,16 +2177,19 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                                   child: Text(
                                     _isRetryingAverage 
                                       ? 'Retrying average temperature data...'
-                                      : 'Failed to load average temperature data',
+                                      : _averageDataRateLimited 
+                                        ? 'Rate limit exceeded - please wait before retrying'
+                                        : 'Failed to load average temperature data',
                                     style: TextStyle(
-                                      color: _isRetryingAverage ? kGreyLabelColour : kAccentColour, 
+                                      color: _isRetryingAverage ? kGreyLabelColour : 
+                                             _averageDataRateLimited ? kGreyLabelColour : kAccentColour, 
                                       fontSize: kFontSizeBody - 1, 
                                       fontWeight: FontWeight.w400
                                     ),
                                     textAlign: TextAlign.left,
                                   ),
                                 ),
-                                if (!_isRetryingAverage) ...[
+                                if (!_isRetryingAverage && !_averageDataRateLimited) ...[
                                   const SizedBox(width: 8),
                                   GestureDetector(
                                     onTap: _retryAverageData,
