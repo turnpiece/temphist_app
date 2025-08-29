@@ -3,8 +3,8 @@
 # Script to switch the app to debug mode
 echo "Switching to debug mode..."
 
-# Update the build config
-sed -i '' 's/isDebugBuild = false/isDebugBuild = true/' lib/config/build_config.dart
+# Update the build config to use environment variable for debug
+sed -i '' 's/defaultValue: false/defaultValue: true/' lib/config/build_config.dart
 
 echo "✅ Switched to debug mode"
 echo "🐛 Debug features are now enabled"

@@ -3,8 +3,8 @@
 # Script to switch the app to production mode
 echo "Switching to production mode..."
 
-# Update the build config
-sed -i '' 's/isDebugBuild = true/isDebugBuild = false/' lib/config/build_config.dart
+# Update the build config to use environment variable for production
+sed -i '' 's/defaultValue: true/defaultValue: false/' lib/config/build_config.dart
 
 echo "✅ Switched to production mode"
 echo "📱 Debug features are now disabled"
