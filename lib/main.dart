@@ -1753,13 +1753,35 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
               margin: EdgeInsets.only(
                 left: horizontalOffset > 0 ? horizontalOffset : kTitleRowHorizontalMargin,
               ),
-              child: Text(
-                'Version: ${AppConfig.fullVersion}',
-                style: TextStyle(
-                  color: kGreyLabelColour,
-                  fontSize: kFontSizeBody - 2,
-                  fontWeight: FontWeight.w400,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Debug Info:',
+                    style: TextStyle(
+                      color: kGreyLabelColour,
+                      fontSize: kFontSizeBody - 2,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Version: ${AppConfig.fullVersion}',
+                    style: TextStyle(
+                      color: kGreyLabelColour,
+                      fontSize: kFontSizeBody - 3,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  Text(
+                    'Release: ${AppConfig.releaseDate}',
+                    style: TextStyle(
+                      color: kGreyLabelColour,
+                      fontSize: kFontSizeBody - 3,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -2546,8 +2568,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                     // Debug toggle for testing (only show when debugging)
                     if (AppConfig.shouldShowDebugFeatures)
                       _buildDebugToggleSection(),
-                    // Version information (always show)
-                    _buildVersionSection(),
+                    // Version information (only show in debug mode)
+                    if (AppConfig.shouldShowDebugFeatures)
+                      _buildVersionSection(),
                     // --- The rest of the UI, including the FutureBuilder ---
                     _buildFutureBuilder(chartHeight: chartHeight),
                     // Add extra space to ensure content is always scrollable
