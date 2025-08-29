@@ -3,13 +3,14 @@
 
 // Use conditional compilation to import the appropriate config
 // This approach uses build-time constants for better control
+import 'build_config.dart';
 import 'debug_config.dart' as debug_config;
 import 'production_config.dart' as production_config;
 
 // Create a unified interface that can be used throughout the app
 class AppConfig {
-  // Build-time constants for conditional compilation
-  static const bool _isDebugBuild = bool.fromEnvironment('DEBUG', defaultValue: true);
+  // Use the build config to determine debug mode
+  static bool get _isDebugBuild => BuildConfig.isDebugBuild;
   
   // Debug logging
   static bool get isDebugMode => _isDebugBuild ? debug_config.DebugConfig.enableDebugLogging : production_config.ProductionConfig.enableDebugLogging;

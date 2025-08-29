@@ -15,5 +15,5 @@ class ProductionConfig {
   // App version information
   static const String appVersion = '1.0.0';
   static const String buildNumber = '1';
-  static const String releaseDate = '2024-01-XX';
+  static const String releaseDate = 'Production Build';
 }

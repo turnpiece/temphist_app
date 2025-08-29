@@ -18,9 +18,17 @@ jobs:
         run: |
           # Update version numbers based on git tag
           VERSION=${GITHUB_REF#refs/tags/}
+          RELEASE_DATE=$(date +'%Y-%m-%d')
           echo "Updating version to: ${VERSION#v}"
+          echo "Setting release date to: $RELEASE_DATE"
+
+          # Update version in all config files
           sed -i "s/appVersion = '.*'/appVersion = '${VERSION#v}'/" lib/config/*.dart
-          echo "Version update complete"
+
+          # Update release date in all config files
+          sed -i "s/releaseDate = '.*'/releaseDate = '$RELEASE_DATE'/" lib/config/*.dart
+
+          echo "Version and release date update complete"
 
       - name: 🚀 Set up Flutter
         uses: subosito/flutter-action@v2
