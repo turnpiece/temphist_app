@@ -1710,6 +1710,35 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     );
   }
 
+  Widget _buildVersionSection() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
+          double horizontalOffset = (constraints.maxWidth - contentWidth) / 2;
+          
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              margin: EdgeInsets.only(
+                left: horizontalOffset > 0 ? horizontalOffset : kTitleRowHorizontalMargin,
+              ),
+              child: Text(
+                'Version: ${AppConfig.fullVersion}',
+                style: TextStyle(
+                  color: kGreyLabelColour,
+                  fontSize: kFontSizeBody - 2,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildDebugToggleSection() {
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
@@ -2483,6 +2512,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                     // Debug toggle for testing (only show when debugging)
                     if (AppConfig.shouldShowDebugFeatures)
                       _buildDebugToggleSection(),
+                    // Version information (always show)
+                    _buildVersionSection(),
                     // --- The rest of the UI, including the FutureBuilder ---
                     _buildFutureBuilder(chartHeight: chartHeight),
                     // Add extra space to ensure content is always scrollable

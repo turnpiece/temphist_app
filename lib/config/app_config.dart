@@ -23,4 +23,10 @@ class AppConfig {
   // Utility methods
   static bool get isProductionMode => !isDebugMode;
   static bool get shouldShowDebugFeatures => isDebugMode && enableDebugUI;
+  
+  // Version information
+  static String get appVersion => config.DebugConfig.appVersion;
+  static String get buildNumber => config.DebugConfig.buildNumber;
+  static String get releaseDate => config.DebugConfig.releaseDate;
+  static String get fullVersion => 'v${appVersion}+${buildNumber}';
 }

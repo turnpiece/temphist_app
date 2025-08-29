@@ -14,6 +14,14 @@ jobs:
       - name: ⬇️ Checkout code
         uses: actions/checkout@v3
 
+      - name: Update version for release
+        run: |
+          # Update version numbers based on git tag
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "Updating version to: ${VERSION#v}"
+          sed -i "s/appVersion = '.*'/appVersion = '${VERSION#v}'/" lib/config/*.dart
+          echo "Version update complete"
+
       - name: 🚀 Set up Flutter
         uses: subosito/flutter-action@v2
         with:
