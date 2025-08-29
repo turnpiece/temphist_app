@@ -16,19 +16,27 @@ jobs:
 
       - name: Update version for release
         run: |
-          # Update version numbers based on git tag
-          VERSION=${GITHUB_REF#refs/tags/}
-          RELEASE_DATE=$(date +'%Y-%m-%d')
-          echo "Updating version to: ${VERSION#v}"
-          echo "Setting release date to: $RELEASE_DATE"
-
-          # Update version in all config files
-          sed -i "s/appVersion = '.*'/appVersion = '${VERSION#v}'/" lib/config/*.dart
-
-          # Update release date in all config files
-          sed -i "s/releaseDate = '.*'/releaseDate = '$RELEASE_DATE'/" lib/config/*.dart
-
-          echo "Version and release date update complete"
+          # Check if this is a tag push or branch push
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            # This is a tag push - extract version and update
+            VERSION=${GITHUB_REF#refs/tags/}
+            RELEASE_DATE=$(date +'%Y-%m-%d')
+            echo "Tag detected: $VERSION"
+            echo "Setting release date to: $RELEASE_DATE"
+            
+            # Update version in all config files
+            sed -i '' "s/appVersion = '.*'/appVersion = '${VERSION#v}'/" lib/config/*.dart
+            
+            # Update release date in all config files  
+            sed -i '' "s/releaseDate = '.*'/releaseDate = '$RELEASE_DATE'/" lib/config/*.dart
+            
+            echo "Version and release date update complete"
+          else
+            # This is a branch push - just log and continue
+            echo "Branch push detected: $GITHUB_REF"
+            echo "No version update needed for branch push"
+            echo "Version will be updated when a tag is pushed"
+          fi
 
       - name: 🚀 Set up Flutter
         uses: subosito/flutter-action@v2
