@@ -2231,10 +2231,25 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                         margin: EdgeInsets.symmetric(horizontal: kChartHorizontalMargin),
                         tooltipBehavior: TooltipBehavior(
                           enable: true,
-                          format: 'point.x: point.y',
+                          format: 'point.x: point.y°C',
                           canShowMarker: false,
                           header: '',
                           textStyle: TextStyle(fontSize: kFontSizeBody),
+                          builder: (data, point, series, pointIndex, seriesIndex) {
+                            final year = data.x.toString();
+                            final temp = (data.y as double).toStringAsFixed(1);
+                            return Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.black87,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '$year: ${temp}°C',
+                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                              ),
+                            );
+                          },
                         ),
                         series: [
                           BarSeries<TemperatureChartData, int>(
@@ -2285,7 +2300,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                         ),
                         primaryYAxis: NumericAxis(
                           labelFormat: '{value}°C',
-                          numberFormat: NumberFormat('0'),
+                          numberFormat: NumberFormat('0.0'),
                           minimum: yAxisMin,
                           maximum: yAxisMax,
                           majorGridLines: MajorGridLines(width: 0),
