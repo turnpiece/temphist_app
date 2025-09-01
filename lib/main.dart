@@ -2565,12 +2565,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                   children: [
                     // --- Title/logo row: always visible and scrolls with content ---
                     _buildTitleLogoSection(),
-                    // Debug toggle for testing (only show when debugging)
-                    if (AppConfig.shouldShowDebugFeatures)
+                    // Debug features (only show when debugging)
+                    if (AppConfig.shouldShowDebugFeatures) ...[
                       _buildDebugToggleSection(),
-                    // Version information (only show in debug mode)
-                    if (AppConfig.shouldShowDebugFeatures)
                       _buildVersionSection(),
+                    ],
                     // --- The rest of the UI, including the FutureBuilder ---
                     _buildFutureBuilder(chartHeight: chartHeight),
                     // Add extra space to ensure content is always scrollable
@@ -2586,19 +2585,14 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
 
     // Wrap with AnnotatedRegion for mobile platforms
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: Platform.isIOS
-        ? const SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            statusBarBrightness: Brightness.dark,
-            systemNavigationBarColor: Colors.transparent,
-            systemNavigationBarIconBrightness: Brightness.light,
-          )
-        : const SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            statusBarIconBrightness: Brightness.light,
-            systemNavigationBarColor: Colors.transparent,
-            systemNavigationBarIconBrightness: Brightness.light,
-          ),
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.light,
+        // iOS uses statusBarBrightness, Android uses statusBarIconBrightness
+        statusBarBrightness: Platform.isIOS ? Brightness.dark : null,
+        statusBarIconBrightness: Platform.isIOS ? null : Brightness.light,
+      ),
       child: appContent,
     );
   }
