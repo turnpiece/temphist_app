@@ -259,14 +259,36 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   @override
   void initState() {
     super.initState();
-    futureChartData = widget.testFuture ?? _loadChartData();
     _startListeningToLocationChanges();
+    // Initialize with location determination first, then load data
+    _initializeApp();
   }
 
   @override
   void dispose() {
     _positionStreamSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _initializeApp() async {
+    // If we have a test future, use it directly
+    if (widget.testFuture != null) {
+      futureChartData = widget.testFuture;
+      return;
+    }
+    
+    // First determine location
+    await _determineLocation();
+    
+    // Then start loading temperature data
+    setState(() {
+      futureChartData = _loadChartData();
+      _isShowingCachedData = false;
+      _isDataLoading = true;
+    });
+    
+    // Start the loading message timer after location is determined
+    _startLoadingMessageTimer();
   }
 
   void _startAutoRetryTimer() {
@@ -708,7 +730,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     try {
       String city = 'London, UK';
       
-            // Try to get user's city via geolocation
+      // Try to get user's city via geolocation
       try {
         debugPrintIfDebugging('_determineLocation: Starting geolocation');
         
@@ -792,6 +814,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         _isLocationDetermined = true;
       });
       
+      // Reset loading message timer to start temperature-related messages
+      _loadingElapsedSeconds = 0;
+      _updateLoadingMessage();
+      
     } catch (e) {
       debugPrintIfDebugging('_determineLocation failed: $e');
       // Set default location if everything fails
@@ -800,6 +826,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         _displayLocation = _extractDisplayLocation('London, UK');
         _isLocationDetermined = true;
       });
+      
+      // Reset loading message timer to start temperature-related messages
+      _loadingElapsedSeconds = 0;
+      _updateLoadingMessage();
     }
   }
 
@@ -873,25 +903,40 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     if (!mounted) return;
     
     String newMessage;
-    if (_loadingElapsedSeconds < 10) {
-      newMessage = 'Loading temperature data...';
-    } else if (_loadingElapsedSeconds < 25) {
-      // Calculate the date that will be used (same logic as _loadChartData)
-      final now = DateTime.now();
-      final useYesterday = now.hour < kUseYesterdayHourThreshold;
-      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
-      final friendlyDate = _formatDayMonth(dateToUse);
-      newMessage = 'Getting temperatures on $friendlyDate over the past 50 years.';
-    } else if (_loadingElapsedSeconds < 45) {
-      // Use the display location if available
-      final locationText = _displayLocation.isNotEmpty ? _displayLocation : 'your area';
-      newMessage = 'Is today warmer than average in $locationText?';
-    } else if (_loadingElapsedSeconds < 60) {
-      newMessage = 'Once we have the data we\'ll know.';
-    } else if (_loadingElapsedSeconds < 80) {
-      newMessage = 'Please be patient. It shouldn\'t be much longer.';
+    
+    // Only show temperature-related messages if location has been determined
+    if (!_isLocationDetermined) {
+      if (_loadingElapsedSeconds < 5) {
+        newMessage = 'Determining your location...';
+      } else if (_loadingElapsedSeconds < 15) {
+        newMessage = 'Getting your location from GPS...';
+      } else if (_loadingElapsedSeconds < 30) {
+        newMessage = 'Still determining your location...';
+      } else {
+        newMessage = 'Location detection is taking longer than expected.';
+      }
     } else {
-      newMessage = 'The server is taking a while to respond.';
+      // Location is determined, show temperature-related messages
+      if (_loadingElapsedSeconds < 10) {
+        newMessage = 'Loading temperature data...';
+      } else if (_loadingElapsedSeconds < 25) {
+        // Calculate the date that will be used (same logic as _loadChartData)
+        final now = DateTime.now();
+        final useYesterday = now.hour < kUseYesterdayHourThreshold;
+        final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+        final friendlyDate = _formatDayMonth(dateToUse);
+        newMessage = 'Getting temperatures on $friendlyDate over the past 50 years.';
+      } else if (_loadingElapsedSeconds < 45) {
+        // Use the display location if available
+        final locationText = _displayLocation.isNotEmpty ? _displayLocation : 'your area';
+        newMessage = 'Is today warmer than average in $locationText?';
+      } else if (_loadingElapsedSeconds < 60) {
+        newMessage = 'Once we have the data we\'ll know.';
+      } else if (_loadingElapsedSeconds < 80) {
+        newMessage = 'Please be patient. It shouldn\'t be much longer.';
+      } else {
+        newMessage = 'The server is taking a while to respond.';
+      }
     }
     
     if (newMessage != _currentLoadingMessage) {
@@ -1302,17 +1347,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       _displayLocation = '';
     });
     
-    // First determine location again
-    await _determineLocation();
-    
-    // Then start loading data
-    setState(() {
-      futureChartData = _loadChartData();
-      _isDataLoading = true;
-    });
-    
-    // Restart loading message timer for refresh
-    _startLoadingMessageTimer();
+    // Reinitialize the app (determine location then load data)
+    await _initializeApp();
     
     // Don't await the future here - let the FutureBuilder handle it
     // This allows the RefreshIndicator to complete its animation
