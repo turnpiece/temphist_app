@@ -208,7 +208,7 @@ class TemperatureScreen extends StatefulWidget {
   _TemperatureScreenState createState() => _TemperatureScreenState();
 }
 
-class _TemperatureScreenState extends State<TemperatureScreen> {
+class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindingObserver {
   Future<Map<String, dynamic>?>? futureChartData;
   bool _isShowingCachedData = false;
   Timer? _dateCheckTimer;
@@ -219,6 +219,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   String _determinedLocation = ''; // Full location for API
   String _displayLocation = ''; // Short location for display
   bool _isLocationDetermined = false;
+  DateTime? _locationDeterminedAt; // Timestamp when location was last determined
   bool _isDataLoading = false;
   
   // Add error tracking for different data types
@@ -259,6 +260,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _startListeningToLocationChanges();
     // Initialize with location determination first, then load data
     _initializeApp();
@@ -266,8 +268,19 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _positionStreamSubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    if (state == AppLifecycleState.resumed) {
+      debugPrintIfDebugging('App resumed - checking if location needs refresh');
+      _checkAndRefreshLocationIfNeeded();
+    }
   }
 
   Future<void> _initializeApp() async {
@@ -288,6 +301,49 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
     });
     
     // Start the loading message timer after location is determined
+    _startLoadingMessageTimer();
+  }
+
+  Future<void> _checkAndRefreshLocationIfNeeded() async {
+    // If no location has been determined yet, don't refresh
+    if (!_isLocationDetermined || _locationDeterminedAt == null) {
+      return;
+    }
+    
+    final now = DateTime.now();
+    final timeSinceLastLocation = now.difference(_locationDeterminedAt!);
+    
+    // Refresh location if it's been more than 1 hour
+    if (timeSinceLastLocation.inHours >= 1) {
+      debugPrintIfDebugging('Location is ${timeSinceLastLocation.inHours} hours old, refreshing...');
+      await _refreshLocationAndData();
+    } else {
+      debugPrintIfDebugging('Location is only ${timeSinceLastLocation.inMinutes} minutes old, keeping cached location');
+    }
+  }
+
+  Future<void> _refreshLocationAndData() async {
+    debugPrintIfDebugging('Refreshing location and data...');
+    
+    // Reset location state
+    setState(() {
+      _isLocationDetermined = false;
+      _determinedLocation = '';
+      _displayLocation = '';
+      _locationDeterminedAt = null;
+    });
+    
+    // Determine new location
+    await _determineLocation();
+    
+    // Reload data with new location
+    setState(() {
+      futureChartData = _loadChartData();
+      _isShowingCachedData = false;
+      _isDataLoading = true;
+    });
+    
+    // Restart loading message timer
     _startLoadingMessageTimer();
   }
 
@@ -812,6 +868,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         _determinedLocation = city; // Full location for API
         _displayLocation = _extractDisplayLocation(city); // Short location for display
         _isLocationDetermined = true;
+        _locationDeterminedAt = DateTime.now(); // Record when location was determined
       });
       
       // Reset loading message timer to start temperature-related messages
@@ -825,6 +882,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
         _determinedLocation = 'London, UK';
         _displayLocation = _extractDisplayLocation('London, UK');
         _isLocationDetermined = true;
+        _locationDeterminedAt = DateTime.now(); // Record when location was determined
       });
       
       // Reset loading message timer to start temperature-related messages
@@ -1112,6 +1170,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           debugPrintIfDebugging('Failed to fetch average data: $e');
           setState(() {
             _averageDataFailed = true;
+            // Check if it's a rate limit error
+            if (e is RateLimitException) {
+              _averageDataRateLimited = true;
+            }
           });
         }
         
@@ -1126,6 +1188,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           debugPrintIfDebugging('Failed to fetch trend data: $e');
           setState(() {
             _trendDataFailed = true;
+            // Check if it's a rate limit error
+            if (e is RateLimitException) {
+              _trendDataRateLimited = true;
+            }
           });
         }
         
@@ -1140,6 +1206,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
           debugPrintIfDebugging('Failed to fetch summary data: $e');
           setState(() {
             _summaryDataFailed = true;
+            // Check if it's a rate limit error
+            if (e is RateLimitException) {
+              _summaryDataRateLimited = true;
+            }
           });
         }
         
@@ -1345,6 +1415,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
       _isLocationDetermined = false;
       _determinedLocation = '';
       _displayLocation = '';
+      _locationDeterminedAt = null;
     });
     
     // Reinitialize the app (determine location then load data)
@@ -1553,6 +1624,39 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                 ),
                 const SizedBox(height: 16),
                 _buildRetryButton(onRetry),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildNoDataSection() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
+        double horizontalOffset = (constraints.maxWidth - contentWidth) / 2;
+        
+        return Center(
+          child: Container(
+            width: contentWidth,
+            margin: EdgeInsets.symmetric(horizontal: horizontalOffset > 0 ? horizontalOffset : kScreenPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'No temperature data available for this location.',
+                  style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody),
+                  textAlign: TextAlign.left,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'This could be due to rate limiting or insufficient historical data for this area.',
+                  style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1),
+                  textAlign: TextAlign.left,
+                ),
               ],
             ),
           ),
@@ -2008,31 +2112,31 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
   }) {
     // Calculate minimum and maximum temperature for Y-axis (only from years with data)
     final validData = chartData.where((data) => data.hasData).toList();
+    
+    // If no valid data at all, don't show the chart
+    if (validData.isEmpty) {
+      return _buildNoDataSection();
+    }
+    
     double yAxisMin;
     double yAxisMax;
     double minTemp = 0.0;
     double maxTemp = 0.0;
     
-    if (validData.isEmpty) {
-      // Fallback if no valid data
-      yAxisMin = -10.0;
-      yAxisMax = 40.0;
-    } else {
-      minTemp = validData.map((data) => data.temperature).reduce((a, b) => a < b ? a : b);
-      maxTemp = validData.map((data) => data.temperature).reduce((a, b) => a > b ? a : b);
-      
-      // Always start just below the lowest temperature and end just above the highest
-      yAxisMin = (minTemp - 2).floorToDouble(); // Start 2 degrees below minimum
-      yAxisMax = (maxTemp + 2).ceilToDouble(); // End 2 degrees above maximum
-      
-      // Ensure we have a reasonable range even for small temperature variations
-      final range = maxTemp - minTemp;
-      if (range < 5) {
-        // For small ranges, ensure we have at least 5 degrees of scale
-        final midPoint = (maxTemp + minTemp) / 2;
-        yAxisMin = (midPoint - 2.5).floorToDouble();
-        yAxisMax = (midPoint + 2.5).ceilToDouble();
-      }
+    minTemp = validData.map((data) => data.temperature).reduce((a, b) => a < b ? a : b);
+    maxTemp = validData.map((data) => data.temperature).reduce((a, b) => a > b ? a : b);
+    
+    // Always start just below the lowest temperature and end just above the highest
+    yAxisMin = (minTemp - 2).floorToDouble(); // Start 2 degrees below minimum
+    yAxisMax = (maxTemp + 2).ceilToDouble(); // End 2 degrees above maximum
+    
+    // Ensure we have a reasonable range even for small temperature variations
+    final range = maxTemp - minTemp;
+    if (range < 5) {
+      // For small ranges, ensure we have at least 5 degrees of scale
+      final midPoint = (maxTemp + minTemp) / 2;
+      yAxisMin = (midPoint - 2.5).floorToDouble();
+      yAxisMax = (midPoint + 2.5).ceilToDouble();
     }
     
     debugPrintIfDebugging('Y-axis calculation - minTemp: $minTemp, maxTemp: $maxTemp, yAxisMin: $yAxisMin, yAxisMax: $yAxisMax');
@@ -2306,16 +2410,19 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                                   child: Text(
                                     _isRetryingTrend 
                                       ? 'Retrying trend data...'
-                                      : 'Failed to load trend data',
+                                      : _trendDataRateLimited 
+                                        ? 'Rate limit exceeded - please wait before retrying'
+                                        : 'Failed to load trend data',
                                     style: TextStyle(
-                                      color: _isRetryingTrend ? kGreyLabelColour : kAccentColour, 
+                                      color: _isRetryingTrend ? kGreyLabelColour : 
+                                             _trendDataRateLimited ? kGreyLabelColour : kAccentColour, 
                                       fontSize: kFontSizeBody - 1, 
                                       fontWeight: FontWeight.w400
                                     ),
                                     textAlign: TextAlign.left,
                                   ),
                                 ),
-                                if (!_isRetryingTrend) ...[
+                                if (!_isRetryingTrend && !_trendDataRateLimited) ...[
                                   const SizedBox(width: 8),
                                   GestureDetector(
                                     onTap: _retryTrendData,
@@ -2357,16 +2464,19 @@ class _TemperatureScreenState extends State<TemperatureScreen> {
                                   child: Text(
                                     _isRetryingSummary 
                                       ? 'Retrying summary data...'
-                                      : 'Failed to load summary data',
+                                      : _summaryDataRateLimited 
+                                        ? 'Rate limit exceeded - please wait before retrying'
+                                        : 'Failed to load summary data',
                                     style: TextStyle(
-                                      color: _isRetryingSummary ? kGreyLabelColour : kAccentColour, 
+                                      color: _isRetryingSummary ? kGreyLabelColour : 
+                                             _summaryDataRateLimited ? kGreyLabelColour : kAccentColour, 
                                       fontSize: kFontSizeBody - 1, 
                                       fontWeight: FontWeight.w400
                                     ),
                                     textAlign: TextAlign.left,
                                   ),
                                 ),
-                                if (!_isRetryingSummary) ...[
+                                if (!_isRetryingSummary && !_summaryDataRateLimited) ...[
                                   const SizedBox(width: 8),
                                   GestureDetector(
                                     onTap: _retrySummaryData,

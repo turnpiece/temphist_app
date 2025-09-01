@@ -5,7 +5,7 @@ class DebugConfig {
   static const bool enableDebugUI = true;
   
   // Debug-specific constants
-  static const String apiBaseUrl = 'https://api.temphist.com';
+  static const String apiBaseUrl = 'http://localhost:3000';
   static const Duration simulatedFailureDelay = Duration(seconds: 2);
   
   // Debug-specific simulation states
