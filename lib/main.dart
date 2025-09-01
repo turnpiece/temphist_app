@@ -12,7 +12,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:flutter/services.dart';
 import 'dart:io' show Platform;
-import 'dart:async'; // Added for StreamSubscription
+import 'dart:async'; // Added for StreamSubscription and StreamController
 
 import 'services/temperature_service.dart';
 import 'config/app_config.dart';
@@ -210,6 +210,7 @@ class TemperatureScreen extends StatefulWidget {
 
 class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindingObserver {
   Future<Map<String, dynamic>?>? futureChartData;
+  StreamController<Map<String, dynamic>?>? _chartDataStreamController;
   bool _isShowingCachedData = false;
   Timer? _dateCheckTimer;
   DateTime? _lastCheckedDate;
@@ -270,6 +271,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _positionStreamSubscription?.cancel();
+    _chartDataStreamController?.close();
     super.dispose();
   }
 
@@ -293,9 +295,26 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // First determine location
     await _determineLocation();
     
-    // Then start loading temperature data
+    // Then start loading temperature data progressively
     setState(() {
-      futureChartData = _loadChartData();
+      _chartDataStreamController = StreamController<Map<String, dynamic>?>();
+      _loadChartDataProgressive().listen(
+        (data) {
+          if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
+            _chartDataStreamController!.add(data);
+          }
+        },
+        onError: (error) {
+          if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
+            _chartDataStreamController!.addError(error);
+          }
+        },
+        onDone: () {
+          if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
+            _chartDataStreamController!.close();
+          }
+        },
+      );
       _isShowingCachedData = false;
       _isDataLoading = true;
     });
@@ -1004,6 +1023,214 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     }
   }
 
+  Stream<Map<String, dynamic>?> _loadChartDataProgressive() async* {
+    debugPrintIfDebugging('_loadChartDataProgressive: Starting progressive chart data load');
+    
+    try {
+      final now = DateTime.now();
+      final useYesterday = now.hour < kUseYesterdayHourThreshold;
+      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+      final formattedDate = DateFormat('yyyy-MM-dd').format(dateToUse);
+      debugPrintIfDebugging('_loadChartDataProgressive: Current time: ${now.hour}:${now.minute}, useYesterday: $useYesterday, dateToUse: $formattedDate');
+
+      final service = TemperatureService();
+      String city = _determinedLocation.isNotEmpty ? _determinedLocation : 'London, UK';
+      
+      debugPrintIfDebugging('_loadChartDataProgressive: Using determined city: $city');
+      final currentYear = dateToUse.year;
+
+      // Try main /data/ endpoint first
+      try {
+        debugPrintIfDebugging('_loadChartDataProgressive: Starting /data/ fetch for $city, $formattedDate');
+        
+        final tempData = await service
+            .fetchCompleteData(city, '$currentYear-${formattedDate.substring(5)}')
+            .timeout(const Duration(seconds: 30));
+            
+        if (tempData.series?.data.isNotEmpty == true) {
+          List<TemperatureChartData> chartData = [];
+          final seriesData = tempData.series!.data;
+          
+          // Extract year range from the series data
+          int minYear = currentYear;
+          int maxYear = currentYear;
+          if (seriesData.isNotEmpty) {
+            minYear = seriesData.map((dp) => dp.x).reduce((a, b) => a < b ? a : b);
+            maxYear = seriesData.map((dp) => dp.x).reduce((a, b) => a > b ? a : b);
+          }
+          
+          // Fill in all years in the range, including gaps for missing data
+          for (int year = minYear; year <= maxYear; year++) {
+            final dataPoint = seriesData.where((dp) => dp.x == year).firstOrNull;
+            
+            if (dataPoint != null && dataPoint.y != null) {
+              // Year has data
+              chartData.add(TemperatureChartData(
+                year: year.toString(),
+                temperature: (dataPoint.y is num) ? (dataPoint.y as num).toDouble() : 0.0,
+                isCurrentYear: year == currentYear,
+                hasData: true,
+              ));
+            } else {
+              // Year is missing data - add gap
+              chartData.add(TemperatureChartData(
+                year: year.toString(),
+                temperature: 0.0, // Will be ignored in chart rendering
+                isCurrentYear: year == currentYear,
+                hasData: false,
+              ));
+            }
+          }
+          
+          // Sort chart data by year to ensure chronological display
+          chartData.sort((a, b) => int.parse(a.year).compareTo(int.parse(b.year)));
+          
+          final result = _createResultMap(
+            chartData: chartData,
+            averageTemperature: tempData.average?.temperature,
+            trendSlope: tempData.trend?.slope,
+            summaryText: tempData.summary,
+            dateToUse: dateToUse,
+            city: city,
+          );
+          
+          // Store the current data for potential updates
+          _currentData = result;
+          
+          yield result;
+          return;
+        }
+      } catch (e) {
+        debugPrintIfDebugging('Exception in /data/ fetch: $e');
+      }
+
+      // Fallback: use individual endpoints with progressive loading
+      debugPrintIfDebugging('Using fallback endpoints for $city, $formattedDate');
+      
+      final mmdd = formattedDate.substring(5);
+      List<TemperatureChartData> chartData = [];
+      double? averageTemperature;
+      double? trendSlope;
+      String? summaryText;
+      int startYear = currentYear - 50;
+      int endYear = currentYear;
+      
+      // Get average data first
+      try {
+        final averageData = await service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: 30));
+        averageTemperature = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
+        
+        if (averageData['year_range'] != null) {
+          final yearRange = averageData['year_range'];
+          if (yearRange is Map<String, dynamic>) {
+            final start = yearRange['start'];
+            final end = yearRange['end'];
+            if (start is int && end is int) {
+              startYear = start;
+              endYear = end;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrintIfDebugging('Failed to fetch average data: $e');
+        setState(() {
+          _averageDataFailed = true;
+          if (e is RateLimitException) {
+            _averageDataRateLimited = true;
+          }
+        });
+      }
+      
+      // Get trend data
+      try {
+        final trendData = await service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: 30));
+        final slope = trendData['slope'];
+        trendSlope = (slope is num) ? slope.toDouble() : null;
+      } catch (e) {
+        debugPrintIfDebugging('Failed to fetch trend data: $e');
+        setState(() {
+          _trendDataFailed = true;
+          if (e is RateLimitException) {
+            _trendDataRateLimited = true;
+          }
+        });
+      }
+      
+      // Get summary data
+      try {
+        final summaryData = await service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 30));
+        final summaryRaw = summaryData['summary'];
+        summaryText = summaryRaw?.toString();
+      } catch (e) {
+        debugPrintIfDebugging('Failed to fetch summary data: $e');
+        setState(() {
+          _summaryDataFailed = true;
+          if (e is RateLimitException) {
+            _summaryDataRateLimited = true;
+          }
+        });
+      }
+      
+      // Emit initial result with summary data (if available)
+      if (averageTemperature != null || trendSlope != null || summaryText != null) {
+        final initialResult = _createResultMap(
+          chartData: [], // Empty chart data initially
+          averageTemperature: averageTemperature,
+          trendSlope: trendSlope,
+          summaryText: summaryText,
+          dateToUse: dateToUse,
+          city: city,
+        );
+        _currentData = initialResult;
+        yield initialResult;
+      }
+      
+      // Fetch year-by-year data progressively (most recent years first)
+      for (int year = endYear; year >= startYear; year--) {
+        final dateForYear = '$year-$mmdd';
+        try {
+          final tempData = await service.fetchTemperature(city, dateForYear);
+          chartData.add(TemperatureChartData(
+            year: year.toString(),
+            temperature: tempData.temperature ?? tempData.average?.temperature ?? 0.0,
+            isCurrentYear: year == currentYear,
+            hasData: true,
+          ));
+        } catch (e) {
+          debugPrintIfDebugging('Failed to fetch temperature for year $year: $e');
+          // Add gap for missing year
+          chartData.add(TemperatureChartData(
+            year: year.toString(),
+            temperature: 0.0, // Will be ignored in chart rendering
+            isCurrentYear: year == currentYear,
+            hasData: false,
+          ));
+        }
+        
+        // Sort chart data by year to ensure chronological display
+        final sortedChartData = List<TemperatureChartData>.from(chartData);
+        sortedChartData.sort((a, b) => int.parse(a.year).compareTo(int.parse(b.year)));
+        
+        // Emit updated result with new data
+        final updatedResult = _createResultMap(
+          chartData: sortedChartData,
+          averageTemperature: averageTemperature,
+          trendSlope: trendSlope,
+          summaryText: summaryText,
+          dateToUse: dateToUse,
+          city: city,
+        );
+        
+        _currentData = updatedResult;
+        yield updatedResult;
+      }
+      
+    } catch (e) {
+      debugPrintIfDebugging('_loadChartDataProgressive failed: $e');
+      rethrow;
+    }
+  }
+
   Future<Map<String, dynamic>?> _loadChartData() async {
     debugPrintIfDebugging('_loadChartData: Starting chart data load');
     
@@ -1213,8 +1440,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           });
         }
         
-        // Fetch year-by-year data
-        for (int year = startYear; year <= endYear; year++) {
+        // Fetch year-by-year data (most recent years first for better user experience)
+        for (int year = endYear; year >= startYear; year--) {
           final dateForYear = '$year-$mmdd';
           try {
             final tempData = await service.fetchTemperature(city, dateForYear);
@@ -1235,6 +1462,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
             ));
           }
         }
+        
+        // Sort chart data by year to ensure chronological display (oldest to newest)
+        chartData.sort((a, b) => int.parse(a.year).compareTo(int.parse(b.year)));
         
         // Check if there are gaps in the data
         final hasGaps = chartData.any((data) => !data.hasData);
@@ -1445,18 +1675,17 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   Widget _buildFutureBuilder({required double chartHeight}) {
-    // If no future is set yet, show loading section
-    if (futureChartData == null) {
+    // If no stream is set yet, show loading section
+    if (_chartDataStreamController == null) {
       return _buildLoadingSection();
     }
     
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: futureChartData,
+    return StreamBuilder<Map<String, dynamic>?>(
+      stream: _chartDataStreamController!.stream,
       builder: (context, snapshot) {
-        final effectiveSnapshot = widget.testSnapshot ?? snapshot;
         
         // Stop loading message timer when data loading completes or fails
-        if (effectiveSnapshot.connectionState != ConnectionState.waiting) {
+        if (snapshot.connectionState != ConnectionState.waiting) {
           _stopLoadingMessageTimer();
           _isDataLoading = false;
           
@@ -1467,18 +1696,35 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         }
         
         // Show loading state with spinner and message
-        if (effectiveSnapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildLoadingSection();
         } 
         
         // Show error state with retry button
-        if (effectiveSnapshot.hasError) {
+        if (snapshot.hasError) {
           return _buildRetrySection(
-            'Error loading data: ${effectiveSnapshot.error}',
+            'Error loading data: ${snapshot.error}',
             () {
               debugPrintIfDebugging('Retry button pressed after error');
               setState(() {
-                futureChartData = _loadChartData();
+                _chartDataStreamController = StreamController<Map<String, dynamic>?>();
+                _loadChartDataProgressive().listen(
+                  (data) {
+                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
+                      _chartDataStreamController!.add(data);
+                    }
+                  },
+                  onError: (error) {
+                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
+                      _chartDataStreamController!.addError(error);
+                    }
+                  },
+                  onDone: () {
+                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
+                      _chartDataStreamController!.close();
+                    }
+                  },
+                );
                 _isShowingCachedData = false;
                 _isDataLoading = true;
               });
@@ -1489,13 +1735,30 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         } 
         
         // Show no data state with retry button
-        if (!effectiveSnapshot.hasData || effectiveSnapshot.data == null || effectiveSnapshot.data!.isEmpty) {
+        if (!snapshot.hasData || snapshot.data == null || snapshot.data!.isEmpty) {
           return _buildRetrySection(
             'No temperature data available. Please check your internet connection and try again.',
             () {
               debugPrintIfDebugging('Retry button pressed after no data');
               setState(() {
-                futureChartData = _loadChartData();
+                _chartDataStreamController = StreamController<Map<String, dynamic>?>();
+                _loadChartDataProgressive().listen(
+                  (data) {
+                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
+                      _chartDataStreamController!.add(data);
+                    }
+                  },
+                  onError: (error) {
+                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
+                      _chartDataStreamController!.addError(error);
+                    }
+                  },
+                  onDone: () {
+                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
+                      _chartDataStreamController!.close();
+                    }
+                  },
+                );
                 _isShowingCachedData = false;
                 _isDataLoading = true;
               });
@@ -1505,7 +1768,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           );
         }
 
-        final data = effectiveSnapshot.data!;
+        final data = snapshot.data!;
         final chartData = data['chartData'] as List<TemperatureChartData>;
         
         // Use stored data if available and more up-to-date
@@ -1524,14 +1787,31 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           }
         }
         
-        // Show no chart data state with retry button
-        if (chartData.isEmpty) {
+        // Show no chart data state with retry button (only if we have no data at all)
+        if (chartData.isEmpty && !snapshot.hasData) {
           return _buildRetrySection(
             'No temperature data available. Please check your internet connection and try again.',
             () {
               debugPrintIfDebugging('Retry button pressed after empty chart data');
               setState(() {
-                futureChartData = _loadChartData();
+                _chartDataStreamController = StreamController<Map<String, dynamic>?>();
+                _loadChartDataProgressive().listen(
+                  (data) {
+                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
+                      _chartDataStreamController!.add(data);
+                    }
+                  },
+                  onError: (error) {
+                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
+                      _chartDataStreamController!.addError(error);
+                    }
+                  },
+                  onDone: () {
+                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
+                      _chartDataStreamController!.close();
+                    }
+                  },
+                );
                 _isShowingCachedData = false;
                 _isDataLoading = true;
               });
