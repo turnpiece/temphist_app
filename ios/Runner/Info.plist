@@ -47,5 +47,7 @@
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app uses your location to show temperature data for where you are.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app uses your location to show temperature data for where you are.</string>
 </dict>
 </plist>
