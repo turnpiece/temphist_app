@@ -2516,8 +2516,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                           header: '',
                           textStyle: TextStyle(fontSize: kFontSizeBody),
                           builder: (data, point, series, pointIndex, seriesIndex) {
-                            final year = data.x.toString();
-                            final temp = (data.y as double).toStringAsFixed(1);
+                            final year = data.year;
+                            final temp = data.temperature.toStringAsFixed(1);
                             return Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
