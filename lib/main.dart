@@ -1080,7 +1080,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       
       // Get average data first
       try {
-        final averageData = await service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: 30));
+        final averageData = await _simulateEndpointFailure('average', () => 
+          service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: 30))
+        );
         averageTemperature = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
         
         if (averageData['year_range'] != null) {
@@ -1106,7 +1108,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       
       // Get trend data
       try {
-        final trendData = await service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: 30));
+        final trendData = await _simulateEndpointFailure('trend', () => 
+          service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: 30))
+        );
         final slope = trendData['slope'];
         trendSlope = (slope is num) ? slope.toDouble() : null;
       } catch (e) {
@@ -1121,7 +1125,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       
       // Get summary data
       try {
-        final summaryData = await service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 30));
+        final summaryData = await _simulateEndpointFailure('summary', () => 
+          service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 30))
+        );
         final summaryRaw = summaryData['summary'];
         summaryText = summaryRaw?.toString();
       } catch (e) {
