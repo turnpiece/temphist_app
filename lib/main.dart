@@ -222,6 +222,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   bool _isLocationDetermined = false;
   DateTime? _locationDeterminedAt; // Timestamp when location was last determined
   bool _isDataLoading = false;
+  Timer? _averageTrendDisplayTimer;
   
   // Chart series controller for progressive loading
   ChartSeriesController? _chartSeriesController;
@@ -275,6 +276,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _positionStreamSubscription?.cancel();
+    _stopAverageTrendDisplayTimer();
     super.dispose();
   }
 
@@ -307,6 +309,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     
     // Start the loading message timer after location is determined
     _startLoadingMessageTimer();
+    
+    // Start the average/trend display timer
+    _startAverageTrendDisplayTimer();
     
     // Start progressive loading in the background
     _loadChartDataProgressive();
@@ -348,6 +353,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     _isShowingCachedData = false;
     _isDataLoading = true;
     
+    // Start the average/trend display timer
+    _startAverageTrendDisplayTimer();
+    
     // Start progressive loading in the background
     _loadChartDataProgressive();
     
@@ -379,6 +387,25 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     _autoRetryTimer = null;
   }
 
+  void _startAverageTrendDisplayTimer() {
+    // Cancel any existing timer
+    _averageTrendDisplayTimer?.cancel();
+    
+    // Start a timer that will show average/trend lines after 15 seconds
+    _averageTrendDisplayTimer = Timer(const Duration(seconds: 15), () {
+      debugPrintIfDebugging('Average/trend display timer triggered - showing lines after timeout');
+      setState(() {
+        // Force show average and trend lines by setting _isDataLoading to false
+        _isDataLoading = false;
+      });
+    });
+  }
+
+  void _stopAverageTrendDisplayTimer() {
+    _averageTrendDisplayTimer?.cancel();
+    _averageTrendDisplayTimer = null;
+  }
+
   void _loadInitialData() async {
     debugPrintIfDebugging('_loadInitialData: Starting data load');
     
@@ -403,6 +430,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // Then start loading temperature data using progressive loading
     _isShowingCachedData = false;
     _isDataLoading = true;
+    
+    // Start the average/trend display timer
+    _startAverageTrendDisplayTimer();
     
     // Start progressive loading in the background
     _loadChartDataProgressive();
@@ -957,6 +987,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       if (!_isShowingCachedData) {
         _isDataLoading = true;
         
+        // Start the average/trend display timer
+        _startAverageTrendDisplayTimer();
+        
         // Start progressive loading in the background
         _loadChartDataProgressive();
         
@@ -1172,12 +1205,14 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         }
         
         // Add a delay to make progressive loading more visible
-        await Future.delayed(const Duration(milliseconds: 300));
+        await Future.delayed(const Duration(milliseconds: 100));
       }
       
       // Stop loading message timer when data loading completes
       _stopLoadingMessageTimer();
+      _stopAverageTrendDisplayTimer(); // Stop the timer since loading completed
       _isDataLoading = false;
+      debugPrintIfDebugging('_loadChartDataProgressive: Loading completed, _isDataLoading set to false');
       
       // Start auto-retry timer if there are failed endpoints
       if (_averageDataFailed || _trendDataFailed || _summaryDataFailed) {
@@ -1189,6 +1224,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       
       // Stop loading message timer on error
       _stopLoadingMessageTimer();
+      _stopAverageTrendDisplayTimer(); // Stop the timer on error too
       _isDataLoading = false;
       
       rethrow;
@@ -2265,7 +2301,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                             spacing: 0.1, // Reduced spacing to maintain bar thickness
                             borderRadius: BorderRadius.circular(2),
                           ),
-                          if (averageTemperature != null)
+                          // Only show average and trend lines after all data has loaded
+                          if (averageTemperature != null && !_isDataLoading)
                             LineSeries<TemperatureChartData, int>(
                               dataSource: _generateAverageData(chartData, averageTemperature),
                               xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
@@ -2275,7 +2312,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                               name: 'Average Temperature',
                               markerSettings: MarkerSettings(isVisible: false),
                             ),
-                          if (trendSlope != null)
+                          if (trendSlope != null && !_isDataLoading)
                             LineSeries<TemperatureChartData, int>(
                               dataSource: _generateTrendData(chartData, trendSlope),
                               xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
@@ -2320,8 +2357,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                     ),
                     // Consistent spacing below chart - always show this
                     const SizedBox(height: kSectionTopPadding),
-                    // Average temperature text below chart
-                    if (averageTemperature != null)
+                    // Average temperature text below chart (only show after loading)
+                    if (averageTemperature != null && !_isDataLoading)
                       Padding(
                         padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
                         child: Align(
@@ -2391,8 +2428,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                           ),
                         ),
                       ),
-                    // Trend text below chart
-                    if (trendSlope != null)
+                    // Trend text below chart (only show after loading)
+                    if (trendSlope != null && !_isDataLoading)
                       Padding(
                         padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
                         child: Align(
@@ -2729,6 +2766,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         _lastPosition = position;
         // Optionally, check if city has changed using placemarkFromCoordinates
         _isDataLoading = true;
+        
+        // Start the average/trend display timer
+        _startAverageTrendDisplayTimer();
         
         // Start progressive loading in the background
         _loadChartDataProgressive();
