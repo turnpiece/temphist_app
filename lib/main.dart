@@ -143,7 +143,7 @@ void main() async {
   );
   // Ensure user is signed in (anonymous)
   await _ensureSignedIn();
-  runApp(MyApp());
+  runApp(TempHist());
 }
 
 void _setSystemUIOverlayStyle() {
@@ -185,14 +185,15 @@ Future<void> _ensureSignedIn() async {
   }
 }
 
-class MyApp extends StatelessWidget {
+class TempHist extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Ensure system UI overlay is set correctly
     _setSystemUIOverlayStyle();
     
     return MaterialApp(
-      title: 'Temperature Trends',
+      debugShowCheckedModeBanner: false,
+      title: 'TempHist',
       home: TemperatureScreen(),
     );
   }
