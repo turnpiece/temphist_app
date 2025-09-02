@@ -211,7 +211,6 @@ class TemperatureScreen extends StatefulWidget {
 
 class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindingObserver {
   Future<Map<String, dynamic>?>? futureChartData;
-  StreamController<Map<String, dynamic>?>? _chartDataStreamController;
   bool _isShowingCachedData = false;
   Timer? _dateCheckTimer;
   DateTime? _lastCheckedDate;
@@ -224,6 +223,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   DateTime? _locationDeterminedAt; // Timestamp when location was last determined
   bool _isDataLoading = false;
   
+  // Chart series controller for progressive loading
+  ChartSeriesController? _chartSeriesController;
+  
   // Add error tracking for different data types
   bool _averageDataFailed = false;
   bool _trendDataFailed = false;
@@ -234,6 +236,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   bool _averageDataRateLimited = false;
   bool _trendDataRateLimited = false;
   bool _summaryDataRateLimited = false;
+  bool _chartDataRateLimited = false; // Track if chart data fetching is rate limited
   
   // Add automatic retry timer
   Timer? _autoRetryTimer;
@@ -272,7 +275,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _positionStreamSubscription?.cancel();
-    _chartDataStreamController?.close();
     super.dispose();
   }
 
@@ -293,35 +295,21 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       return;
     }
     
+    // Clear cache to ensure progressive loading is visible
+    await _clearCache();
+    
     // First determine location
     await _determineLocation();
     
     // Then start loading temperature data progressively
-    setState(() {
-      _chartDataStreamController = StreamController<Map<String, dynamic>?>();
-      _loadChartDataProgressive().listen(
-        (data) {
-          if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
-            _chartDataStreamController!.add(data);
-          }
-        },
-        onError: (error) {
-          if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
-            _chartDataStreamController!.addError(error);
-          }
-        },
-        onDone: () {
-          if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
-            _chartDataStreamController!.close();
-          }
-        },
-      );
-      _isShowingCachedData = false;
-      _isDataLoading = true;
-    });
+    _isShowingCachedData = false;
+    _isDataLoading = true;
     
     // Start the loading message timer after location is determined
     _startLoadingMessageTimer();
+    
+    // Start progressive loading in the background
+    _loadChartDataProgressive();
   }
 
   Future<void> _checkAndRefreshLocationIfNeeded() async {
@@ -356,12 +344,12 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // Determine new location
     await _determineLocation();
     
-    // Reload data with new location
-    setState(() {
-      futureChartData = _loadChartData();
-      _isShowingCachedData = false;
-      _isDataLoading = true;
-    });
+    // Reload data with new location using progressive loading
+    _isShowingCachedData = false;
+    _isDataLoading = true;
+    
+    // Start progressive loading in the background
+    _loadChartDataProgressive();
     
     // Restart loading message timer
     _startLoadingMessageTimer();
@@ -412,12 +400,12 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // First determine location
     await _determineLocation();
     
-    // Then start loading temperature data
-    setState(() {
-      futureChartData = _loadChartData();
-      _isShowingCachedData = false;
-      _isDataLoading = true;
-    });
+    // Then start loading temperature data using progressive loading
+    _isShowingCachedData = false;
+    _isDataLoading = true;
+    
+    // Start progressive loading in the background
+    _loadChartDataProgressive();
     
     // Start the loading message timer after location is determined
     _startLoadingMessageTimer();
@@ -439,6 +427,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       _averageDataRateLimited = false;
       _trendDataRateLimited = false;
       _summaryDataRateLimited = false;
+      _chartDataRateLimited = false;
     });
   }
 
@@ -966,9 +955,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       
       // Only reload if we're not already loading fresh data
       if (!_isShowingCachedData) {
-        setState(() {
-          futureChartData = _loadChartData();
-        });
+        _isDataLoading = true;
+        
+        // Start progressive loading in the background
+        _loadChartDataProgressive();
+        
         // Restart loading message timer for date change reload
         _startLoadingMessageTimer();
       }
@@ -1024,7 +1015,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     }
   }
 
-  Stream<Map<String, dynamic>?> _loadChartDataProgressive() async* {
+  Future<void> _loadChartDataProgressive() async {
     debugPrintIfDebugging('_loadChartDataProgressive: Starting progressive chart data load');
     
     try {
@@ -1040,76 +1031,14 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       debugPrintIfDebugging('_loadChartDataProgressive: Using determined city: $city');
       final currentYear = dateToUse.year;
 
-      // Try main /data/ endpoint first
-      try {
-        debugPrintIfDebugging('_loadChartDataProgressive: Starting /data/ fetch for $city, $formattedDate');
-        
-        final tempData = await service
-            .fetchCompleteData(city, '$currentYear-${formattedDate.substring(5)}')
-            .timeout(const Duration(seconds: 30));
-            
-        if (tempData.series?.data.isNotEmpty == true) {
-          List<TemperatureChartData> chartData = [];
-          final seriesData = tempData.series!.data;
-          
-          // Extract year range from the series data
-          int minYear = currentYear;
-          int maxYear = currentYear;
-          if (seriesData.isNotEmpty) {
-            minYear = seriesData.map((dp) => dp.x).reduce((a, b) => a < b ? a : b);
-            maxYear = seriesData.map((dp) => dp.x).reduce((a, b) => a > b ? a : b);
-          }
-          
-          // Fill in all years in the range, including gaps for missing data
-          for (int year = minYear; year <= maxYear; year++) {
-            final dataPoint = seriesData.where((dp) => dp.x == year).firstOrNull;
-            
-            if (dataPoint != null && dataPoint.y != null) {
-              // Year has data
-              chartData.add(TemperatureChartData(
-                year: year.toString(),
-                temperature: (dataPoint.y is num) ? (dataPoint.y as num).toDouble() : 0.0,
-                isCurrentYear: year == currentYear,
-                hasData: true,
-              ));
-            } else {
-              // Year is missing data - add gap
-              chartData.add(TemperatureChartData(
-                year: year.toString(),
-                temperature: 0.0, // Will be ignored in chart rendering
-                isCurrentYear: year == currentYear,
-                hasData: false,
-              ));
-            }
-          }
-          
-          // Sort chart data by year to ensure chronological display
-          chartData.sort((a, b) => int.parse(a.year).compareTo(int.parse(b.year)));
-          
-          final result = _createResultMap(
-            chartData: chartData,
-            averageTemperature: tempData.average?.temperature,
-            trendSlope: tempData.trend?.slope,
-            summaryText: tempData.summary,
-            dateToUse: dateToUse,
-            city: city,
-          );
-          
-          // Store the current data for potential updates
-          _currentData = result;
-          
-          yield result;
-          return;
-        }
-      } catch (e) {
-        debugPrintIfDebugging('Exception in /data/ fetch: $e');
-      }
+      // Skip main /data/ endpoint for progressive loading to ensure year-by-year loading is visible
+      // This forces the fallback method which loads data progressively
+      debugPrintIfDebugging('_loadChartDataProgressive: Skipping main endpoint to force progressive loading');
 
       // Fallback: use individual endpoints with progressive loading
       debugPrintIfDebugging('Using fallback endpoints for $city, $formattedDate');
       
       final mmdd = formattedDate.substring(5);
-      List<TemperatureChartData> chartData = [];
       double? averageTemperature;
       double? trendSlope;
       String? summaryText;
@@ -1172,346 +1101,101 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         });
       }
       
-      // Emit initial result with summary data (if available)
-      if (averageTemperature != null || trendSlope != null || summaryText != null) {
-        final initialResult = _createResultMap(
-          chartData: [], // Empty chart data initially
-          averageTemperature: averageTemperature,
-          trendSlope: trendSlope,
-          summaryText: summaryText,
-          dateToUse: dateToUse,
-          city: city,
-        );
-        _currentData = initialResult;
-        yield initialResult;
+      // Calculate final year range
+      final finalStartYear = startYear < 1975 ? 1975 : startYear;
+      final finalEndYear = endYear > currentYear ? currentYear : endYear;
+      
+      // Start with empty chart data - bars will be added progressively
+      List<TemperatureChartData> chartData = [];
+      
+      // Set initial result with empty chart data
+      final initialResult = _createResultMap(
+        chartData: chartData,
+        averageTemperature: averageTemperature,
+        trendSlope: trendSlope,
+        summaryText: summaryText,
+        dateToUse: dateToUse,
+        city: city,
+      );
+      _currentData = initialResult;
+      
+      // Update the UI to show the chart structure
+      if (mounted) {
+        setState(() {});
       }
       
-      // Fetch year-by-year data progressively (most recent years first)
-      for (int year = endYear; year >= startYear; year--) {
+      // Load from most recent to oldest (2025 -> 1975) to create right-to-left filling effect
+      for (int year = finalEndYear; year >= finalStartYear; year--) {
+        // Check if we've hit a rate limit - stop making more requests
+        if (_chartDataRateLimited) {
+          debugPrintIfDebugging('Rate limit detected, stopping chart data loading');
+          break;
+        }
+        
         final dateForYear = '$year-$mmdd';
         try {
           final tempData = await service.fetchTemperature(city, dateForYear);
-          chartData.add(TemperatureChartData(
+          
+          // Add the new data point to the chart data
+          final newDataPoint = TemperatureChartData(
             year: year.toString(),
             temperature: tempData.temperature ?? tempData.average?.temperature ?? 0.0,
             isCurrentYear: year == currentYear,
             hasData: true,
-          ));
+          );
+          
+          // Add to the chart data list
+          chartData.add(newDataPoint);
+          
+          // Update the current data and trigger a rebuild
+          _currentData!['chartData'] = chartData;
+          
+          // Trigger a UI update to show the new bar
+          if (mounted) {
+            setState(() {});
+          }
+          
+          debugPrintIfDebugging('Added data for year $year at index ${chartData.length - 1}');
         } catch (e) {
           debugPrintIfDebugging('Failed to fetch temperature for year $year: $e');
-          // Add gap for missing year
-          chartData.add(TemperatureChartData(
-            year: year.toString(),
-            temperature: 0.0, // Will be ignored in chart rendering
-            isCurrentYear: year == currentYear,
-            hasData: false,
-          ));
+          
+          // Check if it's a rate limit error
+          if (e is RateLimitException) {
+            debugPrintIfDebugging('Rate limit exceeded for chart data, stopping further requests');
+            setState(() {
+              _chartDataRateLimited = true;
+            });
+            break; // Stop making more requests
+          }
+          
+          // Don't add missing data points to the chart - they won't be visible anyway
         }
         
-        // Sort chart data by year to ensure chronological display
-        final sortedChartData = List<TemperatureChartData>.from(chartData);
-        sortedChartData.sort((a, b) => int.parse(a.year).compareTo(int.parse(b.year)));
-        
-        // Emit updated result with new data
-        final updatedResult = _createResultMap(
-          chartData: sortedChartData,
-          averageTemperature: averageTemperature,
-          trendSlope: trendSlope,
-          summaryText: summaryText,
-          dateToUse: dateToUse,
-          city: city,
-        );
-        
-        _currentData = updatedResult;
-        yield updatedResult;
+        // Add a delay to make progressive loading more visible
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+      
+      // Stop loading message timer when data loading completes
+      _stopLoadingMessageTimer();
+      _isDataLoading = false;
+      
+      // Start auto-retry timer if there are failed endpoints
+      if (_averageDataFailed || _trendDataFailed || _summaryDataFailed) {
+        _startAutoRetryTimer();
       }
       
     } catch (e) {
       debugPrintIfDebugging('_loadChartDataProgressive failed: $e');
+      
+      // Stop loading message timer on error
+      _stopLoadingMessageTimer();
+      _isDataLoading = false;
+      
       rethrow;
     }
   }
 
-  Future<Map<String, dynamic>?> _loadChartData() async {
-    debugPrintIfDebugging('_loadChartData: Starting chart data load');
-    
-    try {
-      final now = DateTime.now();
-      final useYesterday = now.hour < kUseYesterdayHourThreshold;
-      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
-      final formattedDate = DateFormat('yyyy-MM-dd').format(dateToUse);
-      debugPrintIfDebugging('_loadChartData: Current time: ${now.hour}:${now.minute}, useYesterday: $useYesterday, dateToUse: $formattedDate');
 
-      final service = TemperatureService();
-      String city = _determinedLocation.isNotEmpty ? _determinedLocation : 'London, UK';
-      
-      debugPrintIfDebugging('_loadChartData: Using determined city: $city');
-      final currentYear = dateToUse.year;
-
-      // Try main /data/ endpoint first
-      try {
-        debugPrintIfDebugging('_loadChartData: Starting /data/ fetch for $city, $formattedDate');
-        
-        // In simulation mode, we'll simulate failures even for the main endpoint
-        if (SIMULATE_ENDPOINT_FAILURES) {
-          debugPrintIfDebugging('Simulation mode: will simulate failures for main endpoint data');
-        }
-        
-        final tempData = await service
-            .fetchCompleteData(city, '$currentYear-${formattedDate.substring(5)}')
-            .timeout(const Duration(seconds: 30));
-            
-        if (tempData.series?.data.isNotEmpty == true) {
-          
-          List<TemperatureChartData> chartData = [];
-          final seriesData = tempData.series!.data;
-          
-          // Extract year range from the series data
-          int minYear = currentYear;
-          int maxYear = currentYear;
-          if (seriesData.isNotEmpty) {
-            minYear = seriesData.map((dp) => dp.x).reduce((a, b) => a < b ? a : b);
-            maxYear = seriesData.map((dp) => dp.x).reduce((a, b) => a > b ? a : b);
-          }
-          
-          // Fill in all years in the range, including gaps for missing data
-          for (int year = minYear; year <= maxYear; year++) {
-            final dataPoint = seriesData.where((dp) => dp.x == year).firstOrNull;
-            
-            if (dataPoint != null && dataPoint.y != null) {
-              // Year has data
-              chartData.add(TemperatureChartData(
-                year: year.toString(),
-                temperature: (dataPoint.y is num) ? (dataPoint.y as num).toDouble() : 0.0,
-                isCurrentYear: year == currentYear,
-                hasData: true,
-              ));
-            } else {
-              // Year is missing data - add gap
-              chartData.add(TemperatureChartData(
-                year: year.toString(),
-                temperature: 0.0, // Will be ignored in chart rendering
-                isCurrentYear: year == currentYear,
-                hasData: false,
-              ));
-            }
-          }
-          
-          // Check if there are gaps in the data
-          final hasGaps = chartData.any((data) => !data.hasData);
-          if (hasGaps) {
-            setState(() {
-              _chartDataHasGaps = true;
-            });
-          }
-          
-          // Check if average, trend, or summary data is missing from main endpoint
-          // In simulation mode, we'll simulate failures for specific data types
-          if (SIMULATE_ENDPOINT_FAILURES && _simulateAverageFailure) {
-            debugPrintIfDebugging('Simulation mode: simulating average data failure');
-            setState(() {
-              _averageDataFailed = true;
-            });
-          } else if (tempData.average?.temperature == null) {
-            setState(() {
-              _averageDataFailed = true;
-            });
-          }
-          
-          if (SIMULATE_ENDPOINT_FAILURES && _simulateTrendFailure) {
-            debugPrintIfDebugging('Simulation mode: simulating trend data failure');
-            setState(() {
-              _trendDataFailed = true;
-            });
-          } else if (tempData.trend?.slope == null) {
-            setState(() {
-              _trendDataFailed = true;
-            });
-          }
-          
-          if (SIMULATE_ENDPOINT_FAILURES && _simulateSummaryFailure) {
-            debugPrintIfDebugging('Simulation mode: simulating summary data failure');
-            setState(() {
-              _summaryDataFailed = true;
-            });
-          } else if (tempData.summary == null || tempData.summary!.isEmpty) {
-            setState(() {
-              _summaryDataFailed = true;
-            });
-          }
-
-          final result = _createResultMap(
-            chartData: chartData,
-            averageTemperature: (SIMULATE_ENDPOINT_FAILURES && _simulateAverageFailure) ? null : tempData.average?.temperature,
-            trendSlope: (SIMULATE_ENDPOINT_FAILURES && _simulateTrendFailure) ? null : tempData.trend?.slope,
-            summaryText: (SIMULATE_ENDPOINT_FAILURES && _simulateSummaryFailure) ? null : tempData.summary,
-            dateToUse: dateToUse,
-            city: city,
-          );
-          
-          // Debug logging for simulation
-          if (SIMULATE_ENDPOINT_FAILURES) {
-            debugPrintIfDebugging('Simulation result - Average: ${result['averageTemperature']}, Trend: ${result['trendSlope']}, Summary: ${result['summary']}');
-            debugPrintIfDebugging('Simulation flags - Average: $_simulateAverageFailure, Trend: $_simulateTrendFailure, Summary: $_simulateSummaryFailure');
-          }
-          
-          // Store the current data for potential updates
-          _currentData = result;
-          
-          return await _cacheAndReturnResult(result);
-        }
-      } catch (e) {
-        debugPrintIfDebugging('Exception in /data/ fetch: $e');
-      }
-
-      // Fallback: use individual endpoints
-      try {
-        debugPrintIfDebugging('Using fallback endpoints for $city, $formattedDate');
-        
-        final mmdd = formattedDate.substring(5);
-        List<TemperatureChartData> chartData = [];
-        double? averageTemperature;
-        double? trendSlope;
-        String? summaryText;
-        int startYear = currentYear - 50;
-        int endYear = currentYear;
-        
-        // Get average data
-        try {
-          final averageData = await _simulateEndpointFailure('average', () => 
-            service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: 30))
-          );
-          averageTemperature = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
-          
-          if (averageData['year_range'] != null) {
-            final yearRange = averageData['year_range'];
-            if (yearRange is Map<String, dynamic>) {
-              final start = yearRange['start'];
-              final end = yearRange['end'];
-              if (start is int && end is int) {
-                startYear = start;
-                endYear = end;
-              }
-            }
-          }
-        } catch (e) {
-          debugPrintIfDebugging('Failed to fetch average data: $e');
-          setState(() {
-            _averageDataFailed = true;
-            // Check if it's a rate limit error
-            if (e is RateLimitException) {
-              _averageDataRateLimited = true;
-            }
-          });
-        }
-        
-        // Get trend data
-        try {
-          final trendData = await _simulateEndpointFailure('trend', () => 
-            service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: 30))
-          );
-          final slope = trendData['slope'];
-          trendSlope = (slope is num) ? slope.toDouble() : null;
-        } catch (e) {
-          debugPrintIfDebugging('Failed to fetch trend data: $e');
-          setState(() {
-            _trendDataFailed = true;
-            // Check if it's a rate limit error
-            if (e is RateLimitException) {
-              _trendDataRateLimited = true;
-            }
-          });
-        }
-        
-        // Get summary data
-        try {
-          final summaryData = await _simulateEndpointFailure('summary', () => 
-            service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 30))
-          );
-          final summaryRaw = summaryData['summary'];
-          summaryText = summaryRaw?.toString();
-        } catch (e) {
-          debugPrintIfDebugging('Failed to fetch summary data: $e');
-          setState(() {
-            _summaryDataFailed = true;
-            // Check if it's a rate limit error
-            if (e is RateLimitException) {
-              _summaryDataRateLimited = true;
-            }
-          });
-        }
-        
-        // Fetch year-by-year data (most recent years first for better user experience)
-        for (int year = endYear; year >= startYear; year--) {
-          final dateForYear = '$year-$mmdd';
-          try {
-            final tempData = await service.fetchTemperature(city, dateForYear);
-            chartData.add(TemperatureChartData(
-              year: year.toString(),
-              temperature: tempData.temperature ?? tempData.average?.temperature ?? 0.0,
-              isCurrentYear: year == currentYear,
-              hasData: true,
-            ));
-          } catch (e) {
-            debugPrintIfDebugging('Failed to fetch temperature for year $year: $e');
-            // Add gap for missing year
-            chartData.add(TemperatureChartData(
-              year: year.toString(),
-              temperature: 0.0, // Will be ignored in chart rendering
-              isCurrentYear: year == currentYear,
-              hasData: false,
-            ));
-          }
-        }
-        
-        // Sort chart data by year to ensure chronological display (oldest to newest)
-        chartData.sort((a, b) => int.parse(a.year).compareTo(int.parse(b.year)));
-        
-        // Check if there are gaps in the data
-        final hasGaps = chartData.any((data) => !data.hasData);
-        if (hasGaps) {
-          setState(() {
-            _chartDataHasGaps = true;
-          });
-        }
-        
-        if (chartData.isNotEmpty) {
-          final result = _createResultMap(
-            chartData: chartData,
-            averageTemperature: averageTemperature,
-            trendSlope: trendSlope,
-            summaryText: summaryText,
-            dateToUse: dateToUse,
-            city: city,
-          );
-          
-          // Store the current data for potential updates
-          _currentData = result;
-          
-          return await _cacheAndReturnResult(result);
-        }
-      } catch (e) {
-        debugPrintIfDebugging('Fallback endpoints failed: $e');
-      }
-      
-      // Final fallback: try cached data (but not in simulation mode)
-      if (!SIMULATE_ENDPOINT_FAILURES) {
-        final cached = await _loadCachedChartData();
-        if (cached != null) {
-          debugPrintIfDebugging('Using cached data as final fallback');
-          return cached;
-        }
-      } else {
-        debugPrintIfDebugging('Simulation mode: skipping cache to show failures');
-      }
-      
-      throw Exception('Unable to load temperature data. Please check your internet connection and try again.');
-      
-    } catch (e) {
-      debugPrintIfDebugging('_loadChartData failed: $e');
-      rethrow;
-    }
-  }
 
   Future<void> _cacheChartData(Map<String, dynamic> data) async {
     try {
@@ -1676,198 +1360,73 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   Widget _buildFutureBuilder({required double chartHeight}) {
-    // If no stream is set yet, show loading section
-    if (_chartDataStreamController == null) {
+    // Show loading section if we don't have any data yet
+    if (_currentData == null) {
       return _buildLoadingSection();
     }
     
-    return StreamBuilder<Map<String, dynamic>?>(
-      stream: _chartDataStreamController!.stream,
-      builder: (context, snapshot) {
-        
-        // Stop loading message timer when data loading completes or fails
-        if (snapshot.connectionState != ConnectionState.waiting) {
-          _stopLoadingMessageTimer();
-          _isDataLoading = false;
-          
-          // Start auto-retry timer if there are failed endpoints
-          if (_averageDataFailed || _trendDataFailed || _summaryDataFailed) {
-            _startAutoRetryTimer();
-          }
-        }
-        
-        // Show loading state with spinner and message
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildLoadingSection();
-        } 
-        
-        // Show error state with retry button
-        if (snapshot.hasError) {
-          return _buildRetrySection(
-            'Error loading data: ${snapshot.error}',
-            () {
-              debugPrintIfDebugging('Retry button pressed after error');
-              setState(() {
-                _chartDataStreamController = StreamController<Map<String, dynamic>?>();
-                _loadChartDataProgressive().listen(
-                  (data) {
-                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
-                      _chartDataStreamController!.add(data);
-                    }
-                  },
-                  onError: (error) {
-                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
-                      _chartDataStreamController!.addError(error);
-                    }
-                  },
-                  onDone: () {
-                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
-                      _chartDataStreamController!.close();
-                    }
-                  },
-                );
-                _isShowingCachedData = false;
-                _isDataLoading = true;
-              });
-              // Restart loading message timer for retry
-              _startLoadingMessageTimer();
-            },
-          );
-        } 
-        
-        // Show no data state with retry button
-        if (!snapshot.hasData || snapshot.data == null || snapshot.data!.isEmpty) {
-          return _buildRetrySection(
-            'No temperature data available. Please check your internet connection and try again.',
-            () {
-              debugPrintIfDebugging('Retry button pressed after no data');
-              setState(() {
-                _chartDataStreamController = StreamController<Map<String, dynamic>?>();
-                _loadChartDataProgressive().listen(
-                  (data) {
-                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
-                      _chartDataStreamController!.add(data);
-                    }
-                  },
-                  onError: (error) {
-                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
-                      _chartDataStreamController!.addError(error);
-                    }
-                  },
-                  onDone: () {
-                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
-                      _chartDataStreamController!.close();
-                    }
-                  },
-                );
-                _isShowingCachedData = false;
-                _isDataLoading = true;
-              });
-              // Restart loading message timer for retry
-              _startLoadingMessageTimer();
-            },
-          );
-        }
+    final data = _currentData!;
+    final chartData = data['chartData'] as List<TemperatureChartData>;
+    
+    // If we're loading and have no data yet, show loading state
+    if (chartData.isEmpty && _isDataLoading) {
+      return _buildChartWithEmptyBars(
+        chartData, 
+        data['averageTemperature'] as double?, 
+        data['trendSlope'] as double?, 
+        data['summary'] as String?, 
+        data['displayDate'] as String?, 
+        _displayLocation.isNotEmpty ? _displayLocation : (data['city'] as String?), 
+        chartHeight, 
+        _isShowingCachedData, 
+        data['cachedDate'] as String?
+      );
+    }
+    
+    // Show no chart data state with retry button (only if we have no data at all and not loading)
+    if (chartData.isEmpty && !_isDataLoading) {
+      final isRateLimited = _averageDataRateLimited || _trendDataRateLimited || _summaryDataRateLimited || _chartDataRateLimited;
+      
+      return _buildRetrySection(
+        isRateLimited 
+          ? 'API rate limit exceeded. Please wait a few minutes before trying again.'
+          : 'No temperature data available. Please check your internet connection and try again.',
+        isRateLimited ? null : () {
+          debugPrintIfDebugging('Retry button pressed after no data');
+          _handleRefresh();
+        },
+      );
+    }
+    
+    // Filter to only show bars with actual data for the chart display
+    final validChartData = chartData.where((data) => 
+      data.hasData && 
+      data.temperature.isFinite && 
+      data.temperature.abs() < 100 // Reasonable temperature range
+    ).toList();
+    
+    final averageTemperature = data['averageTemperature'] as double?;
+    final trendSlope = data['trendSlope'] as double?;
+    final summaryText = data['summary'] as String?;
+    final displayDate = data['displayDate'] as String?;
+    // Use display location instead of full location from API data
+    final city = _displayLocation.isNotEmpty ? _displayLocation : (data['city'] as String?);
+    
+    debugPrintIfDebugging('Average temperature for plot band: $averageTemperature°C');
+    debugPrintIfDebugging('Summary text for UI: $summaryText');
+    debugPrintIfDebugging('Summary text is empty: ${summaryText?.isEmpty}');
+    debugPrintIfDebugging('Summary text is null: ${summaryText == null}');
 
-        final data = snapshot.data!;
-        final chartData = data['chartData'] as List<TemperatureChartData>;
-        
-        // Use stored data if available and more up-to-date
-        Map<String, dynamic> displayData = data;
-        if (_currentData != null) {
-          // Merge stored data with snapshot data, preferring stored data for updated fields
-          displayData = Map<String, dynamic>.from(data);
-          if (_currentData!['averageTemperature'] != null) {
-            displayData['averageTemperature'] = _currentData!['averageTemperature'];
-          }
-          if (_currentData!['trendSlope'] != null) {
-            displayData['trendSlope'] = _currentData!['trendSlope'];
-          }
-          if (_currentData!['summary'] != null) {
-            displayData['summary'] = _currentData!['summary'];
-          }
-        }
-        
-        // Show no chart data state with retry button (only if we have no data at all)
-        if (chartData.isEmpty && !snapshot.hasData) {
-          return _buildRetrySection(
-            'No temperature data available. Please check your internet connection and try again.',
-            () {
-              debugPrintIfDebugging('Retry button pressed after empty chart data');
-              setState(() {
-                _chartDataStreamController = StreamController<Map<String, dynamic>?>();
-                _loadChartDataProgressive().listen(
-                  (data) {
-                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
-                      _chartDataStreamController!.add(data);
-                    }
-                  },
-                  onError: (error) {
-                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
-                      _chartDataStreamController!.addError(error);
-                    }
-                  },
-                  onDone: () {
-                    if (_chartDataStreamController != null && !_chartDataStreamController!.isClosed) {
-                      _chartDataStreamController!.close();
-                    }
-                  },
-                );
-                _isShowingCachedData = false;
-                _isDataLoading = true;
-              });
-              // Restart loading message timer for retry
-              _startLoadingMessageTimer();
-            },
-          );
-        }
-        
-        // Validate chart data has valid temperatures
-        final validChartData = chartData.where((data) => 
-          data.temperature.isFinite && 
-          data.temperature.abs() < 100 // Reasonable temperature range
-        ).toList();
-        
-        if (validChartData.isEmpty) {
-          return _buildRetrySection(
-            'Invalid temperature data received. Please try again.',
-            () {
-              debugPrintIfDebugging('Retry button pressed after invalid chart data');
-              setState(() {
-                futureChartData = _loadChartData();
-                _isShowingCachedData = false;
-                _isDataLoading = true;
-              });
-              // Restart loading message timer for retry
-              _startLoadingMessageTimer();
-            },
-          );
-        }
-        
-        final averageTemperature = displayData['averageTemperature'] as double?;
-        final trendSlope = displayData['trendSlope'] as double?;
-        final summaryText = displayData['summary'] as String?;
-        final displayDate = displayData['displayDate'] as String?;
-        // Use display location instead of full location from API data
-        final city = _displayLocation.isNotEmpty ? _displayLocation : (data['city'] as String?);
-        
-        debugPrintIfDebugging('Average temperature for plot band: $averageTemperature°C');
-        debugPrintIfDebugging('Summary text for UI: $summaryText');
-        debugPrintIfDebugging('Summary text is empty: ${summaryText?.isEmpty}');
-        debugPrintIfDebugging('Summary text is null: ${summaryText == null}');
-
-        return _buildChartContent(
-          chartData: validChartData,
-          averageTemperature: averageTemperature,
-          trendSlope: trendSlope,
-          summaryText: summaryText,
-          displayDate: displayDate,
-          city: city,
-          chartHeight: chartHeight,
-          isCachedData: _isShowingCachedData,
-          cachedDate: data['cachedDate'] as String?,
-        );
-      },
+    return _buildChartContent(
+      chartData: chartData, // Pass all chart data (including empty placeholders)
+      averageTemperature: averageTemperature,
+      trendSlope: trendSlope,
+      summaryText: summaryText,
+      displayDate: displayDate,
+      city: city,
+      chartHeight: chartHeight,
+      isCachedData: _isShowingCachedData,
+      cachedDate: data['cachedDate'] as String?,
     );
   }
 
@@ -1884,7 +1443,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     );
   }
 
-  Widget _buildRetrySection(String message, VoidCallback onRetry) {
+  Widget _buildRetrySection(String message, VoidCallback? onRetry) {
     return LayoutBuilder(
       builder: (context, constraints) {
         double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
@@ -1903,8 +1462,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                   style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody),
                   textAlign: TextAlign.left,
                 ),
-                const SizedBox(height: 16),
-                _buildRetryButton(onRetry),
+                if (onRetry != null) ...[
+                  const SizedBox(height: 16),
+                  _buildRetryButton(onRetry),
+                ],
               ],
             ),
           ),
@@ -1914,6 +1475,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   Widget _buildNoDataSection() {
+    // Check if we're rate limited
+    final isRateLimited = _averageDataRateLimited || _trendDataRateLimited || _summaryDataRateLimited || _chartDataRateLimited;
+    
     return LayoutBuilder(
       builder: (context, constraints) {
         double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
@@ -1928,16 +1492,40 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'No temperature data available for this location.',
+                  isRateLimited 
+                    ? 'API rate limit exceeded'
+                    : 'No temperature data available for this location.',
                   style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody),
                   textAlign: TextAlign.left,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'This could be due to rate limiting or insufficient historical data for this area.',
+                  isRateLimited
+                    ? 'Too many requests have been made. Please wait a few minutes before trying again.'
+                    : 'This could be due to rate limiting or insufficient historical data for this area.',
                   style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1),
                   textAlign: TextAlign.left,
                 ),
+                if (isRateLimited) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.timer,
+                        color: kGreyLabelColour,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Rate limits typically reset after 1 hour. You can try refreshing later.',
+                          style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2),
+                          textAlign: TextAlign.left,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -2380,6 +1968,127 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     );
   }
 
+  Widget _buildChartWithEmptyBars(
+    List<TemperatureChartData> chartData,
+    double? averageTemperature,
+    double? trendSlope,
+    String? summaryText,
+    String? displayDate,
+    String? city,
+    double chartHeight,
+    bool isCachedData,
+    String? cachedDate,
+  ) {
+    // Show a loading state with the chart structure but no visible bars
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(kChartInnerPadding),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth - 20 : 580;
+            return Center(
+              child: Container(
+                width: contentWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Date and location above summary
+                    if (displayDate != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: kSectionHorizontalMargin),
+                            child: Text(
+                              isCachedData && cachedDate != null 
+                                ? _formatDayMonth(DateFormat('yyyy-MM-dd').parse(cachedDate))
+                                : displayDate,
+                              style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (city != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
+                            child: Row(
+                              children: [
+                                Text(
+                                  city,
+                                  style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                                  textAlign: TextAlign.left,
+                                ),
+                                if (isCachedData)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 8.0),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                                      decoration: BoxDecoration(
+                                        color: kGreyLabelColour.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(4.0),
+                                      ),
+                                      child: Text(
+                                        'cached',
+                                        style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
+                                        textAlign: TextAlign.left,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (summaryText?.isNotEmpty == true)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
+                            child: Text(
+                              summaryText!,
+                              style: TextStyle(color: kSummaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                        ),
+                      ),
+                    // Show loading message instead of chart
+                    SizedBox(
+                      height: chartHeight,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const CircularProgressIndicator(
+                              color: kGreyLabelColour,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Loading temperature data...',
+                              style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildChartContent({
     required List<TemperatureChartData> chartData,
     required double? averageTemperature,
@@ -2394,9 +2103,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // Calculate minimum and maximum temperature for Y-axis (only from years with data)
     final validData = chartData.where((data) => data.hasData).toList();
     
-    // If no valid data at all, don't show the chart
+    // If we have chart data but no valid data yet, show the chart with empty bars
+    // This allows the progressive loading to be visible
     if (validData.isEmpty) {
-      return _buildNoDataSection();
+      // Show chart with empty bars - they won't be visible but the structure will be there
+      return _buildChartWithEmptyBars(chartData, averageTemperature, trendSlope, summaryText, displayDate, city, chartHeight, isCachedData, cachedDate);
     }
     
     double yAxisMin;
@@ -2407,11 +2118,12 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     minTemp = validData.map((data) => data.temperature).reduce((a, b) => a < b ? a : b);
     maxTemp = validData.map((data) => data.temperature).reduce((a, b) => a > b ? a : b);
     
-    // Always start just below the lowest temperature and end just above the highest
+    // Calculate dynamic Y-axis range based on actual data
+    // Add padding above and below the data range for better visualization
     yAxisMin = (minTemp - 2).floorToDouble(); // Start 2 degrees below minimum
     yAxisMax = (maxTemp + 2).ceilToDouble(); // End 2 degrees above maximum
     
-    // Ensure we have a reasonable range even for small temperature variations
+    // Ensure we have a reasonable minimum range even for small temperature variations
     final range = maxTemp - minTemp;
     if (range < 5) {
       // For small ranges, ensure we have at least 5 degrees of scale
@@ -2430,7 +2142,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         padding: const EdgeInsets.all(kChartInnerPadding),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
+            // Reduce content width to provide more margin for chart labels
+            double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth - 20 : 580;
             debugPrintIfDebugging('Main content - Screen width: ${constraints.maxWidth}, contentWidth: $contentWidth, isWideScreen: ${constraints.maxWidth >= 600}');
             return Center(
               child: Container(
@@ -2509,7 +2222,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                     SizedBox(
                       height: chartHeight,
                       child: SfCartesianChart(
-                        margin: EdgeInsets.symmetric(horizontal: kChartHorizontalMargin),
+                        margin: EdgeInsets.only(
+                          left: kChartHorizontalMargin, // Keep left margin consistent with text
+                          right: kChartHorizontalMargin + 8, // Extra right margin for Y-axis labels
+                        ),
                         tooltipBehavior: TooltipBehavior(
                           enable: true,
                           format: 'point.x: point.y°C',
@@ -2534,7 +2250,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                         ),
                         series: [
                           BarSeries<TemperatureChartData, int>(
-                            dataSource: chartData.where((data) => data.hasData).toList(),
+                            onRendererCreated: (ChartSeriesController controller) {
+                              _chartSeriesController = controller;
+                            },
+                            dataSource: chartData,
                             xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
                             yValueMapper: (TemperatureChartData data, int index) => data.temperature,
                             pointColorMapper: (TemperatureChartData data, int index) =>
@@ -2548,7 +2267,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                           ),
                           if (averageTemperature != null)
                             LineSeries<TemperatureChartData, int>(
-                              dataSource: _generateAverageData(chartData.where((data) => data.hasData).toList(), averageTemperature),
+                              dataSource: _generateAverageData(chartData, averageTemperature),
                               xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
                               yValueMapper: (TemperatureChartData data, int index) => data.temperature,
                               color: kAverageColour,
@@ -2558,7 +2277,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                             ),
                           if (trendSlope != null)
                             LineSeries<TemperatureChartData, int>(
-                              dataSource: _generateTrendData(chartData.where((data) => data.hasData).toList(), trendSlope),
+                              dataSource: _generateTrendData(chartData, trendSlope),
                               xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
                               yValueMapper: (TemperatureChartData data, int index) => data.temperature,
                               color: kTrendColour,
@@ -2571,17 +2290,18 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                           labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
                           majorGridLines: MajorGridLines(width: 0),
                           labelIntersectAction: AxisLabelIntersectAction.hide,
-                          // Add margins to prevent cropping of first and last bars
-                          minimum: chartData.map((data) => int.parse(data.year)).reduce((a, b) => a < b ? a : b).toDouble(),
-                          maximum: chartData.map((data) => int.parse(data.year)).reduce((a, b) => a > b ? a : b).toDouble(),
-                          interval: 1, // Show every year
+                          // For progressive loading, show the full year range (1975-2025) from the start
+                          // This ensures consistent bar spacing as data loads and includes current year
+                          minimum: 1975.0,
+                          maximum: 2025.0,
+                          interval: 5, // Show every 5th year to avoid crowding
                           labelFormat: '{value}',
                           // Ensure proper spacing and prevent cropping
                           plotOffset: 20,
                         ),
                         primaryYAxis: NumericAxis(
                           labelFormat: '{value}°C',
-                          numberFormat: NumberFormat('0.0'),
+                          numberFormat: NumberFormat('0'),
                           minimum: yAxisMin,
                           maximum: yAxisMax,
                           majorGridLines: MajorGridLines(width: 0),
@@ -2590,9 +2310,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                           plotOffset: 0,
                           // Force the axis to respect the exact minimum and maximum values
                           desiredIntervals: 5,
+                          // Add margin for Y-axis labels
+                          labelPosition: ChartDataLabelPosition.outside,
                         ),
                         plotAreaBorderWidth: 0,
-                        enableAxisAnimation: true,
+                        enableAxisAnimation: false, // Disable animation to prevent "moving down" effect
                         // Ensure proper spacing for bars
                       ),
                     ),
@@ -2807,10 +2529,22 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   Widget _buildDataCompletenessIndicator(List<TemperatureChartData> chartData) {
+    // Only show completeness indicator if we're not currently loading data
+    if (_isDataLoading) {
+      return const SizedBox.shrink();
+    }
+    
     final missingYears = chartData.where((data) => !data.hasData).map((data) => int.parse(data.year)).toList();
     final hasGaps = missingYears.isNotEmpty || _chartDataHasGaps;
     
-    if (hasGaps) {
+    // Check for missing recent years (2022-2025)
+    final currentYear = DateTime.now().year;
+    final recentYears = List.generate(currentYear - 2021, (index) => 2022 + index);
+    final missingRecentYears = recentYears.where((year) => 
+      !chartData.any((data) => int.parse(data.year) == year && data.hasData)
+    ).toList();
+    
+    if (hasGaps || missingRecentYears.isNotEmpty) {
       // Sort missing years for better display
       missingYears.sort();
       
@@ -2831,6 +2565,29 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           return '${range.first}-${range.last}';
         }).join(', ');
         missingText = 'Years $ranges are missing';
+      }
+      
+      // Add note about missing recent years if applicable
+      if (missingRecentYears.isNotEmpty) {
+        final recentRanges = _groupConsecutiveYears(missingRecentYears);
+        String recentText;
+        if (recentRanges.length == 1 && recentRanges.first.length == 1) {
+          recentText = 'Year ${recentRanges.first.first}';
+        } else if (recentRanges.length == 1) {
+          recentText = 'Years ${recentRanges.first.first}-${recentRanges.first.last}';
+        } else {
+          final ranges = recentRanges.map((range) {
+            if (range.length == 1) return range.first.toString();
+            return '${range.first}-${range.last}';
+          }).join(', ');
+          recentText = 'Years $ranges';
+        }
+        
+        if (missingText.isNotEmpty) {
+          missingText += '. Recent data ($recentText) is not yet available';
+        } else {
+          missingText = 'Recent data ($recentText) is not yet available';
+        }
       }
       
       return Padding(
@@ -2971,9 +2728,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           _distanceBetween(_lastPosition!, position) > 1000) { // 1km threshold
         _lastPosition = position;
         // Optionally, check if city has changed using placemarkFromCoordinates
-        setState(() {
-          futureChartData = _loadChartData();
-        });
+        _isDataLoading = true;
+        
+        // Start progressive loading in the background
+        _loadChartDataProgressive();
       }
     });
   }
@@ -3086,41 +2844,60 @@ class TemperatureChartData {
 List<TemperatureChartData> _generateTrendData(List<TemperatureChartData> chartData, double slope) {
   if (chartData.isEmpty) return [];
   
-  // Find the middle year to use as reference point
-  final years = chartData.map((data) => int.parse(data.year)).toList();
-  years.sort();
-  final middleYear = years[years.length ~/ 2];
+  // Find the middle year to use as reference point (only from years with data)
+  final yearsWithData = chartData.where((data) => data.hasData).map((data) => int.parse(data.year)).toList();
+  if (yearsWithData.isEmpty) return [];
   
-  // Calculate the middle temperature (average of all temperatures)
-  final middleTemp = chartData.map((data) => data.temperature).reduce((a, b) => a + b) / chartData.length;
+  yearsWithData.sort();
+  final middleYear = yearsWithData[yearsWithData.length ~/ 2];
   
-  // Generate trend line points using only the actual years from chart data
-  return chartData.map((data) {
-    final year = int.parse(data.year);
+  // Calculate the middle temperature (average of all temperatures with data)
+  final tempsWithData = chartData.where((data) => data.hasData).map((data) => data.temperature).toList();
+  final middleTemp = tempsWithData.reduce((a, b) => a + b) / tempsWithData.length;
+  
+  // Generate trend line points for all years in chronological order
+  final allYears = yearsWithData;
+  final minYear = allYears.first;
+  final maxYear = allYears.last;
+  
+  List<TemperatureChartData> trendData = [];
+  for (int year = minYear; year <= maxYear; year++) {
     final yearsFromMiddle = year - middleYear;
     final trendTemp = middleTemp + (slope * yearsFromMiddle / 10); // Convert decade slope to yearly
     
-    return TemperatureChartData(
-      year: data.year,
+    trendData.add(TemperatureChartData(
+      year: year.toString(),
       temperature: trendTemp,
-      isCurrentYear: data.isCurrentYear,
-      hasData: data.hasData,
-    );
-  }).toList();
+      isCurrentYear: year == DateTime.now().year,
+      hasData: true,
+    ));
+  }
+  
+  return trendData;
 }
 
 List<TemperatureChartData> _generateAverageData(List<TemperatureChartData> chartData, double averageTemp) {
   if (chartData.isEmpty) return [];
   
-  // Generate average line points using only the actual years from chart data
-  return chartData.map((data) {
-    return TemperatureChartData(
-      year: data.year,
+  // Generate average line points for all years in chronological order
+  final yearsWithData = chartData.where((data) => data.hasData).map((data) => int.parse(data.year)).toList();
+  if (yearsWithData.isEmpty) return [];
+  
+  yearsWithData.sort();
+  final minYear = yearsWithData.first;
+  final maxYear = yearsWithData.last;
+  
+  List<TemperatureChartData> averageData = [];
+  for (int year = minYear; year <= maxYear; year++) {
+    averageData.add(TemperatureChartData(
+      year: year.toString(),
       temperature: averageTemp,
-      isCurrentYear: data.isCurrentYear,
-      hasData: data.hasData,
-    );
-  }).toList();
+      isCurrentYear: year == DateTime.now().year,
+      hasData: true,
+    ));
+  }
+  
+  return averageData;
 }
 
 String _formatDayMonth(DateTime date) {
