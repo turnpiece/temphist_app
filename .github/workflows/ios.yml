@@ -1,0 +1,112 @@
+name: iOS Build (Flutter)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v3
+
+      - name: Update version for release
+        run: |
+          # Check if this is a tag push or branch push
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            # This is a tag push - extract version and update
+            VERSION=${GITHUB_REF#refs/tags/}
+            RELEASE_DATE=$(date +'%Y-%m-%d')
+            echo "Tag detected: $VERSION"
+            echo "Setting release date to: $RELEASE_DATE"
+            
+            # Update version in all config files
+            sed -i '' "s/appVersion = '.*'/appVersion = '${VERSION#v}'/" lib/config/*.dart
+            
+            # Update release date in all config files  
+            sed -i '' "s/releaseDate = '.*'/releaseDate = '$RELEASE_DATE'/" lib/config/*.dart
+            
+            echo "Version and release date update complete"
+          else
+            # This is a branch push - just log and continue
+            echo "Branch push detected: $GITHUB_REF"
+            echo "No version update needed for branch push"
+            echo "Version will be updated when a tag is pushed"
+          fi
+
+      - name: 🚀 Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.8'
+          channel: "stable"
+
+      - name: 🔍 Check Flutter and Dart versions
+        run: |
+          flutter --version
+          dart --version
+
+      - name: 📦 Install dependencies
+        run: flutter pub get
+
+      - name: 🧪 Run tests
+        run: flutter test
+
+      - name: 🔐 Decode GoogleService-Info.plist
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_B64 }}" | base64 --decode > ios/Runner/GoogleService-Info.plist
+
+      - name: Clear match cache
+        run: rm -rf ~/Library/MobileDevice/Provisioning\ Profiles/*
+
+      - name: Remove old match repo
+        run: rm -rf /Users/runner/.fastlane/ci/*
+
+      - name: Clean DerivedData
+        run: rm -rf ~/Library/Developer/Xcode/DerivedData
+
+      - name: Select Xcode 16.2
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app
+
+      - name: Verify Xcode version
+        run: |
+          xcode-select -p
+          xcodebuild -version
+
+      - name: 🛠️ Install Fastlane
+        working-directory: ios
+        run: bundle install
+
+      - name: 📦 Install CocoaPods dependencies
+        working-directory: ios
+        run: bundle exec pod install
+
+      - name: 🚀 Upload to TestFlight with Fastlane
+        working-directory: ios
+        run: bundle exec fastlane beta --verbose
+        env:
+          APP_STORE_KEY_ID: ${{ secrets.APP_STORE_KEY_ID }}
+          APP_STORE_ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}
+          APP_STORE_PRIVATE_KEY: ${{ secrets.APP_STORE_PRIVATE_KEY }}
+          APP_IDENTIFIER: ${{ secrets.APP_IDENTIFIER }}
+          APP_STORE_TEAM_ID: ${{ secrets.APP_STORE_TEAM_ID }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_URL: https://x-access-token:${{ secrets.MATCH_GIT_PAT }}@github.com/turnpiece/apple-certs.git
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          FASTLANE_DISABLE_COLORS: 1
+
+      - name: ✅ Archive output
+        run: |
+          mkdir -p build-artifacts
+          IPA_PATH=$(find ios -name "*.ipa" | head -n 1)
+          echo "Found IPA at: $IPA_PATH"
+          cp "$IPA_PATH" build-artifacts/
+
+      - name: 💾 Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app
+          path: build-artifacts

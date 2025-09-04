@@ -272,6 +272,13 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    
+    // If we have a test future, skip all the async initialization
+    if (widget.testFuture != null) {
+      futureChartData = widget.testFuture;
+      return;
+    }
+    
     _startListeningToLocationChanges();
     // Initialize with location determination first, then load data
     _initializeApp();
@@ -1402,6 +1409,12 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
 
   Widget _buildRefreshIndicator(Widget child) {
     debugPrintIfDebugging('_buildRefreshIndicator: futureChartData=${futureChartData != null}, _isDataLoading=$_isDataLoading');
+    
+    // In test mode, don't create RefreshIndicator to avoid async operations
+    if (widget.testFuture != null) {
+      debugPrintIfDebugging('_buildRefreshIndicator: Test mode, returning child without RefreshIndicator');
+      return child;
+    }
     
     // Always show RefreshIndicator when we have data
     if (futureChartData == null) {

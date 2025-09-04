@@ -20,7 +20,8 @@ void main() {
       ),
     ));
 
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
     expect(find.byType(Text), findsWidgets);
   });
 
@@ -40,7 +41,8 @@ void main() {
       ),
     ));
 
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
     expect(find.text('TempHist'), findsOneWidget);
   });
 
@@ -65,7 +67,8 @@ void main() {
     ));
 
     // Wait for the FutureBuilder to complete
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
 
     // Check for chart, summary, and city
     expect(find.text('Test summary'), findsOneWidget);
@@ -104,7 +107,8 @@ void main() {
     completer.completeError('Test error');
 
     // Wait for the error to be displayed
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
 
     // Verify that error message and retry button are shown
     expect(find.textContaining('Error loading data'), findsOneWidget);
