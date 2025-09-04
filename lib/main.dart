@@ -1433,6 +1433,38 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   Widget _buildFutureBuilder({required double chartHeight}) {
+    // In test mode, use FutureBuilder to handle test data
+    if (widget.testFuture != null) {
+      return FutureBuilder<Map<String, dynamic>?>(
+        future: widget.testFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return _buildLoadingSection();
+          } else if (snapshot.hasError) {
+            return _buildRetrySection(
+              'Error loading data: ${snapshot.error}',
+              () {
+                // In test mode, we can't really retry, but this satisfies the interface
+              },
+            );
+          } else if (snapshot.hasData) {
+            final data = snapshot.data!;
+            return _buildChartContent(
+              chartData: data['chartData'] as List<TemperatureChartData>,
+              averageTemperature: data['averageTemperature'] as double?,
+              trendSlope: data['trendSlope'] as double?,
+              summaryText: data['summary'] as String?,
+              displayDate: data['displayDate'] as String?,
+              city: data['city'] as String?,
+              chartHeight: chartHeight,
+            );
+          } else {
+            return _buildLoadingSection();
+          }
+        },
+      );
+    }
+    
     // Show loading section if we don't have any data yet
     if (_currentData == null) {
       return _buildLoadingSection();
