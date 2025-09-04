@@ -89,43 +89,17 @@ String _cleanupLocationString(String location) {
 }
 
 /// Detect suspicious or obviously incorrect location strings
+/// This is very conservative since location data comes from device GPS/geocoding
 bool _isLocationSuspicious(String location) {
   if (location.isEmpty) return true;
   
-  final lowerLocation = location.toLowerCase();
-  
-  // Check for street addresses (which are usually wrong for city-level queries)
-  if (lowerLocation.contains('street') || 
-      lowerLocation.contains('st,') ||
-      lowerLocation.contains('ave,') ||
-      lowerLocation.contains('road') ||
-      lowerLocation.contains('rd,') ||
-      lowerLocation.contains('drive') ||
-      lowerLocation.contains('dr,') ||
-      lowerLocation.contains('lane') ||
-      lowerLocation.contains('ln,') ||
-      lowerLocation.contains('blvd') ||
-      lowerLocation.contains('boulevard')) {
+  // Check for very short or very long location strings (indicates API issues)
+  if (location.length < 2 || location.length > 200) {
     return true;
   }
   
-  // Check for postal codes (which are usually wrong for city-level queries)
-  if (RegExp(r'\d{5}').hasMatch(location) || // US ZIP codes
-      RegExp(r'[A-Z]\d[A-Z]\s?\d[A-Z]\d').hasMatch(location)) { // Canadian postal codes
-    return true;
-  }
-  
-  // Check for coordinates (which are obviously wrong)
-  if (lowerLocation.contains('°') || 
-      lowerLocation.contains('north') ||
-      lowerLocation.contains('south') ||
-      lowerLocation.contains('east') ||
-      lowerLocation.contains('west')) {
-    return true;
-  }
-  
-  // Check for very short or very long location strings
-  if (location.length < 3 || location.length > 100) {
+  // Check for pure numeric strings (postal codes without city names)
+  if (RegExp(r'^\d+$').hasMatch(location.trim())) {
     return true;
   }
   
@@ -272,6 +246,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   
   // Track if progressive loading has completed to prevent flash of "no data" message
   bool _progressiveLoadingCompleted = false;
+  
+  // Track current loading operation to prevent race conditions
+  bool _isLoadingOperationActive = false;
 
   @override
   void initState() {
@@ -284,7 +261,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       return;
     }
     
-    _startListeningToLocationChanges();
     // Initialize with location determination first, then load data
     _initializeApp();
   }
@@ -336,6 +312,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     
     // Start progressive loading in the background
     _loadChartDataProgressive();
+    
+    // Start listening to location changes after initial setup is complete
+    _startListeningToLocationChanges();
     
     DebugUtils.verboseLazy(() => 'App initialization completed - location: $_determinedLocation, loading: $_isDataLoading');
   }
@@ -1000,6 +979,13 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   Future<void> _loadChartDataProgressive() async {
+    // Prevent multiple concurrent loading operations
+    if (_isLoadingOperationActive) {
+      debugPrintIfDebugging('_loadChartDataProgressive: Already loading, skipping duplicate request');
+      return;
+    }
+    
+    _isLoadingOperationActive = true;
     debugPrintIfDebugging('_loadChartDataProgressive: Starting progressive chart data load');
     
     try {
@@ -1194,6 +1180,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       _progressiveLoadingCompleted = true;
       
       rethrow;
+    } finally {
+      // Always reset the loading operation flag
+      _isLoadingOperationActive = false;
     }
   }
 
@@ -2549,14 +2538,58 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       if (_lastPosition == null ||
           _distanceBetween(_lastPosition!, position) > 1000) { // 1km threshold
         _lastPosition = position;
-        // Optionally, check if city has changed using placemarkFromCoordinates
-        _isDataLoading = true;
         
-        // Start the average/trend display timer
-        _startAverageTrendDisplayTimer();
+        // Don't start new data loading if we're already loading or if location hasn't been determined yet
+        if (_isDataLoading || _isLoadingOperationActive || !_isLocationDetermined) {
+          debugPrintIfDebugging('Skipping location change - already loading: $_isDataLoading, operation active: $_isLoadingOperationActive, location determined: $_isLocationDetermined');
+          return;
+        }
         
-        // Start progressive loading in the background
-        _loadChartDataProgressive();
+        debugPrintIfDebugging('Significant location change detected, refreshing data...');
+        
+        // Check if the city has actually changed before reloading data
+        try {
+          List<Placemark> placemarks = await placemarkFromCoordinates(
+            position.latitude, 
+            position.longitude
+          ).timeout(const Duration(seconds: 5));
+          
+          if (placemarks.isNotEmpty) {
+            final placemark = placemarks.first;
+            String newCity = 'London, UK'; // Default fallback
+            
+            if (placemark.locality != null && placemark.locality!.isNotEmpty) {
+              final locality = placemark.locality!;
+              final country = placemark.country;
+              final administrativeArea = placemark.administrativeArea;
+              
+              // Build location string same way as _determineLocation
+              if (country != null && country.isNotEmpty) {
+                if (administrativeArea != null && administrativeArea.isNotEmpty) {
+                  newCity = '$locality, $administrativeArea, $country';
+                } else {
+                  newCity = '$locality, $country';
+                }
+              } else if (administrativeArea != null && administrativeArea.isNotEmpty) {
+                newCity = '$locality, $administrativeArea';
+              } else {
+                newCity = locality;
+              }
+            }
+            
+            newCity = _cleanupLocationString(newCity);
+            
+            // Only reload if the city has actually changed
+            if (newCity != _determinedLocation) {
+              debugPrintIfDebugging('City changed from $_determinedLocation to $newCity, refreshing data');
+              await _refreshLocationAndData();
+            } else {
+              debugPrintIfDebugging('Location change detected but city is the same, no refresh needed');
+            }
+          }
+        } catch (e) {
+          debugPrintIfDebugging('Error checking location change: $e');
+        }
       }
     });
   }
