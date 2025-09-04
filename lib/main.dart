@@ -2203,9 +2203,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                       Padding(
                         padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
                         child: Text(
-                            trendSlope > 0 
-                              ? 'Trend: Rising at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
-                              : 'Trend: Falling at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
+                            trendSlope.abs() < 0.1
+                              ? 'Trend: Steady at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
+                              : trendSlope > 0 
+                                ? 'Trend: Rising at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
+                                : 'Trend: Falling at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
                             style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
                             textAlign: TextAlign.left,
                           ),
