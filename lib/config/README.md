@@ -93,7 +93,7 @@ DebugUtils.logWithTimestamp('User action performed');
 
 ## Migration from Old System
 
-The old constants `DEBUGGING` and `SIMULATE_ENDPOINT_FAILURES` are still available for backward compatibility, but they now use the new configuration system internally.
+The old constants `DEBUGGING` and `SIMULATE_ENDPOINT_FAILURES` have been removed. Use `AppConfig` methods directly instead.
 
 ## Best Practices
 
@@ -101,4 +101,4 @@ The old constants `DEBUGGING` and `SIMULATE_ENDPOINT_FAILURES` are still availab
 2. Use `DebugUtils` for all debug logging
 3. Keep debug-specific code in conditional blocks
 4. Test both debug and production configurations
-5. Document any new configuration options you add
+5. Document any new configuration options

@@ -21,8 +21,6 @@ import 'utils/debug_utils.dart';
 // App color constants
 // Note: These are no longer const because they depend on runtime configuration
 // but they maintain the same interface for backward compatibility
-bool get DEBUGGING => AppConfig.isDebugMode;
-bool get SIMULATE_ENDPOINT_FAILURES => AppConfig.enableEndpointFailureSimulation;
 const kBackgroundColour = Color(0xFF242456);
 const kAccentColour = Color(0xFFFF6B6B);
 const kTextPrimaryColour = Color(0xFFECECEC);
@@ -124,9 +122,13 @@ bool _isLocationSuspicious(String location) {
   return false;
 }
 
-// Legacy function for backward compatibility - use DebugUtils.log() instead
+/// Legacy function for backward compatibility.
+/// Calls are stripped out entirely in release builds.
 void debugPrintIfDebugging(Object? message) {
-  DebugUtils.log(message.toString());
+  assert(() {
+    DebugUtils.logLazy(() => message.toString());
+    return true;
+  }());
 }
 
 
@@ -1370,7 +1372,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     _resetErrorStates();
     
     // Clear cache in simulation mode to ensure fresh data loading
-    if (SIMULATE_ENDPOINT_FAILURES) {
+    if (AppConfig.enableEndpointFailureSimulation) {
       await _clearCache();
     }
     
@@ -1803,7 +1805,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                 _buildResetAllButton(),
               ],
             ),
-            if (SIMULATE_ENDPOINT_FAILURES) ...[
+            if (AppConfig.enableEndpointFailureSimulation) ...[
               const SizedBox(height: 8),
               Text(
                 'Simulation Active: ${_simulateAverageFailure ? "Average" : ""}${_simulateTrendFailure ? (_simulateAverageFailure ? ", " : "") + "Trend" : ""}${_simulateSummaryFailure ? ((_simulateAverageFailure || _simulateTrendFailure) ? ", " : "") + "Summary" : ""}',
@@ -2667,7 +2669,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
 
   /// Simulate endpoint failures for testing purposes
   Future<T> _simulateEndpointFailure<T>(String endpointName, Future<T> Function() apiCall) async {
-    if (!SIMULATE_ENDPOINT_FAILURES) {
+    if (!AppConfig.enableEndpointFailureSimulation) {
       return await apiCall();
     }
     
