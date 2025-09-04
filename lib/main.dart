@@ -38,12 +38,11 @@ const kGreyLabelColour = Color(0xFFB0B0B0);
 
 // Layout constants for easy adjustment
 const double kScreenPadding = 8.0;
-const double kTitleRowHorizontalMargin = 4.0;
+
 const double kTitleRowIconRightPadding = 6.0;
-const double kSectionHorizontalMargin = 4.0;
-const double kCitySummaryHorizontalMargin = 4.0;
-const double kChartHorizontalMargin = 4.0;
-const double kChartInnerPadding = 4.0;
+const double kContentHorizontalMargin = 2.0;
+const double kChartHorizontalMargin = 0.0;
+const double kChartInnerPadding = 0.0;
 const double kSectionBottomPadding = 22.0;
 const double kSectionTopPadding = 22.0;
 const double kContentVerticalPadding = 32.0; // Vertical padding for main content area
@@ -262,6 +261,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   bool _isRetryingChartData = false;
   int _chartDataRetryCount = 0;
   static const int _maxChartDataRetries = 3;
+  
+  // Track if progressive loading has completed to prevent flash of "no data" message
+  bool _progressiveLoadingCompleted = false;
 
   @override
   void initState() {
@@ -306,6 +308,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // Then start loading temperature data progressively
     _isShowingCachedData = false;
     _isDataLoading = true;
+    _progressiveLoadingCompleted = false;
     
     // Start the loading message timer after location is determined
     _startLoadingMessageTimer();
@@ -352,6 +355,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // Reload data with new location using progressive loading
     _isShowingCachedData = false;
     _isDataLoading = true;
+    _progressiveLoadingCompleted = false;
     
     // Start the average/trend display timer
     _startAverageTrendDisplayTimer();
@@ -430,6 +434,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // Then start loading temperature data using progressive loading
     _isShowingCachedData = false;
     _isDataLoading = true;
+    _progressiveLoadingCompleted = false;
     
     // Start the average/trend display timer
     _startAverageTrendDisplayTimer();
@@ -1218,6 +1223,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       _stopLoadingMessageTimer();
       _stopAverageTrendDisplayTimer(); // Stop the timer since loading completed
       _isDataLoading = false;
+      _progressiveLoadingCompleted = true;
       debugPrintIfDebugging('_loadChartDataProgressive: Loading completed, _isDataLoading set to false');
       
       // Start auto-retry timer if there are failed endpoints
@@ -1232,6 +1238,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       _stopLoadingMessageTimer();
       _stopAverageTrendDisplayTimer(); // Stop the timer on error too
       _isDataLoading = false;
+      _progressiveLoadingCompleted = true;
       
       rethrow;
     }
@@ -1426,7 +1433,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     }
     
     // Show no chart data state with retry button (only if we have no data at all and not loading)
-    if (chartData.isEmpty && !_isDataLoading) {
+    // Only show this if progressive loading has completed - this prevents flash during loading transitions
+    if (chartData.isEmpty && !_isDataLoading && _progressiveLoadingCompleted) {
       final isRateLimited = _averageDataRateLimited || _trendDataRateLimited || _summaryDataRateLimited || _chartDataRateLimited;
       
       return _buildRetrySection(
@@ -1577,33 +1585,22 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   Widget _buildLoadingSection() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
-        double horizontalOffset = (constraints.maxWidth - contentWidth) / 2;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Date section - show as soon as we have it
+        _buildLoadingDateSection(),
         
-        return Container(
-          width: contentWidth,
-          margin: EdgeInsets.symmetric(horizontal: horizontalOffset > 0 ? horizontalOffset : kScreenPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start, // Left align like other content
-            children: [
-              // Date section - show as soon as we have it
-              _buildLoadingDateSection(),
-              
-              // Location section - show the determined location
-              if (_isLocationDetermined)
-                _buildDeterminedLocationSection()
-              else
-                _buildLocationDeterminingSection(),
-              
-              // Progressive loading messages - show below location
-              if (_isLocationDetermined)
-                _buildProgressiveLoadingSection(),
-            ],
-          ),
-        );
-      },
+        // Location section - show the determined location
+        if (_isLocationDetermined)
+          _buildDeterminedLocationSection()
+        else
+          _buildLocationDeterminingSection(),
+        
+        // Progressive loading messages - show below location
+        if (_isLocationDetermined)
+          _buildProgressiveLoadingSection(),
+      ],
     );
   }
 
@@ -1617,27 +1614,21 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
       child: Text(
-        displayDate,
-        style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-        textAlign: TextAlign.left,
-      ),
+          displayDate,
+          style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+          textAlign: TextAlign.left,
+        ),
     );
   }
 
   Widget _buildDeterminedLocationSection() {
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-          child: Text(
-            _displayLocation,
-            style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-            textAlign: TextAlign.left,
-          ),
+      child: Text(
+          _displayLocation,
+          style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+          textAlign: TextAlign.left,
         ),
-      ),
     );
   }
 
@@ -1681,34 +1672,28 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   Widget _buildProgressiveLoadingSection() {
     return Padding(
       padding: const EdgeInsets.only(top: kSectionTopPadding, bottom: kSectionBottomPadding),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-          child: Row(
-            children: [
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: kGreyLabelColour,
-                ),
+      child: Row(
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: kGreyLabelColour,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _currentLoadingMessage.isNotEmpty 
-                    ? _currentLoadingMessage 
-                    : 'Loading temperature data...',
-                  style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
-                  textAlign: TextAlign.left,
-                ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _currentLoadingMessage.isNotEmpty 
+                  ? _currentLoadingMessage 
+                  : 'Loading temperature data...',
+                style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
+                textAlign: TextAlign.left,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ),
     );
   }
 
@@ -1730,171 +1715,107 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   Widget _buildTitleLogoSection() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
-        double horizontalOffset = (constraints.maxWidth - contentWidth) / 2;
-        
-        debugPrintIfDebugging('Title area - Screen width: ${constraints.maxWidth}, contentWidth: $contentWidth, horizontalOffset: $horizontalOffset, isWideScreen: ${constraints.maxWidth >= 600}');
-        
-        return Padding(
-          padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-          child: Stack(
-            children: [
-              // Logo positioned to the left of content area
-              if (horizontalOffset > 0)
-                Positioned(
-                  left: horizontalOffset - 60, // Position logo 60px to the left of content (50px + 10px for bar alignment)
-                  child: SvgPicture.asset(
-                    'assets/logo.svg',
-                    width: 40,
-                    height: 40,
-                  ),
-                ),
-              // Title text aligned with content left edge
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  margin: EdgeInsets.only(
-                    left: horizontalOffset > 0 ? horizontalOffset : kTitleRowHorizontalMargin,
-                  ),
-                  child: Row(
-                    children: [
-                      // Only show logo inline on narrow screens
-                      if (horizontalOffset <= 0)
-                        Padding(
-                          padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
-                          child: SvgPicture.asset(
-                            'assets/logo.svg',
-                            width: 40,
-                            height: 40,
-                          ),
-                        ),
-                      Text(
-                        'TempHist',
-                        style: TextStyle(
-                          color: kAccentColour,
-                          fontSize: kFontSizeTitle,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+      child: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
+              child: SvgPicture.asset(
+                'assets/logo.svg',
+                width: 40,
+                height: 40,
               ),
-            ],
-          ),
-        );
-      },
+            ),
+            Text(
+              'TempHist',
+              style: TextStyle(
+                color: kAccentColour,
+                fontSize: kFontSizeTitle,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
+        ),
     );
   }
 
   Widget _buildVersionSection() {
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
-          double horizontalOffset = (constraints.maxWidth - contentWidth) / 2;
-          
-          return Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              margin: EdgeInsets.only(
-                left: horizontalOffset > 0 ? horizontalOffset : kTitleRowHorizontalMargin,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Debug Info:',
-                    style: TextStyle(
-                      color: kGreyLabelColour,
-                      fontSize: kFontSizeBody - 2,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Version: ${AppConfig.fullVersion}',
-                    style: TextStyle(
-                      color: kGreyLabelColour,
-                      fontSize: kFontSizeBody - 3,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                  Text(
-                    'Release: ${AppConfig.releaseDate}',
-                    style: TextStyle(
-                      color: kGreyLabelColour,
-                      fontSize: kFontSizeBody - 3,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Debug Info:',
+              style: TextStyle(
+                color: kGreyLabelColour,
+                fontSize: kFontSizeBody - 2,
+                fontWeight: FontWeight.w500,
               ),
             ),
-          );
-        },
-      ),
+            const SizedBox(height: 4),
+            Text(
+              'Version: ${AppConfig.fullVersion}',
+              style: TextStyle(
+                color: kGreyLabelColour,
+                fontSize: kFontSizeBody - 3,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+            Text(
+              'Release: ${AppConfig.releaseDate}',
+              style: TextStyle(
+                color: kGreyLabelColour,
+                fontSize: kFontSizeBody - 3,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
     );
   }
 
   Widget _buildDebugToggleSection() {
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth : 600;
-          double horizontalOffset = (constraints.maxWidth - contentWidth) / 2;
-          
-          return Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              margin: EdgeInsets.only(
-                left: horizontalOffset > 0 ? horizontalOffset : kTitleRowHorizontalMargin,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Debug Mode - Simulate Endpoint Failures:',
-                    style: TextStyle(
-                      color: kGreyLabelColour,
-                      fontSize: kFontSizeBody - 1,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // Use Wrap for responsive button layout
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _buildDebugToggleButton('Average', 'average'),
-                      _buildDebugToggleButton('Trend', 'trend'),
-                      _buildDebugToggleButton('Summary', 'summary'),
-                      _buildResetAllButton(),
-                    ],
-                  ),
-                  if (SIMULATE_ENDPOINT_FAILURES) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Simulation Active: ${_simulateAverageFailure ? "Average" : ""}${_simulateTrendFailure ? (_simulateAverageFailure ? ", " : "") + "Trend" : ""}${_simulateSummaryFailure ? ((_simulateAverageFailure || _simulateTrendFailure) ? ", " : "") + "Summary" : ""}',
-                      style: TextStyle(
-                        color: kAccentColour,
-                        fontSize: kFontSizeBody - 2,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ],
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Debug Mode - Simulate Endpoint Failures:',
+              style: TextStyle(
+                color: kGreyLabelColour,
+                fontSize: kFontSizeBody - 1,
+                fontWeight: FontWeight.w500,
               ),
             ),
-          );
-        },
-      ),
+            const SizedBox(height: 8),
+            // Use Wrap for responsive button layout
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildDebugToggleButton('Average', 'average'),
+                _buildDebugToggleButton('Trend', 'trend'),
+                _buildDebugToggleButton('Summary', 'summary'),
+                _buildResetAllButton(),
+              ],
+            ),
+            if (SIMULATE_ENDPOINT_FAILURES) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Simulation Active: ${_simulateAverageFailure ? "Average" : ""}${_simulateTrendFailure ? (_simulateAverageFailure ? ", " : "") + "Trend" : ""}${_simulateSummaryFailure ? ((_simulateAverageFailure || _simulateTrendFailure) ? ", " : "") + "Summary" : ""}',
+                style: TextStyle(
+                  color: kAccentColour,
+                  fontSize: kFontSizeBody - 2,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ],
+        ),
     );
   }
 
@@ -2003,8 +1924,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + kContentVerticalPadding,
         bottom: MediaQuery.of(context).padding.bottom + kContentVerticalPadding,
-        left: kScreenPadding,
-        right: kScreenPadding,
+        left: kScreenPadding + kContentHorizontalMargin,
+        right: kScreenPadding + kContentHorizontalMargin,
       ),
       child: child,
     );
@@ -2021,112 +1942,98 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     bool isCachedData,
     String? cachedDate,
   ) {
-    // Show a loading state with the chart structure but no visible bars
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(kChartInnerPadding),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth - 20 : 580;
-            return Center(
-              child: Container(
-                width: contentWidth,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Date and location above summary
-                    if (displayDate != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: kSectionHorizontalMargin),
-                            child: Text(
-                              isCachedData && cachedDate != null 
-                                ? _formatDayMonth(DateFormat('yyyy-MM-dd').parse(cachedDate))
-                                : displayDate,
-                              style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                              textAlign: TextAlign.left,
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (city != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                            child: Row(
-                              children: [
-                                Text(
-                                  city,
-                                  style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                                  textAlign: TextAlign.left,
-                                ),
-                                if (isCachedData)
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 8.0),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
-                                      decoration: BoxDecoration(
-                                        color: kGreyLabelColour.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4.0),
-                                      ),
-                                      child: Text(
-                                        'cached',
-                                        style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
-                                        textAlign: TextAlign.left,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (summaryText?.isNotEmpty == true)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                            child: Text(
-                              summaryText!,
-                              style: TextStyle(color: kSummaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                              textAlign: TextAlign.left,
-                            ),
-                          ),
-                        ),
-                      ),
-                    // Show loading message instead of chart
-                    SizedBox(
-                      height: chartHeight,
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const CircularProgressIndicator(
-                              color: kGreyLabelColour,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Loading temperature data...',
-                              style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildDateSection(displayDate, isCachedData, cachedDate),
+          _buildCitySection(city, isCachedData),
+          _buildSummarySection(summaryText),
+          _buildLoadingChartSection(chartHeight),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateSection(String? displayDate, bool isCachedData, String? cachedDate) {
+    if (displayDate == null) return const SizedBox.shrink();
+    
+    final dateToShow = isCachedData && cachedDate != null 
+      ? _formatDayMonth(DateFormat('yyyy-MM-dd').parse(cachedDate))
+      : displayDate;
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+      child: Text(
+        dateToShow,
+        style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+        textAlign: TextAlign.left,
+      ),
+    );
+  }
+
+  Widget _buildCitySection(String? city, bool isCachedData) {
+    if (city == null) return const SizedBox.shrink();
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+      child: Row(
+        children: [
+          Text(
+            city,
+            style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+            textAlign: TextAlign.left,
+          ),
+          if (isCachedData) _buildCachedBadge(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCachedBadge() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+        decoration: BoxDecoration(
+          color: kGreyLabelColour.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(4.0),
         ),
+        child: Text(
+          'cached',
+          style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
+          textAlign: TextAlign.left,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummarySection(String? summaryText) {
+    if (summaryText?.isEmpty != false) return const SizedBox.shrink();
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+      child: Text(
+        summaryText!,
+        style: TextStyle(color: kSummaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+        textAlign: TextAlign.left,
+      ),
+    );
+  }
+
+  Widget _buildLoadingChartSection(double chartHeight) {
+    return SizedBox(
+      height: chartHeight,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const CircularProgressIndicator(color: kGreyLabelColour),
+          const SizedBox(height: 16),
+          Text(
+            'Loading temperature data...',
+            style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
+          ),
+        ],
       ),
     );
   }
@@ -2180,393 +2087,286 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     debugPrintIfDebugging('_buildChartContent: kSummaryColour = $kSummaryColour');
     
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(kChartInnerPadding),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // Reduce content width to provide more margin for chart labels
-            double contentWidth = constraints.maxWidth < 600 ? constraints.maxWidth - 20 : 580;
-            debugPrintIfDebugging('Main content - Screen width: ${constraints.maxWidth}, contentWidth: $contentWidth, isWideScreen: ${constraints.maxWidth >= 600}');
-            return Center(
-              child: Container(
-                width: contentWidth,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Date and location above summary
-                    if (displayDate != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: kSectionHorizontalMargin),
-                            child: Text(
-                              isCachedData && cachedDate != null 
-                                ? _formatDayMonth(DateFormat('yyyy-MM-dd').parse(cachedDate))
-                                : displayDate,
-                              style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                              textAlign: TextAlign.left,
-                            ),
-                          ),
-                        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildDateSection(displayDate, isCachedData, cachedDate),
+          _buildCitySection(city, isCachedData),
+          _buildSummarySection(summaryText),
+          Padding(
+            padding: const EdgeInsets.all(kChartInnerPadding),
+            child: SizedBox(
+              height: chartHeight,
+              child: SfCartesianChart(
+                margin: EdgeInsets.only(
+                  left: kChartHorizontalMargin, // Keep left margin consistent with text
+                  right: kChartHorizontalMargin + 8, // Extra right margin for Y-axis labels
+                ),
+                tooltipBehavior: TooltipBehavior(
+                  enable: true,
+                  format: 'point.x: point.y°C',
+                  canShowMarker: false,
+                  header: '',
+                  textStyle: TextStyle(fontSize: kFontSizeBody),
+                  builder: (data, point, series, pointIndex, seriesIndex) {
+                    final year = data.year;
+                    final temp = data.temperature.toStringAsFixed(1);
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black87,
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                    if (city != null)
+                      child: Text(
+                        '$year: ${temp}°C',
+                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    );
+                  },
+                ),
+                series: [
+                  BarSeries<TemperatureChartData, int>(
+                    onRendererCreated: (ChartSeriesController controller) {
+                      _chartSeriesController = controller;
+                    },
+                    dataSource: chartData,
+                    xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
+                    yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                    pointColorMapper: (TemperatureChartData data, int index) =>
+                        data.isCurrentYear ? kBarCurrentYearColour : kBarOtherYearColour,
+                    width: 0.8, // Restored to proper thickness
+                    name: 'Yearly Temperature',
+                    enableTooltip: true,
+                    // Ensure consistent spacing and prevent edge cropping
+                    spacing: 0.1, // Reduced spacing to maintain bar thickness
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  // Only show average and trend lines after all data has loaded
+                  if (averageTemperature != null && !_isDataLoading)
+                    LineSeries<TemperatureChartData, int>(
+                      dataSource: _generateAverageData(chartData, averageTemperature),
+                      xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
+                      yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                      color: kAverageColour,
+                      width: 2,
+                      name: 'Average Temperature',
+                      markerSettings: MarkerSettings(isVisible: false),
+                    ),
+                  if (trendSlope != null && !_isDataLoading)
+                    LineSeries<TemperatureChartData, int>(
+                      dataSource: _generateTrendData(chartData, trendSlope),
+                      xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
+                      yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                      color: kTrendColour,
+                      width: 2,
+                      name: 'Trend',
+                      markerSettings: MarkerSettings(isVisible: false),
+                    ),
+                ],
+                primaryXAxis: NumericAxis(
+                  labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
+                  majorGridLines: MajorGridLines(width: 0),
+                  labelIntersectAction: AxisLabelIntersectAction.hide,
+                  // For progressive loading, show the full year range (1975-2025) from the start
+                  // This ensures consistent bar spacing as data loads and includes current year
+                  minimum: 1975.0,
+                  maximum: 2025.0,
+                  interval: 5, // Show every 5th year to avoid crowding
+                  labelFormat: '{value}',
+                  // Ensure proper spacing and prevent cropping
+                  plotOffset: 20,
+                ),
+                primaryYAxis: NumericAxis(
+                  labelFormat: '{value}°C',
+                  numberFormat: NumberFormat('0'),
+                  minimum: yAxisMin,
+                  maximum: yAxisMax,
+                  majorGridLines: MajorGridLines(width: 0),
+                  labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
+                  // Ensure bars start at the axis regardless of temperature values
+                  plotOffset: 0,
+                  // Force the axis to respect the exact minimum and maximum values
+                  desiredIntervals: 5,
+                  // Add margin for Y-axis labels
+                  labelPosition: ChartDataLabelPosition.outside,
+                ),
+                plotAreaBorderWidth: 0,
+                enableAxisAnimation: false, // Disable animation to prevent "moving down" effect
+                // Ensure proper spacing for bars
+              ),
+            ),
+          ),
+          // Consistent spacing below chart - always show this
+          const SizedBox(height: kSectionTopPadding),
+          // Average temperature text below chart (only show after loading)
+          if (averageTemperature != null && !_isDataLoading)
+            Padding(
+              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+              child: Text(
+                'Average: ${averageTemperature.toStringAsFixed(1)}°C',
+                style: TextStyle(color: kAverageColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                textAlign: TextAlign.left,
+              ),
+            ),
+                    if (_averageDataFailed)
                       Padding(
                         padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                            child: Row(
-                              children: [
-                                Text(
-                                  city,
-                                  style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                        child: Row(
+                            children: [
+                              Icon(
+                                _isRetryingAverage ? Icons.hourglass_empty : 
+                                _averageDataRateLimited ? Icons.timer : Icons.error_outline,
+                                color: _isRetryingAverage ? kGreyLabelColour : 
+                                       _averageDataRateLimited ? kGreyLabelColour : kAccentColour,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _isRetryingAverage 
+                                    ? 'Retrying average temperature data...'
+                                    : _averageDataRateLimited 
+                                      ? 'Rate limit exceeded - please wait before retrying'
+                                      : 'Failed to load average temperature data',
+                                  style: TextStyle(
+                                    color: _isRetryingAverage ? kGreyLabelColour : 
+                                           _averageDataRateLimited ? kGreyLabelColour : kAccentColour, 
+                                    fontSize: kFontSizeBody - 1, 
+                                    fontWeight: FontWeight.w400
+                                  ),
                                   textAlign: TextAlign.left,
                                 ),
-                                if (isCachedData)
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 8.0),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
-                                      decoration: BoxDecoration(
-                                        color: kGreyLabelColour.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4.0),
-                                      ),
-                                      child: Text(
-                                        'cached',
-                                        style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
-                                        textAlign: TextAlign.left,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (summaryText?.isNotEmpty == true)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                            child: Text(
-                              summaryText!,
-                              style: TextStyle(color: kSummaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                              textAlign: TextAlign.left,
-                            ),
-                          ),
-                        ),
-                      ),
-                    SizedBox(
-                      height: chartHeight,
-                      child: SfCartesianChart(
-                        margin: EdgeInsets.only(
-                          left: kChartHorizontalMargin, // Keep left margin consistent with text
-                          right: kChartHorizontalMargin + 8, // Extra right margin for Y-axis labels
-                        ),
-                        tooltipBehavior: TooltipBehavior(
-                          enable: true,
-                          format: 'point.x: point.y°C',
-                          canShowMarker: false,
-                          header: '',
-                          textStyle: TextStyle(fontSize: kFontSizeBody),
-                          builder: (data, point, series, pointIndex, seriesIndex) {
-                            final year = data.year;
-                            final temp = data.temperature.toStringAsFixed(1);
-                            return Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.black87,
-                                borderRadius: BorderRadius.circular(4),
                               ),
-                              child: Text(
-                                '$year: ${temp}°C',
-                                style: const TextStyle(color: Colors.white, fontSize: 12),
-                              ),
-                            );
-                          },
-                        ),
-                        series: [
-                          BarSeries<TemperatureChartData, int>(
-                            onRendererCreated: (ChartSeriesController controller) {
-                              _chartSeriesController = controller;
-                            },
-                            dataSource: chartData,
-                            xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                            yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                            pointColorMapper: (TemperatureChartData data, int index) =>
-                                data.isCurrentYear ? kBarCurrentYearColour : kBarOtherYearColour,
-                            width: 0.8, // Restored to proper thickness
-                            name: 'Yearly Temperature',
-                            enableTooltip: true,
-                            // Ensure consistent spacing and prevent edge cropping
-                            spacing: 0.1, // Reduced spacing to maintain bar thickness
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                          // Only show average and trend lines after all data has loaded
-                          if (averageTemperature != null && !_isDataLoading)
-                            LineSeries<TemperatureChartData, int>(
-                              dataSource: _generateAverageData(chartData, averageTemperature),
-                              xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                              yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                              color: kAverageColour,
-                              width: 2,
-                              name: 'Average Temperature',
-                              markerSettings: MarkerSettings(isVisible: false),
-                            ),
-                          if (trendSlope != null && !_isDataLoading)
-                            LineSeries<TemperatureChartData, int>(
-                              dataSource: _generateTrendData(chartData, trendSlope),
-                              xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                              yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                              color: kTrendColour,
-                              width: 2,
-                              name: 'Trend',
-                              markerSettings: MarkerSettings(isVisible: false),
-                            ),
-                        ],
-                        primaryXAxis: NumericAxis(
-                          labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
-                          majorGridLines: MajorGridLines(width: 0),
-                          labelIntersectAction: AxisLabelIntersectAction.hide,
-                          // For progressive loading, show the full year range (1975-2025) from the start
-                          // This ensures consistent bar spacing as data loads and includes current year
-                          minimum: 1975.0,
-                          maximum: 2025.0,
-                          interval: 5, // Show every 5th year to avoid crowding
-                          labelFormat: '{value}',
-                          // Ensure proper spacing and prevent cropping
-                          plotOffset: 20,
-                        ),
-                        primaryYAxis: NumericAxis(
-                          labelFormat: '{value}°C',
-                          numberFormat: NumberFormat('0'),
-                          minimum: yAxisMin,
-                          maximum: yAxisMax,
-                          majorGridLines: MajorGridLines(width: 0),
-                          labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
-                          // Ensure bars start at the axis regardless of temperature values
-                          plotOffset: 0,
-                          // Force the axis to respect the exact minimum and maximum values
-                          desiredIntervals: 5,
-                          // Add margin for Y-axis labels
-                          labelPosition: ChartDataLabelPosition.outside,
-                        ),
-                        plotAreaBorderWidth: 0,
-                        enableAxisAnimation: false, // Disable animation to prevent "moving down" effect
-                        // Ensure proper spacing for bars
-                      ),
-                    ),
-                    // Consistent spacing below chart - always show this
-                    const SizedBox(height: kSectionTopPadding),
-                    // Average temperature text below chart (only show after loading)
-                    if (averageTemperature != null && !_isDataLoading)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                            child: Text(
-                              'Average: ${averageTemperature.toStringAsFixed(1)}°C',
-                              style: TextStyle(color: kAverageColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                              textAlign: TextAlign.left,
-                            ),
-                          ),
-                        ),
-                      )
-                    else if (_averageDataFailed)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  _isRetryingAverage ? Icons.hourglass_empty : 
-                                  _averageDataRateLimited ? Icons.timer : Icons.error_outline,
-                                  color: _isRetryingAverage ? kGreyLabelColour : 
-                                         _averageDataRateLimited ? kGreyLabelColour : kAccentColour,
-                                  size: 16,
-                                ),
+                              if (!_isRetryingAverage && !_averageDataRateLimited) ...[
                                 const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _isRetryingAverage 
-                                      ? 'Retrying average temperature data...'
-                                      : _averageDataRateLimited 
-                                        ? 'Rate limit exceeded - please wait before retrying'
-                                        : 'Failed to load average temperature data',
-                                    style: TextStyle(
-                                      color: _isRetryingAverage ? kGreyLabelColour : 
-                                             _averageDataRateLimited ? kGreyLabelColour : kAccentColour, 
-                                      fontSize: kFontSizeBody - 1, 
-                                      fontWeight: FontWeight.w400
+                                GestureDetector(
+                                  onTap: _retryAverageData,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: kAccentColour.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
                                     ),
-                                    textAlign: TextAlign.left,
+                                    child: Text(
+                                      'Retry',
+                                      style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                                    ),
                                   ),
                                 ),
-                                if (!_isRetryingAverage && !_averageDataRateLimited) ...[
-                                  const SizedBox(width: 8),
-                                  GestureDetector(
-                                    onTap: _retryAverageData,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: kAccentColour.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        'Retry',
-                                        style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                                      ),
-                                    ),
-                                  ),
-                                ],
                               ],
-                            ),
+                            ],
                           ),
-                        ),
                       ),
                     // Trend text below chart (only show after loading)
                     if (trendSlope != null && !_isDataLoading)
                       Padding(
                         padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                            child: Text(
-                              trendSlope > 0 
-                                ? 'Trend: Rising at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
-                                : 'Trend: Falling at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
-                              style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                              textAlign: TextAlign.left,
-                            ),
+                        child: Text(
+                            trendSlope > 0 
+                              ? 'Trend: Rising at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
+                              : 'Trend: Falling at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
+                            style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                            textAlign: TextAlign.left,
                           ),
-                        ),
-                      )
-                    else if (_trendDataFailed)
+                      ),
+                    if (_trendDataFailed)
                       Padding(
                         padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  _isRetryingTrend ? Icons.hourglass_empty : Icons.error_outline,
-                                  color: _isRetryingTrend ? kGreyLabelColour : kAccentColour,
-                                  size: 16,
+                        child: Row(
+                            children: [
+                              Icon(
+                                _isRetryingTrend ? Icons.hourglass_empty : Icons.error_outline,
+                                color: _isRetryingTrend ? kGreyLabelColour : kAccentColour,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _isRetryingTrend 
+                                    ? 'Retrying trend data...'
+                                    : _trendDataRateLimited 
+                                      ? 'Rate limit exceeded - please wait before retrying'
+                                      : 'Failed to load trend data',
+                                  style: TextStyle(
+                                    color: _isRetryingTrend ? kGreyLabelColour : 
+                                           _trendDataRateLimited ? kGreyLabelColour : kAccentColour, 
+                                    fontSize: kFontSizeBody - 1, 
+                                    fontWeight: FontWeight.w400
+                                  ),
+                                  textAlign: TextAlign.left,
                                 ),
+                              ),
+                              if (!_isRetryingTrend && !_trendDataRateLimited) ...[
                                 const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _isRetryingTrend 
-                                      ? 'Retrying trend data...'
-                                      : _trendDataRateLimited 
-                                        ? 'Rate limit exceeded - please wait before retrying'
-                                        : 'Failed to load trend data',
-                                    style: TextStyle(
-                                      color: _isRetryingTrend ? kGreyLabelColour : 
-                                             _trendDataRateLimited ? kGreyLabelColour : kAccentColour, 
-                                      fontSize: kFontSizeBody - 1, 
-                                      fontWeight: FontWeight.w400
+                                GestureDetector(
+                                  onTap: _retryTrendData,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: kAccentColour.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
                                     ),
-                                    textAlign: TextAlign.left,
+                                    child: Text(
+                                      'Retry',
+                                      style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                                    ),
                                   ),
                                 ),
-                                if (!_isRetryingTrend && !_trendDataRateLimited) ...[
-                                  const SizedBox(width: 8),
-                                  GestureDetector(
-                                    onTap: _retryTrendData,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: kAccentColour.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        'Retry',
-                                        style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                                      ),
-                                    ),
-                                  ),
-                                ],
                               ],
-                            ),
+                            ],
                           ),
-                        ),
                       ),
                     // Summary error message if it failed
                     if (_summaryDataFailed)
                       Padding(
                         padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  _isRetryingSummary ? Icons.hourglass_empty : Icons.error_outline,
-                                  color: _isRetryingSummary ? kGreyLabelColour : kAccentColour,
-                                  size: 16,
+                        child: Row(
+                            children: [
+                              Icon(
+                                _isRetryingSummary ? Icons.hourglass_empty : Icons.error_outline,
+                                color: _isRetryingSummary ? kGreyLabelColour : kAccentColour,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _isRetryingSummary 
+                                    ? 'Retrying summary data...'
+                                    : _summaryDataRateLimited 
+                                      ? 'Rate limit exceeded - please wait before retrying'
+                                      : 'Failed to load summary data',
+                                  style: TextStyle(
+                                    color: _isRetryingSummary ? kGreyLabelColour : 
+                                           _summaryDataRateLimited ? kGreyLabelColour : kAccentColour, 
+                                    fontSize: kFontSizeBody - 1, 
+                                    fontWeight: FontWeight.w400
+                                  ),
+                                  textAlign: TextAlign.left,
                                 ),
+                              ),
+                              if (!_isRetryingSummary && !_summaryDataRateLimited) ...[
                                 const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _isRetryingSummary 
-                                      ? 'Retrying summary data...'
-                                      : _summaryDataRateLimited 
-                                        ? 'Rate limit exceeded - please wait before retrying'
-                                        : 'Failed to load summary data',
-                                    style: TextStyle(
-                                      color: _isRetryingSummary ? kGreyLabelColour : 
-                                             _summaryDataRateLimited ? kGreyLabelColour : kAccentColour, 
-                                      fontSize: kFontSizeBody - 1, 
-                                      fontWeight: FontWeight.w400
+                                GestureDetector(
+                                  onTap: _retrySummaryData,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: kAccentColour.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
                                     ),
-                                    textAlign: TextAlign.left,
+                                    child: Text(
+                                      'Retry',
+                                      style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                                    ),
                                   ),
                                 ),
-                                if (!_isRetryingSummary && !_summaryDataRateLimited) ...[
-                                  const SizedBox(width: 8),
-                                  GestureDetector(
-                                    onTap: _retrySummaryData,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: kAccentColour.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        'Retry',
-                                        style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                                      ),
-                                    ),
-                                  ),
-                                ],
                               ],
-                            ),
+                            ],
                           ),
-                        ),
                       ),
                     // Data completeness indicator
                     _buildDataCompletenessIndicator(chartData),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
+        ],
       ),
     );
   }
@@ -2588,152 +2388,174 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     ).toList();
     
     if (hasGaps || missingRecentYears.isNotEmpty) {
-      // Sort missing years for better display
-      missingYears.sort();
-      
-      // Group consecutive missing years for cleaner display
-      final missingRanges = _groupConsecutiveYears(missingYears);
-      
-      String missingText;
-      if (missingRanges.length == 1 && missingRanges.first.length == 1) {
-        // Single year missing
-        missingText = 'Year ${missingRanges.first.first} is missing';
-      } else if (missingRanges.length == 1) {
-        // Consecutive years missing
-        missingText = 'Years ${missingRanges.first.first}-${missingRanges.first.last} are missing';
-      } else {
-        // Multiple ranges missing
-        final ranges = missingRanges.map((range) {
-          if (range.length == 1) return range.first.toString();
-          return '${range.first}-${range.last}';
-        }).join(', ');
-        missingText = 'Years $ranges are missing';
-      }
-      
-      // Add note about missing recent years if applicable
-      if (missingRecentYears.isNotEmpty) {
-        final recentRanges = _groupConsecutiveYears(missingRecentYears);
-        String recentText;
-        if (recentRanges.length == 1 && recentRanges.first.length == 1) {
-          recentText = 'Year ${recentRanges.first.first}';
-        } else if (recentRanges.length == 1) {
-          recentText = 'Years ${recentRanges.first.first}-${recentRanges.first.last}';
-        } else {
-          final ranges = recentRanges.map((range) {
-            if (range.length == 1) return range.first.toString();
-            return '${range.first}-${range.last}';
-          }).join(', ');
-          recentText = 'Years $ranges';
-        }
-        
-        if (missingText.isNotEmpty) {
-          missingText += '. Recent data ($recentText) is not yet available';
-        } else {
-          missingText = 'Recent data ($recentText) is not yet available';
-        }
-      }
+      final missingText = _buildMissingYearsText(missingYears, missingRecentYears);
       
       return Padding(
         padding: const EdgeInsets.only(top: kSectionTopPadding, bottom: kSectionBottomPadding),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: kCitySummaryHorizontalMargin),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Note: $missingText.',
-                  style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
-                  textAlign: TextAlign.left,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Data completeness: ${((chartData.where((data) => data.hasData).length / chartData.length) * 100).toStringAsFixed(0)}%',
-                  style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
-                  textAlign: TextAlign.left,
-                ),
-                if (_chartDataRetryCount < _maxChartDataRetries) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        _isRetryingChartData ? Icons.hourglass_empty : Icons.refresh,
-                        color: _isRetryingChartData ? kGreyLabelColour : kAccentColour,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _isRetryingChartData 
-                            ? 'Retrying chart data...'
-                            : 'Missing data may be temporary. Try refreshing.',
-                          style: TextStyle(
-                            color: _isRetryingChartData ? kGreyLabelColour : kGreyLabelColour, 
-                            fontSize: kFontSizeBody - 2, 
-                            fontWeight: FontWeight.w400
-                          ),
-                          textAlign: TextAlign.left,
-                        ),
-                      ),
-                      if (!_isRetryingChartData) ...[
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: _retryChartData,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: kAccentColour.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'Retry',
-                              style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  if (_chartDataRetryCount > 0) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Retry attempts: $_chartDataRetryCount/$_maxChartDataRetries',
-                      style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 3, fontWeight: FontWeight.w400),
-                      textAlign: TextAlign.left,
-                    ),
-                  ],
-                ] else ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        color: kGreyLabelColour,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Data appears to be genuinely incomplete for this location. Some years may not have historical data available.',
-                          style: TextStyle(
-                            color: kGreyLabelColour, 
-                            fontSize: kFontSizeBody - 2, 
-                            fontWeight: FontWeight.w400
-                          ),
-                          textAlign: TextAlign.left,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Note: $missingText.',
+              style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
+              textAlign: TextAlign.left,
             ),
-          ),
+            const SizedBox(height: 4),
+            Text(
+              'Data completeness: ${((chartData.where((data) => data.hasData).length / chartData.length) * 100).toStringAsFixed(0)}%',
+              style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
+              textAlign: TextAlign.left,
+            ),
+            _buildDataRetrySection(),
+            _buildRetryAttemptsOrInfoSection(),
+          ],
         ),
       );
     }
     return const SizedBox.shrink();
+  }
+
+  String _buildMissingYearsText(List<int> missingYears, List<int> missingRecentYears) {
+    // Sort missing years for better display
+    missingYears.sort();
+    
+    // Group consecutive missing years for cleaner display
+    final missingRanges = _groupConsecutiveYears(missingYears);
+    
+    String missingText;
+    if (missingRanges.length == 1 && missingRanges.first.length == 1) {
+      // Single year missing
+      missingText = 'Year ${missingRanges.first.first} is missing';
+    } else if (missingRanges.length == 1) {
+      // Consecutive years missing
+      missingText = 'Years ${missingRanges.first.first}-${missingRanges.first.last} are missing';
+    } else {
+      // Multiple ranges missing
+      final ranges = missingRanges.map((range) {
+        if (range.length == 1) return range.first.toString();
+        return '${range.first}-${range.last}';
+      }).join(', ');
+      missingText = 'Years $ranges are missing';
+    }
+    
+    // Add note about missing recent years if applicable
+    if (missingRecentYears.isNotEmpty) {
+      final recentRanges = _groupConsecutiveYears(missingRecentYears);
+      String recentText;
+      if (recentRanges.length == 1 && recentRanges.first.length == 1) {
+        recentText = 'Year ${recentRanges.first.first}';
+      } else if (recentRanges.length == 1) {
+        recentText = 'Years ${recentRanges.first.first}-${recentRanges.first.last}';
+      } else {
+        final ranges = recentRanges.map((range) {
+          if (range.length == 1) return range.first.toString();
+          return '${range.first}-${range.last}';
+        }).join(', ');
+        recentText = 'Years $ranges';
+      }
+      
+      if (missingText.isNotEmpty) {
+        missingText += '. Recent data ($recentText) is not yet available';
+      } else {
+        missingText = 'Recent data ($recentText) is not yet available';
+      }
+    }
+    
+    return missingText;
+  }
+
+  Widget _buildDataRetrySection() {
+    if (_chartDataRetryCount >= _maxChartDataRetries) {
+      return const SizedBox.shrink();
+    }
+    
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(
+              _isRetryingChartData ? Icons.hourglass_empty : Icons.refresh,
+              color: _isRetryingChartData ? kGreyLabelColour : kAccentColour,
+              size: 16,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _isRetryingChartData 
+                  ? 'Retrying chart data...'
+                  : 'Missing data may be temporary. Try refreshing.',
+                style: TextStyle(
+                  color: kGreyLabelColour, 
+                  fontSize: kFontSizeBody - 2, 
+                  fontWeight: FontWeight.w400
+                ),
+                textAlign: TextAlign.left,
+              ),
+            ),
+            if (!_isRetryingChartData) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _retryChartData,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: kAccentColour.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Retry',
+                    style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRetryAttemptsOrInfoSection() {
+    if (_chartDataRetryCount > 0) {
+      return Column(
+        children: [
+          const SizedBox(height: 4),
+          Text(
+            'Retry attempts: $_chartDataRetryCount/$_maxChartDataRetries',
+            style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 3, fontWeight: FontWeight.w400),
+            textAlign: TextAlign.left,
+          ),
+        ],
+      );
+    } else {
+      return Column(
+        children: [
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                color: kGreyLabelColour,
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Data appears to be genuinely incomplete for this location. Some years may not have historical data available.',
+                  style: TextStyle(
+                    color: kGreyLabelColour, 
+                    fontSize: kFontSizeBody - 2, 
+                    fontWeight: FontWeight.w400
+                  ),
+                  textAlign: TextAlign.left,
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
   }
 
   /// Group consecutive years into ranges for cleaner display
