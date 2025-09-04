@@ -476,10 +476,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
               _isRetryingAverage = false;
             });
             // Update the current data with new average
-            if (futureChartData != null) {
-              // We need to rebuild the data with the new average
-              _rebuildDataWithNewAverage(newAverage);
-            }
+            _rebuildDataWithNewAverage(newAverage);
             // Stop auto-retry timer if no more failures
             if (!_trendDataFailed && !_summaryDataFailed) {
               _stopAutoRetryTimer();
@@ -526,9 +523,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
               _isRetryingTrend = false;
             });
             // Update the current data with new trend
-            if (futureChartData != null) {
-              _rebuildDataWithNewTrend((newSlope as num).toDouble());
-            }
+            _rebuildDataWithNewTrend((newSlope as num).toDouble());
             // Stop auto-retry timer if no more failures
             if (!_averageDataFailed && !_summaryDataFailed) {
               _stopAutoRetryTimer();
@@ -561,9 +556,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
               _isRetryingSummary = false;
             });
             // Update the current data with new summary
-            if (futureChartData != null) {
-              _rebuildDataWithNewSummary(newSummary);
-            }
+            _rebuildDataWithNewSummary(newSummary);
             // Stop auto-retry timer if no more failures
             if (!_averageDataFailed && !_trendDataFailed) {
               _stopAutoRetryTimer();
