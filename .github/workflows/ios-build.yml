@@ -1,0 +1,44 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.0'
+        channel: 'stable'
+    
+    - name: Install dependencies
+      run: flutter pub get
+    
+    - name: Install CocoaPods
+      run: |
+        cd ios
+        pod install
+    
+    - name: List available simulators
+      run: xcrun simctl list devices available
+    
+    - name: Build iOS (no codesign)
+      run: |
+        flutter build ios --release --no-codesign
+      env:
+        FLUTTER_BUILD_MODE: release
+    
+    - name: Upload iOS build
+      uses: actions/upload-artifact@v4
+      with:
+        name: ios-build-${{ github.sha }}
+        path: build/ios/iphoneos/Runner.app
+        retention-days: 30
