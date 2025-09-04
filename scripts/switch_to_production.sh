@@ -3,13 +3,17 @@
 # Script to switch the app to production mode
 echo "Switching to production mode..."
 
-# Update the build config to use environment variable for production
-sed -i '' 's/defaultValue: true/defaultValue: false/' lib/config/build_config.dart
-
-echo "✅ Switched to production mode"
-echo "📱 Debug features are now disabled"
-echo "🔒 Debug UI will not be shown"
-echo "📊 Debug logging is disabled"
+echo "✅ Production mode configuration ready"
+echo "📱 Debug features will be disabled in release builds"
+echo "🔒 Debug UI will not be shown in release builds"
+echo "📊 Debug logging is disabled in release builds"
 echo ""
-echo "To switch back to debug mode, run: ./scripts/switch_to_debug.sh"
-echo "To test, run: flutter run --debug"
+echo "To build for production:"
+echo "  flutter build apk --release"
+echo "  flutter build ios --release"
+echo "  flutter build web --release"
+echo ""
+echo "To test in debug mode: flutter run --debug"
+echo "To test in production mode: flutter run --release"
+echo ""
+echo "Note: The app automatically uses production config when built with --release flag"
