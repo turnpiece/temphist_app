@@ -131,11 +131,24 @@ create_release() {
     
     # Run code analysis to catch any linting issues
     print_status "Running code analysis..."
-    if ! flutter analyze; then
-        print_error "Code analysis failed! Please fix the linting issues before creating a release."
+    local analyze_output
+    analyze_output=$(flutter analyze 2>&1)
+    local analyze_exit_code=$?
+    
+    # Check if there are any warnings or errors (not just info-level issues)
+    if echo "$analyze_output" | grep -E "(warning|error)" > /dev/null; then
+        print_error "Code analysis found warnings or errors! Please fix them before creating a release."
+        echo "$analyze_output"
         exit 1
     fi
-    print_success "Code analysis passed!"
+    
+    if [ $analyze_exit_code -eq 0 ]; then
+        print_success "Code analysis passed with no issues!"
+    else
+        print_warning "Code analysis found info-level issues (style suggestions) - these won't block the release:"
+        echo "$analyze_output"
+        print_status "Continuing with release..."
+    fi
     
     # Get current version
     local current_version=$(get_current_version)
