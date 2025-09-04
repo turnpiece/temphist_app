@@ -17,6 +17,7 @@ import 'dart:async'; // Added for StreamSubscription and StreamController
 import 'services/temperature_service.dart';
 import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
+import 'constants.dart';
 
 // App color constants
 // Note: These are no longer const because they depend on runtime configuration
@@ -301,6 +302,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       return;
     }
     
+    // Verbose logging for initialization steps
+    DebugUtils.verboseLazy(() => 'Initializing app - test future: ${widget.testFuture != null}');
+    
     // Clear cache to ensure progressive loading is visible
     await _clearCache();
     
@@ -320,6 +324,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     
     // Start progressive loading in the background
     _loadChartDataProgressive();
+    
+    DebugUtils.verboseLazy(() => 'App initialization completed - location: $_determinedLocation, loading: $_isDataLoading');
   }
 
   Future<void> _checkAndRefreshLocationIfNeeded() async {
@@ -908,6 +914,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       }
       
       debugPrintIfDebugging('_determineLocation: Final city: $city');
+      
+      // Verbose logging for location determination
+      DebugUtils.verboseWithContextLazy('Location', () => 'Determined location: $city (display: ${_extractDisplayLocation(city)})');
       
       // Update the UI with the determined location
       setState(() {

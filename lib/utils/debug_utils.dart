@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
+import '../constants.dart';
 
 /// Debug utility functions that are only active in debug mode
 /// Uses kDebugMode for zero-cost production builds
 class DebugUtils {
   /// Legacy: keep this if you still want to pass a string.
   /// Note: String building still happens even in production builds.
+  @Deprecated('Use DebugUtils.logLazy(() => ...) instead for zero-cost when disabled.')
   static void log(String message) {
     if (kDebugMode) {
       // ignore: avoid_print
@@ -56,24 +58,67 @@ class DebugUtils {
     }
   }
   
-  /// Print debug message only in verbose mode (for future use)
+  /// Print debug message only in verbose mode
+  /// Uses verboseLogs constant for production builds
   static void verbose(String message) {
-    if (kDebugMode) {
+    if (kDebugMode || verboseLogs) {
       // ignore: avoid_print
       print('VERBOSE: $message');
     }
   }
   
   /// Print verbose message using lazy evaluation
+  /// Uses verboseLogs constant for production builds
   static void verboseLazy(Object? Function() messageBuilder) {
-    if (kDebugMode) {
+    if (kDebugMode || verboseLogs) {
       // ignore: avoid_print
       print('VERBOSE: ${messageBuilder()}');
     }
   }
   
+  /// Print verbose message with timestamp
+  /// Uses verboseLogs constant for production builds
+  static void verboseWithTimestamp(String message) {
+    if (kDebugMode || verboseLogs) {
+      final timestamp = DateTime.now().toIso8601String();
+      // ignore: avoid_print
+      print('VERBOSE [$timestamp]: $message');
+    }
+  }
+  
+  /// Print verbose message with timestamp using lazy evaluation
+  /// Uses verboseLogs constant for production builds
+  static void verboseWithTimestampLazy(Object? Function() messageBuilder) {
+    if (kDebugMode || verboseLogs) {
+      final timestamp = DateTime.now().toIso8601String();
+      // ignore: avoid_print
+      print('VERBOSE [$timestamp]: ${messageBuilder()}');
+    }
+  }
+  
+  /// Print verbose message with context
+  /// Uses verboseLogs constant for production builds
+  static void verboseWithContext(String context, String message) {
+    if (kDebugMode || verboseLogs) {
+      // ignore: avoid_print
+      print('VERBOSE [$context]: $message');
+    }
+  }
+  
+  /// Print verbose message with context using lazy evaluation
+  /// Uses verboseLogs constant for production builds
+  static void verboseWithContextLazy(String context, Object? Function() messageBuilder) {
+    if (kDebugMode || verboseLogs) {
+      // ignore: avoid_print
+      print('VERBOSE [$context]: ${messageBuilder()}');
+    }
+  }
+  
   /// Check if debug mode is enabled (uses kDebugMode for zero-cost)
   static bool get isEnabled => kDebugMode;
+  
+  /// Check if verbose logging is enabled (uses verboseLogs constant)
+  static bool get isVerboseEnabled => kDebugMode || verboseLogs;
   
   /// Check if debug UI should be shown (still uses AppConfig for app-specific settings)
   static bool get shouldShowDebugUI => AppConfig.shouldShowDebugFeatures;
