@@ -121,6 +121,22 @@ create_release() {
     check_clean_working_directory
     check_develop_merged
     
+    # Run tests to ensure everything is working
+    print_status "Running tests to ensure code quality..."
+    if ! flutter test; then
+        print_error "Tests failed! Please fix the failing tests before creating a release."
+        exit 1
+    fi
+    print_success "All tests passed!"
+    
+    # Run code analysis to catch any linting issues
+    print_status "Running code analysis..."
+    if ! flutter analyze; then
+        print_error "Code analysis failed! Please fix the linting issues before creating a release."
+        exit 1
+    fi
+    print_success "Code analysis passed!"
+    
     # Get current version
     local current_version=$(get_current_version)
     local current_build=$(get_current_build)
