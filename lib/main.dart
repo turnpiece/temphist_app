@@ -1115,26 +1115,33 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         try {
           final tempData = await service.fetchTemperature(city, dateForYear);
           
-          // Add the new data point to the chart data
-          final newDataPoint = TemperatureChartData(
-            year: year.toString(),
-            temperature: tempData.temperature ?? tempData.average?.temperature ?? 0.0,
-            isCurrentYear: year == currentYear,
-            hasData: true,
-          );
+          // Check if we have valid temperature data
+          final temperature = tempData.temperature ?? tempData.average?.temperature;
           
-          // Add to the chart data list
-          chartData.add(newDataPoint);
-          
-          // Update the current data and trigger a rebuild
-          _currentData!['chartData'] = chartData;
-          
-          // Trigger a UI update to show the new bar
-          if (mounted) {
-            setState(() {});
+          if (temperature != null) {
+            // Add the new data point to the chart data
+            final newDataPoint = TemperatureChartData(
+              year: year.toString(),
+              temperature: temperature,
+              isCurrentYear: year == currentYear,
+              hasData: true,
+            );
+            
+            // Add to the chart data list
+            chartData.add(newDataPoint);
+            
+            // Update the current data and trigger a rebuild
+            _currentData!['chartData'] = chartData;
+            
+            // Trigger a UI update to show the new bar
+            if (mounted) {
+              setState(() {});
+            }
+            
+            debugPrintIfDebugging('Added data for year $year at index ${chartData.length - 1}');
+          } else {
+            debugPrintIfDebugging('No valid temperature data for year $year, skipping');
           }
-          
-          debugPrintIfDebugging('Added data for year $year at index ${chartData.length - 1}');
         } catch (e) {
           debugPrintIfDebugging('Failed to fetch temperature for year $year: $e');
           
