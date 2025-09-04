@@ -1730,13 +1730,29 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
       child: Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
-              child: SvgPicture.asset(
-                'assets/logo.svg',
-                width: 40,
-                height: 40,
-              ),
+            Builder(
+              builder: (context) {
+                final screenWidth = MediaQuery.of(context).size.width;
+                final isTablet = screenWidth >= 768;
+                
+                // Only apply transform on phones to align logo with content
+                // On tablets, logo doesn't need to align with anything
+                final logoWidget = Padding(
+                  padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
+                  child: SvgPicture.asset(
+                    'assets/logo.svg',
+                    width: 40,
+                    height: 40,
+                  ),
+                );
+                
+                return isTablet 
+                  ? logoWidget 
+                  : Transform.translate(
+                      offset: const Offset(-8.0, 0.0), // Shift logo 8px left to compensate for SVG's internal left margin
+                      child: logoWidget,
+                    );
+              },
             ),
             Text(
               'TempHist',
@@ -1753,9 +1769,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   Widget _buildVersionSection() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Column(
+    return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -1784,14 +1798,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
               ),
             ),
           ],
-        ),
-    );
+        );
   }
 
   Widget _buildDebugToggleSection() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Column(
+    return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -1826,8 +1837,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
               ),
             ],
           ],
-        ),
-    );
+        );
   }
 
   Widget _buildDebugToggleButton(String label, String endpoint) {
@@ -1930,13 +1940,122 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     );
   }
 
-  Widget _buildContentPadding(BuildContext context, Widget child) {
+  Widget _buildConstrainedContent(BuildContext context, double chartHeight) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final screenHeight = MediaQuery.of(context).size.height;
+        final isLandscapeTablet = screenWidth >= 768 && screenHeight < screenWidth;
+        
+        // For landscape tablets, constrain the overall content area width to 650px max
+        final maxContentWidth = isLandscapeTablet ? 650.0 : constraints.maxWidth;
+        final contentWidth = constraints.maxWidth > maxContentWidth ? maxContentWidth : constraints.maxWidth;
+        final horizontalMargin = isLandscapeTablet ? (constraints.maxWidth - contentWidth) / 2 : 0.0;
+        
+        return Container(
+          width: constraints.maxWidth,
+          child: Center(
+            child: Container(
+              width: contentWidth,
+              margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // --- Title/logo row: uses normal padding, not iPad indentation ---
+                  _buildTitlePadding(context, _buildTitleLogoSection()),
+                  // Debug features (only show when debugging)
+                  if (AppConfig.shouldShowDebugFeatures) ...[
+                    _buildDebugPadding(context, _buildDebugToggleSection()),
+                    _buildDebugPadding(context, _buildVersionSection()),
+                  ],
+                  // --- The rest of the UI, including the FutureBuilder ---
+                  _buildContentPadding(context, _buildFutureBuilder(chartHeight: chartHeight)),
+                  // Add extra space to ensure content is always scrollable
+                  _buildContentPadding(context, const SizedBox(height: 100)),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTitlePadding(BuildContext context, Widget child) {
     return Padding(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + kContentVerticalPadding,
-        bottom: MediaQuery.of(context).padding.bottom + kContentVerticalPadding,
+        bottom: kSectionBottomPadding,
         left: kScreenPadding + kContentHorizontalMargin,
         right: kScreenPadding + kContentHorizontalMargin,
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildDebugPadding(BuildContext context, Widget child) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth >= 768; // iPad threshold
+    
+    double leftPadding;
+    double rightPadding;
+    
+    if (isTablet) {
+      // For all iPads, align debug content with the title text (not the logo)
+      final titleTextStartPosition = 40 + 6; // Logo width + right padding
+      leftPadding = kScreenPadding + kContentHorizontalMargin + titleTextStartPosition;
+      rightPadding = leftPadding; // Symmetric padding
+    } else {
+      // For phones, use the original padding
+      leftPadding = kScreenPadding + kContentHorizontalMargin;
+      rightPadding = kScreenPadding + kContentHorizontalMargin;
+    }
+    
+    // Ensure padding values are non-negative
+    leftPadding = leftPadding.clamp(0.0, double.infinity);
+    rightPadding = rightPadding.clamp(0.0, double.infinity);
+    
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: 8.0, // Reduced bottom padding for debug sections
+        left: leftPadding,
+        right: rightPadding,
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildContentPadding(BuildContext context, Widget child) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isTablet = screenWidth >= 768; // iPad threshold
+    
+    double leftPadding;
+    double rightPadding;
+    
+    if (isTablet) {
+      // For all iPads (both portrait and landscape), align content with the title text (not the logo)
+      // Calculate the position where the title text starts
+      // Logo width (40) + logo right padding (6) = 46px from left edge
+      // We want content to align with the title text, so we need to account for the logo's visual position
+      final titleTextStartPosition = 40 + 6; // Logo width + right padding (logo stays in original position)
+      leftPadding = kScreenPadding + kContentHorizontalMargin + titleTextStartPosition;
+      rightPadding = leftPadding; // Symmetric padding
+    } else {
+      // For phones, use the original padding
+      leftPadding = kScreenPadding + kContentHorizontalMargin;
+      rightPadding = kScreenPadding + kContentHorizontalMargin;
+    }
+    
+    // Ensure padding values are non-negative
+    leftPadding = leftPadding.clamp(0.0, double.infinity);
+    rightPadding = rightPadding.clamp(0.0, double.infinity);
+    
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).padding.bottom + kContentVerticalPadding,
+        left: leftPadding,
+        right: rightPadding,
       ),
       child: child,
     );
@@ -2106,105 +2225,127 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           _buildSummarySection(summaryText),
           Padding(
             padding: const EdgeInsets.all(kChartInnerPadding),
-            child: SizedBox(
-              height: chartHeight,
-              child: SfCartesianChart(
-                margin: EdgeInsets.only(
-                  left: kChartHorizontalMargin, // Keep left margin consistent with text
-                  right: kChartHorizontalMargin + 8, // Extra right margin for Y-axis labels
-                ),
-                tooltipBehavior: TooltipBehavior(
-                  enable: true,
-                  format: 'point.x: point.y°C',
-                  canShowMarker: false,
-                  header: '',
-                  textStyle: TextStyle(fontSize: kFontSizeBody),
-                  builder: (data, point, series, pointIndex, seriesIndex) {
-                    final year = data.year;
-                    final temp = data.temperature.toStringAsFixed(1);
-                    return Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black87,
-                        borderRadius: BorderRadius.circular(4),
+            child: Builder(
+              builder: (context) {
+                final screenWidth = MediaQuery.of(context).size.width;
+                final isTablet = screenWidth >= 768; // iPad threshold
+                
+                // On tablets, constrain chart width to a reasonable maximum
+                final chartWidth = isTablet ? 600.0 : screenWidth;
+                
+                // Create the chart widget once to avoid duplication
+                final chartWidget = SfCartesianChart(
+                  margin: EdgeInsets.only(
+                    left: kChartHorizontalMargin, // Keep left margin consistent with text
+                    right: kChartHorizontalMargin + 8, // Extra right margin for Y-axis labels
+                  ),
+                  tooltipBehavior: TooltipBehavior(
+                    enable: true,
+                    format: 'point.x: point.y°C',
+                    canShowMarker: false,
+                    header: '',
+                    textStyle: TextStyle(fontSize: kFontSizeBody),
+                    builder: (data, point, series, pointIndex, seriesIndex) {
+                      final year = data.year;
+                      final temp = data.temperature.toStringAsFixed(1);
+                      return Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black87,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '$year: ${temp}°C',
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      );
+                    },
+                  ),
+                  series: [
+                    BarSeries<TemperatureChartData, int>(
+                      onRendererCreated: (ChartSeriesController controller) {
+                        _chartSeriesController = controller;
+                      },
+                      dataSource: chartData,
+                      xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
+                      yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                      pointColorMapper: (TemperatureChartData data, int index) =>
+                          data.isCurrentYear ? kBarCurrentYearColour : kBarOtherYearColour,
+                      width: 0.8, // Restored to proper thickness
+                      name: 'Yearly Temperature',
+                      enableTooltip: true,
+                      // Ensure consistent spacing and prevent edge cropping
+                      spacing: 0.1, // Reduced spacing to maintain bar thickness
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    // Only show average and trend lines after all data has loaded
+                    if (averageTemperature != null && !_isDataLoading)
+                      LineSeries<TemperatureChartData, int>(
+                        dataSource: _generateAverageData(chartData, averageTemperature),
+                        xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
+                        yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                        color: kAverageColour,
+                        width: 2,
+                        name: 'Average Temperature',
+                        markerSettings: MarkerSettings(isVisible: false),
                       ),
-                      child: Text(
-                        '$year: ${temp}°C',
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                    if (trendSlope != null && !_isDataLoading)
+                      LineSeries<TemperatureChartData, int>(
+                        dataSource: _generateTrendData(chartData, trendSlope),
+                        xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
+                        yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                        color: kTrendColour,
+                        width: 2,
+                        name: 'Trend',
+                        markerSettings: MarkerSettings(isVisible: false),
+                      ),
+                  ],
+                  primaryXAxis: NumericAxis(
+                    labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
+                    majorGridLines: MajorGridLines(width: 0),
+                    labelIntersectAction: AxisLabelIntersectAction.hide,
+                    // For progressive loading, show the full year range (1975-2025) from the start
+                    // This ensures consistent bar spacing as data loads and includes current year
+                    minimum: 1975.0,
+                    maximum: 2025.0,
+                    interval: 5, // Show every 5th year to avoid crowding
+                    labelFormat: '{value}',
+                    // Ensure proper spacing and prevent cropping
+                    plotOffset: 20,
+                  ),
+                  primaryYAxis: NumericAxis(
+                    labelFormat: '{value}°C',
+                    numberFormat: NumberFormat('0'),
+                    minimum: yAxisMin,
+                    maximum: yAxisMax,
+                    majorGridLines: MajorGridLines(width: 0),
+                    labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
+                    // Ensure bars start at the axis regardless of temperature values
+                    plotOffset: 0,
+                    // Force the axis to respect the exact minimum and maximum values
+                    desiredIntervals: 5,
+                    // Add margin for Y-axis labels
+                    labelPosition: ChartDataLabelPosition.outside,
+                  ),
+                  plotAreaBorderWidth: 0,
+                  enableAxisAnimation: false, // Disable animation to prevent "moving down" effect
+                  // Ensure proper spacing for bars
+                );
+                
+                return isTablet 
+                  ? SizedBox(
+                      height: chartHeight,
+                      width: chartWidth,
+                      child: chartWidget,
+                    )
+                  : Center(
+                      child: SizedBox(
+                        height: chartHeight,
+                        width: chartWidth,
+                        child: chartWidget,
                       ),
                     );
-                  },
-                ),
-                series: [
-                  BarSeries<TemperatureChartData, int>(
-                    onRendererCreated: (ChartSeriesController controller) {
-                      _chartSeriesController = controller;
-                    },
-                    dataSource: chartData,
-                    xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                    yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                    pointColorMapper: (TemperatureChartData data, int index) =>
-                        data.isCurrentYear ? kBarCurrentYearColour : kBarOtherYearColour,
-                    width: 0.8, // Restored to proper thickness
-                    name: 'Yearly Temperature',
-                    enableTooltip: true,
-                    // Ensure consistent spacing and prevent edge cropping
-                    spacing: 0.1, // Reduced spacing to maintain bar thickness
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                  // Only show average and trend lines after all data has loaded
-                  if (averageTemperature != null && !_isDataLoading)
-                    LineSeries<TemperatureChartData, int>(
-                      dataSource: _generateAverageData(chartData, averageTemperature),
-                      xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                      yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                      color: kAverageColour,
-                      width: 2,
-                      name: 'Average Temperature',
-                      markerSettings: MarkerSettings(isVisible: false),
-                    ),
-                  if (trendSlope != null && !_isDataLoading)
-                    LineSeries<TemperatureChartData, int>(
-                      dataSource: _generateTrendData(chartData, trendSlope),
-                      xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                      yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                      color: kTrendColour,
-                      width: 2,
-                      name: 'Trend',
-                      markerSettings: MarkerSettings(isVisible: false),
-                    ),
-                ],
-                primaryXAxis: NumericAxis(
-                  labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
-                  majorGridLines: MajorGridLines(width: 0),
-                  labelIntersectAction: AxisLabelIntersectAction.hide,
-                  // For progressive loading, show the full year range (1975-2025) from the start
-                  // This ensures consistent bar spacing as data loads and includes current year
-                  minimum: 1975.0,
-                  maximum: 2025.0,
-                  interval: 5, // Show every 5th year to avoid crowding
-                  labelFormat: '{value}',
-                  // Ensure proper spacing and prevent cropping
-                  plotOffset: 20,
-                ),
-                primaryYAxis: NumericAxis(
-                  labelFormat: '{value}°C',
-                  numberFormat: NumberFormat('0'),
-                  minimum: yAxisMin,
-                  maximum: yAxisMax,
-                  majorGridLines: MajorGridLines(width: 0),
-                  labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
-                  // Ensure bars start at the axis regardless of temperature values
-                  plotOffset: 0,
-                  // Force the axis to respect the exact minimum and maximum values
-                  desiredIntervals: 5,
-                  // Add margin for Y-axis labels
-                  labelPosition: ChartDataLabelPosition.outside,
-                ),
-                plotAreaBorderWidth: 0,
-                enableAxisAnimation: false, // Disable animation to prevent "moving down" effect
-                // Ensure proper spacing for bars
-              ),
+              },
             ),
           ),
           // Consistent spacing below chart - always show this
@@ -2637,25 +2778,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           _buildRefreshIndicator(
             SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              child: _buildContentPadding(
-                context,
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // --- Title/logo row: always visible and scrolls with content ---
-                    _buildTitleLogoSection(),
-                    // Debug features (only show when debugging)
-                    if (AppConfig.shouldShowDebugFeatures) ...[
-                      _buildDebugToggleSection(),
-                      _buildVersionSection(),
-                    ],
-                    // --- The rest of the UI, including the FutureBuilder ---
-                    _buildFutureBuilder(chartHeight: chartHeight),
-                    // Add extra space to ensure content is always scrollable
-                    const SizedBox(height: 100),
-                  ],
-                ),
-              ),
+              child: _buildConstrainedContent(context, chartHeight),
             ),
           ),
         ],
