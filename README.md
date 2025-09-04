@@ -44,6 +44,42 @@ flutter run
 
 - [graphic](https://pub.dev/packages/graphic)
 
+## Layout Constants
+
+The app uses several layout constants for consistent spacing and padding throughout the UI. These can be easily adjusted in `lib/main.dart`:
+
+### Content Padding
+
+- **`kContentVerticalPadding`** (32.0) - Controls the vertical padding for the main content area (top and bottom)
+- **`kContentHorizontalMargin`** (4.0) - Controls the horizontal margin for content
+
+### Title Section Spacing
+
+- **`kTitleRowIconRightPadding`** (6.0) - Controls space between logo and title text
+- **`kTitleRowBottomPadding`** (16.0) - Controls space below the title section (gap between title and date)
+
+### Section Spacing
+
+- **`kSectionBottomPadding`** (22.0) - Controls spacing below sections (like between date, location, summary, chart)
+- **`kSectionTopPadding`** (22.0) - Controls spacing above sections
+
+### Screen Edge Padding
+
+- **`kScreenPadding`** (8.0) - Controls the base padding from screen edges
+
+### Chart-Specific Padding
+
+- **`kChartHorizontalMargin`** (0.0) - Controls horizontal margins around the chart
+- **`kChartInnerPadding`** (0.0) - Controls inner padding within the chart area
+
+### Font Sizes
+
+- **`kFontSizeTitle`** (20.0) - Title font size
+- **`kFontSizeBody`** (16.0) - Body text font size
+- **`kFontSizeAxisLabel`** (14.0) - Chart axis label font size
+
+To change overall content padding, adjust `kContentVerticalPadding` and `kContentHorizontalMargin`. For spacing between sections, modify `kSectionBottomPadding` and `kSectionTopPadding`. To adjust the gap between the title and date specifically, use `kTitleRowBottomPadding`.
+
 ## Screenshots
 
 _Add screenshots of the chart here once available._

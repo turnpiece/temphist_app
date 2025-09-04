@@ -34,23 +34,34 @@ const kAxisGridColour = kAxisLabelColour;
 const kGreyLabelColour = Color(0xFFB0B0B0);
 
 // Layout constants for easy adjustment
+// These constants control the spacing and padding throughout the app's UI
+
+// Base padding from screen edges - affects all content
 const double kScreenPadding = 8.0;
 
-const double kTitleRowIconRightPadding = 6.0;
-const double kContentHorizontalMargin = 2.0;
-const double kChartHorizontalMargin = 0.0;
-const double kChartInnerPadding = 0.0;
-const double kSectionBottomPadding = 22.0;
-const double kSectionTopPadding = 22.0;
-const double kContentVerticalPadding = 32.0; // Vertical padding for main content area
+// Title/logo section spacing
+const double kTitleRowIconRightPadding = 6.0; // Space between logo and title text
+const double kTitleRowBottomPadding = 16.0; // Space below each section
 
-// Font size constants
-const double kFontSizeTitle = 20.0;
-const double kFontSizeBody = 14.0;
-const double kFontSizeAxisLabel = 12.0;
+// Main content area margins
+const double kContentHorizontalMargin = 4.0; // Additional horizontal margin for content
+const double kContentVerticalPadding = 32.0; // Vertical padding for main content area (top and bottom)
+
+// Chart-specific spacing
+const double kChartHorizontalMargin = 0.0; // Horizontal margins around the chart
+const double kChartInnerPadding = 0.0; // Inner padding within the chart area
+
+// Section spacing - controls gaps between UI sections (date, location, summary, chart, etc.)
+const double kSectionBottomPadding = 22.0; // Space below each section
+const double kSectionTopPadding = 22.0; // Space above each section
+
+// Font size constants - control text sizing throughout the app
+const double kFontSizeTitle = 20.0; // Main title text (e.g., "TempHist")
+const double kFontSizeBody = 16.0; // Body text (date, location, summary, etc.)
+const double kFontSizeAxisLabel = 14.0; // Chart axis labels (years and temperatures)
 
 // Time constants
-const int kUseYesterdayHourThreshold = 3; // Use yesterday's data if current hour is before this
+const int kUseYesterdayHourThreshold = 3; // Use yesterday's data if current hour is before this (3 AM)
 
 /// Clean up and validate location strings for better API compatibility
 String _cleanupLocationString(String location) {
@@ -1783,7 +1794,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     return Padding(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + kContentVerticalPadding,
-        bottom: kSectionBottomPadding,
+        bottom: kTitleRowBottomPadding,
         left: kScreenPadding + kContentHorizontalMargin,
         right: kScreenPadding + kContentHorizontalMargin,
       ),
