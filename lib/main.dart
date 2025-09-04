@@ -1737,13 +1737,12 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = MediaQuery.of(context).size.width;
-        final screenHeight = MediaQuery.of(context).size.height;
-        final isLandscapeTablet = screenWidth >= 768 && screenHeight < screenWidth;
+        final isTablet = screenWidth >= 768;
         
-        // For landscape tablets, constrain the overall content area width to 650px max
-        final maxContentWidth = isLandscapeTablet ? 650.0 : constraints.maxWidth;
+        // For all tablets (both portrait and landscape), constrain the overall content area width to 650px max
+        final maxContentWidth = isTablet ? 650.0 : constraints.maxWidth;
         final contentWidth = constraints.maxWidth > maxContentWidth ? maxContentWidth : constraints.maxWidth;
-        final horizontalMargin = isLandscapeTablet ? (constraints.maxWidth - contentWidth) / 2 : 0.0;
+        final horizontalMargin = isTablet ? (constraints.maxWidth - contentWidth) / 2 : 0.0;
         
         return Container(
           width: constraints.maxWidth,
