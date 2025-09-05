@@ -56,9 +56,9 @@ const double kSectionBottomPadding = 22.0; // Space below each section
 const double kSectionTopPadding = 22.0; // Space above each section
 
 // Font size constants - control text sizing throughout the app
-const double kFontSizeTitle = 24.0; // Main title text (e.g., "TempHist")
-const double kFontSizeBody = 16.0; // Body text (date, location, summary, etc.)
-const double kFontSizeAxisLabel = 14.0; // Chart axis labels (years and temperatures)
+const double kFontSizeTitle = 28.0; // Main title text (e.g., "TempHist")
+const double kFontSizeBody = 18.0; // Body text (date, location, summary, etc.)
+const double kFontSizeAxisLabel = 16.0; // Chart axis labels (years and temperatures)
 
 // Time constants
 const int kUseYesterdayHourThreshold = 3; // Use yesterday's data if current hour is before this (3 AM)
@@ -746,11 +746,15 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
 
   Future<void> _retryChartData() async {
     if (_chartDataRetryCount >= _maxChartDataRetries) {
-      debugPrintIfDebugging('Max chart data retries reached, not retrying further');
+      debugPrintIfDebugging('🛑 Max chart data retries reached ($_chartDataRetryCount/$_maxChartDataRetries), not retrying further');
       return;
     }
     
-    debugPrintIfDebugging('Retrying chart data... (attempt ${_chartDataRetryCount + 1})');
+    debugPrintIfDebugging('🔄 Retrying chart data... (attempt ${_chartDataRetryCount + 1}/$_maxChartDataRetries)');
+    debugPrintIfDebugging('📋 Failed years to retry: $_failedYears');
+    
+    // Store the failed years before clearing them
+    final yearsToRetry = List<int>.from(_failedYears);
     
     setState(() {
       _isRetryingChartData = true;
@@ -764,9 +768,13 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       _chartDataRetryCount++;
       
       // Retry loading the failed years specifically
-      if (_failedYears.isNotEmpty) {
+      if (yearsToRetry.isNotEmpty) {
+        debugPrintIfDebugging('🎯 Retrying specific failed years: $yearsToRetry');
+        // Temporarily restore the failed years for the retry function
+        _failedYears.addAll(yearsToRetry);
         await _retryFailedYears();
       } else {
+        debugPrintIfDebugging('🔄 No specific failed years, triggering full refresh');
         // If no specific failed years, trigger a full refresh
         await _handleRefresh();
       }
@@ -774,8 +782,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       setState(() {
         _isRetryingChartData = false;
       });
+      debugPrintIfDebugging('✅ Chart data retry completed');
     } catch (e) {
-      debugPrintIfDebugging('Error during chart data retry: $e');
+      debugPrintIfDebugging('❌ Error during chart data retry: $e');
       setState(() {
         _isRetryingChartData = false;
       });
@@ -783,9 +792,12 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   Future<void> _retryFailedYears() async {
-    if (_failedYears.isEmpty) return;
+    if (_failedYears.isEmpty) {
+      debugPrintIfDebugging('⚠️ No failed years to retry');
+      return;
+    }
     
-    debugPrintIfDebugging('Retrying failed years: $_failedYears');
+    debugPrintIfDebugging('🔄 Retrying failed years: $_failedYears');
     
     try {
       final now = DateTime.now();
@@ -794,15 +806,22 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       final mmdd = DateFormat('MM-dd').format(dateToUse);
       final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
       
+      debugPrintIfDebugging('📍 Retry parameters - city: $city, date: $mmdd');
+      
       final service = TemperatureService();
       final currentData = _currentData;
-      if (currentData == null) return;
+      if (currentData == null) {
+        debugPrintIfDebugging('❌ No current data available for retry');
+        return;
+      }
       
       List<TemperatureChartData> chartData = List<TemperatureChartData>.from(currentData['chartData']);
+      int successCount = 0;
       
       // Retry each failed year
       for (int year in _failedYears) {
         final dateForYear = '$year-$mmdd';
+        debugPrintIfDebugging('🔄 Retrying year $year ($dateForYear)');
         try {
           final tempData = await service.fetchTemperature(city, dateForYear);
           final temperature = tempData.temperature ?? tempData.average?.temperature;
@@ -818,12 +837,16 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                 hasData: true,
               );
               
-              debugPrintIfDebugging('Successfully retried year $year');
+              successCount++;
+              debugPrintIfDebugging('✅ Successfully retried year $year: ${temperature.toStringAsFixed(1)}°C');
             }
+          } else {
+            debugPrintIfDebugging('❌ No valid temperature data for retry year $year');
           }
         } catch (e) {
-          debugPrintIfDebugging('Failed to retry year $year: $e');
+          debugPrintIfDebugging('❌ Failed to retry year $year: $e');
           if (e is RateLimitException) {
+            debugPrintIfDebugging('⚠️ Rate limit hit during retry, stopping');
             setState(() {
               _chartDataFailedDueToRateLimit = true;
             });
@@ -838,12 +861,14 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       // Update the current data with retried results
       _currentData!['chartData'] = chartData;
       
+      debugPrintIfDebugging('📊 Retry completed: $successCount/${_failedYears.length} years successfully retried');
+      
       if (mounted) {
         setState(() {});
       }
       
     } catch (e) {
-      debugPrintIfDebugging('Error during failed years retry: $e');
+      debugPrintIfDebugging('❌ Error during failed years retry: $e');
     }
   }
 
@@ -870,6 +895,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       });
     }
   }
+
 
   Future<void> _determineLocation() async {
     try {
@@ -1190,14 +1216,16 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       }
       
       // Load from most recent to oldest (2025 -> 1975) to create right-to-left filling effect
+      debugPrintIfDebugging('Starting chart data loading for years $finalEndYear to $finalStartYear');
       for (int year = finalEndYear; year >= finalStartYear; year--) {
         // Check if we've hit a rate limit - stop making more requests
         if (_chartDataRateLimited) {
-          debugPrintIfDebugging('Rate limit detected, stopping chart data loading');
+          debugPrintIfDebugging('Rate limit detected, stopping chart data loading at year $year');
           break;
         }
         
         final dateForYear = '$year-$mmdd';
+        debugPrintIfDebugging('Fetching temperature data for year $year ($dateForYear)');
         try {
           final tempData = await service.fetchTemperature(city, dateForYear);
           
@@ -1223,17 +1251,17 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                 setState(() {});
               }
               
-              debugPrintIfDebugging('Updated data for year $year at index $yearIndex');
+              debugPrintIfDebugging('✓ Successfully loaded data for year $year: ${temperature.toStringAsFixed(1)}°C');
             }
           } else {
-            debugPrintIfDebugging('No valid temperature data for year $year, keeping as placeholder');
+            debugPrintIfDebugging('✗ No valid temperature data returned for year $year (tempData: $tempData)');
             // Mark this year as failed for tracking
             if (!_failedYears.contains(year)) {
               _failedYears.add(year);
             }
           }
         } catch (e) {
-          debugPrintIfDebugging('Failed to fetch temperature for year $year: $e');
+          debugPrintIfDebugging('✗ Failed to fetch temperature for year $year: $e');
           
           // Track this year as failed
           if (!_failedYears.contains(year)) {
@@ -1242,7 +1270,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           
           // Check if it's a rate limit error
           if (e is RateLimitException) {
-            debugPrintIfDebugging('Rate limit exceeded for chart data, stopping further requests');
+            debugPrintIfDebugging('⚠️ Rate limit exceeded for chart data, stopping further requests at year $year');
             setState(() {
               _chartDataRateLimited = true;
               _chartDataFailed = true;
@@ -1251,6 +1279,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
             break; // Stop making more requests
           } else {
             // Other error - mark as failed but continue trying other years
+            debugPrintIfDebugging('⚠️ Other error for year $year, continuing with next year');
             setState(() {
               _chartDataFailed = true;
             });
@@ -1266,7 +1295,17 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       _stopAverageTrendDisplayTimer(); // Stop the timer since loading completed
       _isDataLoading = false;
       _progressiveLoadingCompleted = true;
-      debugPrintIfDebugging('_loadChartDataProgressive: Loading completed, _isDataLoading set to false');
+      
+      // Log final results
+      final successfulYears = chartData.where((data) => data.hasData).length;
+      final totalYears = chartData.length;
+      debugPrintIfDebugging('📊 Chart data loading completed: $successfulYears/$totalYears years loaded successfully');
+      if (_failedYears.isNotEmpty) {
+        debugPrintIfDebugging('❌ Failed years: $_failedYears');
+      }
+      if (_chartDataFailed) {
+        debugPrintIfDebugging('⚠️ Chart data loading had failures - rate limited: $_chartDataFailedDueToRateLimit');
+      }
       
       // Start auto-retry timer if there are failed endpoints
       if (_averageDataFailed || _trendDataFailed || _summaryDataFailed) {
@@ -1434,9 +1473,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     final city = _displayLocation.isNotEmpty ? _displayLocation : (data['city'] as String?);
     
     debugPrintIfDebugging('Average temperature for plot band: $averageTemperature°C');
-    debugPrintIfDebugging('Summary text for UI: $summaryText');
-    debugPrintIfDebugging('Summary text is empty: ${summaryText?.isEmpty}');
-    debugPrintIfDebugging('Summary text is null: ${summaryText == null}');
 
     return _buildChartContent(
       chartData: chartData, // Pass all chart data (including empty placeholders)
@@ -2111,9 +2147,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     }
     
     debugPrintIfDebugging('Y-axis calculation - minTemp: $minTemp, maxTemp: $maxTemp, yAxisMin: $yAxisMin, yAxisMax: $yAxisMax');
-    debugPrintIfDebugging('_buildChartContent: summaryText = "$summaryText"');
-    debugPrintIfDebugging('_buildChartContent: summaryText?.isNotEmpty = ${summaryText?.isNotEmpty}');
-    debugPrintIfDebugging('_buildChartContent: kSummaryColour = $kSummaryColour');
     
     return SingleChildScrollView(
       child: Column(
@@ -2155,7 +2188,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                         ),
                         child: Text(
                           '$year: ${temp}°C',
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          style: TextStyle(color: Colors.white, fontSize: kFontSizeBody - 4),
                         ),
                       );
                     },
@@ -2224,7 +2257,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                     labelPosition: ChartDataLabelPosition.outside,
                   ),
                   plotAreaBorderWidth: 0,
-                  enableAxisAnimation: false, // Disable animation to prevent "moving down" effect
+                  enableAxisAnimation: false, // Disable animation to prevent layout shifting
                   // Ensure proper spacing for bars
                 );
                 
@@ -2422,13 +2455,15 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   Widget _buildDataCompletenessIndicator(List<TemperatureChartData> chartData) {
-    // Only show completeness indicator if we're not currently loading data
-    if (_isDataLoading) {
+    // Only show completeness indicator if we're not currently loading data AND progressive loading has completed
+    if (_isDataLoading || !_progressiveLoadingCompleted) {
       return const SizedBox.shrink();
     }
     
     final missingYears = chartData.where((data) => !data.hasData).map((data) => int.parse(data.year)).toList();
     final hasGaps = missingYears.isNotEmpty || _chartDataHasGaps || _chartDataFailed;
+    
+    debugPrintIfDebugging('📊 Data completeness check - missing years: $missingYears, hasGaps: $hasGaps, chartDataFailed: $_chartDataFailed, progressiveLoadingCompleted: $_progressiveLoadingCompleted');
     
     // Check for missing recent years (2022-2025)
     final currentYear = DateTime.now().year;
