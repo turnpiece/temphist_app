@@ -284,6 +284,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   // Track app initialization state
   bool _isAppInitialized = false;
   bool _splashScreenMinTimeElapsed = false;
+  Timer? _splashScreenTimer;
   
   
   // Add error tracking for different data types
@@ -356,6 +357,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     WidgetsBinding.instance.removeObserver(this);
     _positionStreamSubscription?.cancel();
     _stopAverageTrendDisplayTimer();
+    _splashScreenTimer?.cancel();
     super.dispose();
   }
 
@@ -373,7 +375,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // If we have a test future, use it directly
     if (widget.testFuture != null) {
       futureChartData = widget.testFuture;
-      // Don't set _isAppInitialized here - let the splash screen timer handle it
+      setState(() {
+        _isAppInitialized = true;
+      });
       return;
     }
     
@@ -1098,8 +1102,14 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   void _startSplashScreenTimer() {
+    // Skip splash screen timer in test mode
+    if (widget.testFuture != null) {
+      _splashScreenMinTimeElapsed = true;
+      return;
+    }
+    
     // Show splash screen for minimum 2 seconds to prevent white flash
-    Timer(const Duration(seconds: 2), () {
+    _splashScreenTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
           _splashScreenMinTimeElapsed = true;
@@ -1113,6 +1123,14 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   void _waitForSplashScreenAndInitialize() {
+    // Skip in test mode
+    if (widget.testFuture != null) {
+      setState(() {
+        _isAppInitialized = true;
+      });
+      return;
+    }
+    
     // Wait for splash screen timer to complete, then initialize
     Timer.periodic(const Duration(milliseconds: 100), (timer) {
       if (_splashScreenMinTimeElapsed && mounted) {
@@ -2921,7 +2939,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     _setSystemUIOverlayStyle();
     
     // Show splash screen while app is initializing OR minimum time hasn't elapsed
-    if (!_isAppInitialized || !_splashScreenMinTimeElapsed) {
+    // Skip splash screen in test mode
+    if (widget.testFuture == null && (!_isAppInitialized || !_splashScreenMinTimeElapsed)) {
       return SplashScreen();
     }
     
