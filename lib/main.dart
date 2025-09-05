@@ -1375,9 +1375,15 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         }
         
         final dateForYear = '$year-$mmdd';
-        debugPrintIfDebugging('Fetching temperature data for year $year ($dateForYear)');
+        debugPrintIfDebugging('🔄 About to fetch temperature data for year $year ($dateForYear) - attempt $totalAttempts');
         try {
-          final tempData = await service.fetchTemperature(city, dateForYear);
+          // Add a timeout to individual API calls to prevent hanging
+          final tempData = await service.fetchTemperature(city, dateForYear)
+              .timeout(const Duration(seconds: 30), onTimeout: () {
+            debugPrintIfDebugging('⚠️ API request for year $year timed out after 30 seconds');
+            throw TimeoutException('API request for year $year timed out', const Duration(seconds: 30));
+          });
+          debugPrintIfDebugging('✅ API response received for year $year');
           
           // Check if we have valid temperature data
           final temperature = tempData.temperature ?? tempData.average?.temperature;
@@ -1444,6 +1450,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         
         // Add a delay to make progressive loading more visible
         await Future.delayed(const Duration(milliseconds: 100));
+        
+        // Log progress every 5 years to help track where it might be stalling
+        if (totalAttempts % 5 == 0) {
+          debugPrintIfDebugging('📊 Progress update: attempted $totalAttempts years, successful: $successfulAttempts, current year: $year');
+        }
       }
       
       // Log final loading summary
