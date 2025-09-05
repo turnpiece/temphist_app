@@ -185,6 +185,15 @@ class TempHist extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'TempHist',
       home: TemperatureScreen(),
+      // Add a custom loading screen theme
+      theme: ThemeData(
+        scaffoldBackgroundColor: kBackgroundColour,
+        // This helps prevent the white flash during initialization
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: kAccentColour,
+          brightness: Brightness.dark,
+        ),
+      ),
     );
   }
 }
@@ -199,6 +208,66 @@ class TemperatureScreen extends StatefulWidget {
   _TemperatureScreenState createState() => _TemperatureScreenState();
 }
 
+class SplashScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF242456), // Top color
+              Color(0xFF343499), // Bottom color
+            ],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Logo
+              SvgPicture.asset(
+                'assets/logo.svg',
+                width: 80,
+                height: 80,
+              ),
+              const SizedBox(height: 24),
+              // App title
+              Text(
+                'TempHist',
+                style: TextStyle(
+                  color: kAccentColour,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Loading indicator
+              const CircularProgressIndicator(
+                color: kAccentColour,
+                strokeWidth: 3,
+              ),
+              const SizedBox(height: 16),
+              // Loading text
+              Text(
+                'Loading...',
+                style: TextStyle(
+                  color: kTextPrimaryColour,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindingObserver {
   Future<Map<String, dynamic>?>? futureChartData;
   bool _isShowingCachedData = false;
@@ -211,6 +280,10 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   DateTime? _locationDeterminedAt; // Timestamp when location was last determined
   bool _isDataLoading = false;
   Timer? _averageTrendDisplayTimer;
+  
+  // Track app initialization state
+  bool _isAppInitialized = false;
+  bool _splashScreenMinTimeElapsed = false;
   
   
   // Add error tracking for different data types
@@ -265,6 +338,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     
+    // Start minimum splash screen timer
+    _startSplashScreenTimer();
+    
     // If we have a test future, skip all the async initialization
     if (widget.testFuture != null) {
       futureChartData = widget.testFuture;
@@ -297,6 +373,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // If we have a test future, use it directly
     if (widget.testFuture != null) {
       futureChartData = widget.testFuture;
+      // Don't set _isAppInitialized here - let the splash screen timer handle it
       return;
     }
     
@@ -308,6 +385,17 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     
     // First determine location
     await _determineLocation();
+    
+    // Mark app as initialized after location is determined
+    // But only if minimum splash screen time has elapsed
+    if (_splashScreenMinTimeElapsed) {
+      setState(() {
+        _isAppInitialized = true;
+      });
+    } else {
+      // If splash screen time hasn't elapsed, wait for it
+      _waitForSplashScreenAndInitialize();
+    }
     
     // Then start loading temperature data progressively
     _isShowingCachedData = false;
@@ -1007,6 +1095,33 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       _loadingElapsedSeconds = 0;
       _updateLoadingMessage();
     }
+  }
+
+  void _startSplashScreenTimer() {
+    // Show splash screen for minimum 2 seconds to prevent white flash
+    Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _splashScreenMinTimeElapsed = true;
+        });
+        // If app is already initialized, we can proceed
+        if (_isAppInitialized) {
+          // App is ready, no additional action needed
+        }
+      }
+    });
+  }
+
+  void _waitForSplashScreenAndInitialize() {
+    // Wait for splash screen timer to complete, then initialize
+    Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (_splashScreenMinTimeElapsed && mounted) {
+        timer.cancel();
+        setState(() {
+          _isAppInitialized = true;
+        });
+      }
+    });
   }
 
   void _startLoadingMessageTimer() {
@@ -2231,7 +2346,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                   ],
                   primaryXAxis: NumericAxis(
                     labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
-                    majorGridLines: MajorGridLines(width: 0),
+                    majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withOpacity(0.3)),
                     labelIntersectAction: AxisLabelIntersectAction.hide,
                     // For progressive loading, show the full year range (1975-2025) from the start
                     // This ensures consistent bar spacing as data loads and includes current year
@@ -2241,13 +2356,15 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                     labelFormat: '{value}',
                     // Ensure proper spacing and prevent cropping
                     plotOffset: 20,
+                    // Show the axis line
+                    axisLine: AxisLine(width: 1, color: kAxisLabelColour),
                   ),
                   primaryYAxis: NumericAxis(
                     labelFormat: '{value}°C',
                     numberFormat: NumberFormat('0'),
                     minimum: yAxisMin,
                     maximum: yAxisMax,
-                    majorGridLines: MajorGridLines(width: 0),
+                    majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withOpacity(0.3)),
                     labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
                     // Ensure bars start at the axis regardless of temperature values
                     plotOffset: 0,
@@ -2255,6 +2372,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                     desiredIntervals: 5,
                     // Add margin for Y-axis labels
                     labelPosition: ChartDataLabelPosition.outside,
+                    // Show the axis line
+                    axisLine: AxisLine(width: 1, color: kAxisLabelColour),
                   ),
                   plotAreaBorderWidth: 0,
                   enableAxisAnimation: false, // Disable animation to prevent layout shifting
@@ -2800,6 +2919,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   Widget build(BuildContext context) {
     // Ensure system UI overlay is set correctly
     _setSystemUIOverlayStyle();
+    
+    // Show splash screen while app is initializing OR minimum time hasn't elapsed
+    if (!_isAppInitialized || !_splashScreenMinTimeElapsed) {
+      return SplashScreen();
+    }
     
     final double chartHeight = 800;
 
