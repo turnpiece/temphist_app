@@ -330,9 +330,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   // Track current loading operation to prevent race conditions
   bool _isLoadingOperationActive = false;
   
-  // Add timeout tracking for loading operations
-  Timer? _loadingTimeoutTimer;
-  
   // Track chart data loading failures
   bool _chartDataFailed = false;
   bool _chartDataFailedDueToRateLimit = false;
@@ -362,7 +359,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     _positionStreamSubscription?.cancel();
     _stopAverageTrendDisplayTimer();
     _splashScreenTimer?.cancel();
-    _loadingTimeoutTimer?.cancel();
     super.dispose();
   }
 
@@ -1233,20 +1229,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     _isLoadingOperationActive = true;
     debugPrintIfDebugging('_loadChartDataProgressive: Starting progressive chart data load');
     
-    // Set up a timeout to prevent infinite loading
-    _loadingTimeoutTimer?.cancel();
-    _loadingTimeoutTimer = Timer(const Duration(minutes: 2), () {
-      if (_isLoadingOperationActive && mounted) {
-        debugPrintIfDebugging('⚠️ Loading timeout reached, forcing completion');
-        _isLoadingOperationActive = false;
-        _isDataLoading = false;
-        _progressiveLoadingCompleted = true;
-        setState(() {
-          _chartDataFailed = true;
-        });
-      }
-    });
-    
     try {
       final now = DateTime.now();
       final useYesterday = now.hour < kUseYesterdayHourThreshold;
@@ -1371,17 +1353,21 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       debugPrintIfDebugging('Starting chart data loading for years $finalEndYear to $finalStartYear');
       int consecutiveFailures = 0;
       const int maxConsecutiveFailures = 5; // Stop after 5 consecutive failures
+      int totalAttempts = 0;
+      int successfulAttempts = 0;
       
       for (int year = finalEndYear; year >= finalStartYear; year--) {
+        totalAttempts++;
+        
         // Check if we've hit a rate limit - stop making more requests
         if (_chartDataRateLimited) {
-          debugPrintIfDebugging('Rate limit detected, stopping chart data loading at year $year');
+          debugPrintIfDebugging('Rate limit detected, stopping chart data loading at year $year (attempted $totalAttempts years, $successfulAttempts successful)');
           break;
         }
         
         // Check for too many consecutive failures - might indicate API is down
         if (consecutiveFailures >= maxConsecutiveFailures) {
-          debugPrintIfDebugging('Too many consecutive failures ($consecutiveFailures), stopping at year $year');
+          debugPrintIfDebugging('Too many consecutive failures ($consecutiveFailures), stopping at year $year (attempted $totalAttempts years, $successfulAttempts successful)');
           setState(() {
             _chartDataFailed = true;
           });
@@ -1415,8 +1401,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                 setState(() {});
               }
               
-              debugPrintIfDebugging('✓ Successfully loaded data for year $year: ${temperature.toStringAsFixed(1)}°C');
+              successfulAttempts++;
               consecutiveFailures = 0; // Reset failure counter on success
+              debugPrintIfDebugging('✓ Successfully loaded data for year $year: ${temperature.toStringAsFixed(1)}°C (successful: $successfulAttempts/$totalAttempts)');
             }
           } else {
             debugPrintIfDebugging('✗ No valid temperature data returned for year $year (tempData: $tempData)');
@@ -1425,6 +1412,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
               _failedYears.add(year);
             }
             consecutiveFailures++;
+            debugPrintIfDebugging('⚠️ Consecutive failures: $consecutiveFailures/$maxConsecutiveFailures (successful: $successfulAttempts/$totalAttempts)');
           }
         } catch (e) {
           debugPrintIfDebugging('✗ Failed to fetch temperature for year $year: $e');
@@ -1434,6 +1422,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
             _failedYears.add(year);
           }
           consecutiveFailures++;
+          debugPrintIfDebugging('⚠️ Consecutive failures: $consecutiveFailures/$maxConsecutiveFailures (successful: $successfulAttempts/$totalAttempts)');
           
           // Check if it's a rate limit error
           if (e is RateLimitException) {
@@ -1456,6 +1445,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         // Add a delay to make progressive loading more visible
         await Future.delayed(const Duration(milliseconds: 100));
       }
+      
+      // Log final loading summary
+      debugPrintIfDebugging('📊 Progressive loading completed - attempted: $totalAttempts years, successful: $successfulAttempts, consecutive failures: $consecutiveFailures');
       
       // Stop loading message timer when data loading completes
       _stopLoadingMessageTimer();
@@ -1512,10 +1504,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       _isLoadingOperationActive = false;
       _isDataLoading = false;
       _progressiveLoadingCompleted = true;
-      
-      // Cancel the timeout timer since loading is complete
-      _loadingTimeoutTimer?.cancel();
-      _loadingTimeoutTimer = null;
     }
   }
 
@@ -2552,7 +2540,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                       Padding(
                         padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
                         child: Text(
-                            trendSlope.abs() < 0.1
+                            trendSlope.abs() < 0.05
                               ? 'Trend: Steady at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
                               : trendSlope > 0 
                                 ? 'Trend: Rising at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
@@ -2674,7 +2662,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     
     debugPrintIfDebugging('📊 Data completeness check - missing years: $missingYears, hasGaps: $hasGaps, chartDataFailed: $_chartDataFailed, progressiveLoadingCompleted: $_progressiveLoadingCompleted');
     
-    // Check for missing recent years (2022-2025)
+    // Check for missing recent years (2022-2025) - but only if we actually attempted to load them
     final currentYear = DateTime.now().year;
     final recentYears = List.generate(currentYear - 2021, (index) => 2022 + index);
     final missingRecentYears = recentYears.where((year) => 
@@ -2684,6 +2672,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // Also check if we have very few data points (less than 10 years of data)
     final successfulYears = chartData.where((data) => data.hasData).length;
     final hasVeryLittleData = successfulYears < 10;
+    
+    // Debug log the user-facing messages
+    if (hasGaps || missingRecentYears.isNotEmpty || hasVeryLittleData) {
+      debugPrintIfDebugging('📝 Showing data completeness message - missingYears: $missingYears, missingRecentYears: $missingRecentYears, hasVeryLittleData: $hasVeryLittleData, successfulYears: $successfulYears');
+    }
     
     if (hasGaps || missingRecentYears.isNotEmpty || hasVeryLittleData) {
       return Padding(
@@ -2696,12 +2689,23 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
             // Show missing years text or low data warning
             if (missingYears.isNotEmpty || missingRecentYears.isNotEmpty || hasVeryLittleData) ...[
               const SizedBox(height: 8),
-              Text(
-                hasVeryLittleData && missingYears.isEmpty && missingRecentYears.isEmpty
-                  ? 'Note: Very limited data available for this location. Only $successfulYears years of data were loaded.'
-                  : 'Note: ${_buildMissingYearsText(missingYears, missingRecentYears)}.',
-                style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
-                textAlign: TextAlign.left,
+              Builder(
+                builder: (context) {
+                  String message;
+                  if (hasVeryLittleData && missingYears.isEmpty && missingRecentYears.isEmpty) {
+                    message = 'Note: Very limited data available for this location. Only $successfulYears years of data were loaded.';
+                    debugPrintIfDebugging('📝 User message: $message');
+                  } else {
+                    message = 'Note: ${_buildMissingYearsText(missingYears, missingRecentYears)}.';
+                    debugPrintIfDebugging('📝 User message: $message');
+                  }
+                  
+                  return Text(
+                    message,
+                    style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
+                    textAlign: TextAlign.left,
+                  );
+                },
               ),
             ],
             const SizedBox(height: 4),
@@ -2742,7 +2746,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       missingText = 'Years $ranges are missing';
     }
     
-    // Add note about missing recent years if applicable
+    // Only add note about missing recent years if they were actually attempted to be loaded
+    // and are genuinely missing (not just not yet attempted due to timeout)
     if (missingRecentYears.isNotEmpty) {
       final recentRanges = _groupConsecutiveYears(missingRecentYears);
       String recentText;
@@ -2765,10 +2770,22 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       }
     }
     
+    debugPrintIfDebugging('📝 Generated missing years text: "$missingText"');
     return missingText;
   }
 
   Widget _buildChartDataFailureMessage() {
+    String message;
+    if (_isRetryingChartData) {
+      message = 'Retrying chart data...';
+    } else if (_chartDataFailedDueToRateLimit) {
+      message = 'API rate limit exceeded - please wait before retrying chart data';
+    } else {
+      message = 'Failed to load some chart data';
+    }
+    
+    debugPrintIfDebugging('📝 Chart data failure message: "$message"');
+    
     return Row(
       children: [
         Icon(
@@ -2781,11 +2798,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            _isRetryingChartData 
-              ? 'Retrying chart data...'
-              : _chartDataFailedDueToRateLimit 
-                ? 'API rate limit exceeded - please wait before retrying chart data'
-                : 'Failed to load some chart data',
+            message,
             style: TextStyle(
               color: _isRetryingChartData ? kGreyLabelColour : 
                      _chartDataFailedDueToRateLimit ? kGreyLabelColour : kAccentColour, 
@@ -2886,32 +2899,46 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         ],
       );
     } else {
-      return Column(
-        children: [
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(
-                Icons.info_outline,
-                color: kGreyLabelColour,
-                size: 16,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Data appears to be genuinely incomplete for this location. Some years may not have historical data available.',
-                  style: TextStyle(
-                    color: kGreyLabelColour, 
-                    fontSize: kFontSizeBody - 2, 
-                    fontWeight: FontWeight.w400
-                  ),
-                  textAlign: TextAlign.left,
+      // Only show the "genuinely incomplete" message if we didn't hit a timeout
+      // and we have a reasonable amount of data (more than 10 years)
+      final successfulYears = _currentData != null ? 
+        (_currentData!['chartData'] as List<TemperatureChartData>).where((data) => data.hasData).length : 0;
+      
+      if (!_chartDataFailed && successfulYears >= 10) {
+        const message = 'Data appears to be incomplete for this location. Some years may not have data available.';
+        debugPrintIfDebugging('📝 User message: $message');
+        
+        return Column(
+          children: [
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: kGreyLabelColour,
+                  size: 16,
                 ),
-              ),
-            ],
-          ),
-        ],
-      );
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      color: kGreyLabelColour, 
+                      fontSize: kFontSizeBody - 2, 
+                      fontWeight: FontWeight.w400
+                    ),
+                    textAlign: TextAlign.left,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      } else {
+        // Don't show the "incomplete" message if we hit a timeout or have very little data
+        debugPrintIfDebugging('📝 Skipping "incomplete" message - chartDataFailed: $_chartDataFailed, successfulYears: $successfulYears');
+        return const SizedBox.shrink();
+      }
     }
   }
 
