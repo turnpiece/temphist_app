@@ -37,7 +37,7 @@ const kGreyLabelColour = Color(0xFFB0B0B0);
 // These constants control the spacing and padding throughout the app's UI
 
 // Base padding from screen edges - affects all content
-const double kScreenPadding = 8.0;
+const double kScreenPadding = 12.0;
 
 // Title/logo section spacing
 const double kTitleRowIconRightPadding = 6.0; // Space between logo and title text
@@ -50,14 +50,15 @@ const double kContentVerticalPadding = 32.0; // Vertical padding for main conten
 // Chart-specific spacing
 const double kChartHorizontalMargin = 0.0; // Horizontal margins around the chart
 const double kChartInnerPadding = 0.0; // Inner padding within the chart area
+const double kChartRightMargin = 20.0; // Extra right margin for Y-axis labels
 
 // Section spacing - controls gaps between UI sections (date, location, summary, chart, etc.)
 const double kSectionBottomPadding = 22.0; // Space below each section
 const double kSectionTopPadding = 22.0; // Space above each section
 
 // Font size constants - control text sizing throughout the app
-const double kFontSizeTitle = 28.0; // Main title text (e.g., "TempHist")
-const double kFontSizeBody = 18.0; // Body text (date, location, summary, etc.)
+const double kFontSizeTitle = 26.0; // Main title text (e.g., "TempHist")
+const double kFontSizeBody = 17.0; // Body text (date, location, summary, etc.)
 const double kFontSizeAxisLabel = 16.0; // Chart axis labels (years and temperatures)
 
 // Time constants
@@ -2075,6 +2076,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         final isTablet = screenWidth >= 768;
         
         // For all tablets (both portrait and landscape), constrain the overall content area width to 650px max
+        // Account for increased screen padding
         final maxContentWidth = isTablet ? 650.0 : constraints.maxWidth;
         final contentWidth = constraints.maxWidth > maxContentWidth ? maxContentWidth : constraints.maxWidth;
         final horizontalMargin = isTablet ? (constraints.maxWidth - contentWidth) / 2 : 0.0;
@@ -2354,13 +2356,17 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                 final isTablet = screenWidth >= 768; // iPad threshold
                 
                 // On tablets, constrain chart width to a reasonable maximum
-                final chartWidth = isTablet ? 600.0 : screenWidth;
+                // Account for chart margins and content padding to prevent overflow
+                final availableWidth = isTablet ? 600.0 : screenWidth;
+                // Subtract right margin and account for content padding
+                final contentPadding = kScreenPadding + kContentHorizontalMargin;
+                final chartWidth = availableWidth - kChartRightMargin - (contentPadding * 2);
                 
                 // Create the chart widget once to avoid duplication
                 final chartWidget = SfCartesianChart(
                   margin: EdgeInsets.only(
                     left: kChartHorizontalMargin, // Keep left margin consistent with text
-                    right: kChartHorizontalMargin + 8, // Extra right margin for Y-axis labels
+                    right: kChartRightMargin, // Extra right margin for Y-axis labels
                   ),
                   tooltipBehavior: TooltipBehavior(
                     enable: true,
