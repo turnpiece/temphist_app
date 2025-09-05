@@ -44,7 +44,7 @@ const double kTitleRowIconRightPadding = 6.0; // Space between logo and title te
 const double kTitleRowBottomPadding = 16.0; // Space below each section
 
 // Main content area margins
-const double kContentHorizontalMargin = 4.0; // Additional horizontal margin for content
+const double kContentHorizontalMargin = 8.0; // Additional horizontal margin for content
 const double kContentVerticalPadding = 32.0; // Vertical padding for main content area (top and bottom)
 
 // Chart-specific spacing
@@ -56,7 +56,7 @@ const double kSectionBottomPadding = 22.0; // Space below each section
 const double kSectionTopPadding = 22.0; // Space above each section
 
 // Font size constants - control text sizing throughout the app
-const double kFontSizeTitle = 20.0; // Main title text (e.g., "TempHist")
+const double kFontSizeTitle = 24.0; // Main title text (e.g., "TempHist")
 const double kFontSizeBody = 16.0; // Body text (date, location, summary, etc.)
 const double kFontSizeAxisLabel = 14.0; // Chart axis labels (years and temperatures)
 
@@ -65,9 +65,12 @@ const int kUseYesterdayHourThreshold = 3; // Use yesterday's data if current hou
 const int kAverageTrendDisplayDelaySeconds = 25; // Delay before showing average/trend lines (seconds)
 const int kApiTimeoutSeconds = 35; // API timeout (must be longer than display timer to prevent race conditions)
 
+// Default location constant
+const String kDefaultLocation = 'London, UK';
+
 /// Clean up and validate location strings for better API compatibility
 String _cleanupLocationString(String location) {
-  if (location.isEmpty) return 'London, UK';
+  if (location.isEmpty) return kDefaultLocation;
   
   // Remove extra whitespace and normalize commas
   String cleaned = location.trim();
@@ -251,6 +254,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   
   // Track current loading operation to prevent race conditions
   bool _isLoadingOperationActive = false;
+  
+  // Track chart data loading failures
+  bool _chartDataFailed = false;
+  bool _chartDataFailedDueToRateLimit = false;
+  List<int> _failedYears = []; // Track which years failed to load
 
   @override
   void initState() {
@@ -429,6 +437,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       _trendDataRateLimited = false;
       _summaryDataRateLimited = false;
       _chartDataRateLimited = false;
+      
+      // Reset chart data failure tracking
+      _chartDataFailed = false;
+      _chartDataFailedDueToRateLimit = false;
+      _failedYears.clear();
     });
   }
 
@@ -454,7 +467,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       final useYesterday = now.hour < kUseYesterdayHourThreshold;
       final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
       final mmdd = DateFormat('MM-dd').format(dateToUse);
-      final city = _determinedLocation.isNotEmpty ? _determinedLocation : 'London, UK';
+      final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
       
       final service = TemperatureService();
       
@@ -588,7 +601,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       final useYesterday = now.hour < kUseYesterdayHourThreshold;
       final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
       final mmdd = DateFormat('MM-dd').format(dateToUse);
-      final city = _determinedLocation.isNotEmpty ? _determinedLocation : 'London, UK';
+      final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
       
       final service = TemperatureService();
       
@@ -641,7 +654,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       final useYesterday = now.hour < kUseYesterdayHourThreshold;
       final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
       final mmdd = DateFormat('MM-dd').format(dateToUse);
-      final city = _determinedLocation.isNotEmpty ? _determinedLocation : 'London, UK';
+      final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
       
       final service = TemperatureService();
       
@@ -691,7 +704,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       final useYesterday = now.hour < kUseYesterdayHourThreshold;
       final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
       final mmdd = DateFormat('MM-dd').format(dateToUse);
-      final city = _determinedLocation.isNotEmpty ? _determinedLocation : 'London, UK';
+      final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
       
       final service = TemperatureService();
       
@@ -741,14 +754,22 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     
     setState(() {
       _isRetryingChartData = true;
+      _chartDataFailed = false;
+      _chartDataFailedDueToRateLimit = false;
+      _failedYears.clear();
     });
     
     try {
       // Increment retry count
       _chartDataRetryCount++;
       
-      // Trigger a refresh to reload chart data
-      await _handleRefresh();
+      // Retry loading the failed years specifically
+      if (_failedYears.isNotEmpty) {
+        await _retryFailedYears();
+      } else {
+        // If no specific failed years, trigger a full refresh
+        await _handleRefresh();
+      }
       
       setState(() {
         _isRetryingChartData = false;
@@ -758,6 +779,71 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       setState(() {
         _isRetryingChartData = false;
       });
+    }
+  }
+
+  Future<void> _retryFailedYears() async {
+    if (_failedYears.isEmpty) return;
+    
+    debugPrintIfDebugging('Retrying failed years: $_failedYears');
+    
+    try {
+      final now = DateTime.now();
+      final useYesterday = now.hour < kUseYesterdayHourThreshold;
+      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+      final mmdd = DateFormat('MM-dd').format(dateToUse);
+      final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
+      
+      final service = TemperatureService();
+      final currentData = _currentData;
+      if (currentData == null) return;
+      
+      List<TemperatureChartData> chartData = List<TemperatureChartData>.from(currentData['chartData']);
+      
+      // Retry each failed year
+      for (int year in _failedYears) {
+        final dateForYear = '$year-$mmdd';
+        try {
+          final tempData = await service.fetchTemperature(city, dateForYear);
+          final temperature = tempData.temperature ?? tempData.average?.temperature;
+          
+          if (temperature != null) {
+            // Find and update the entry for this year
+            final yearIndex = chartData.indexWhere((data) => data.year == year.toString());
+            if (yearIndex != -1) {
+              chartData[yearIndex] = TemperatureChartData(
+                year: year.toString(),
+                temperature: temperature,
+                isCurrentYear: year == DateTime.now().year,
+                hasData: true,
+              );
+              
+              debugPrintIfDebugging('Successfully retried year $year');
+            }
+          }
+        } catch (e) {
+          debugPrintIfDebugging('Failed to retry year $year: $e');
+          if (e is RateLimitException) {
+            setState(() {
+              _chartDataFailedDueToRateLimit = true;
+            });
+            break;
+          }
+        }
+        
+        // Add a small delay between retries
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+      
+      // Update the current data with retried results
+      _currentData!['chartData'] = chartData;
+      
+      if (mounted) {
+        setState(() {});
+      }
+      
+    } catch (e) {
+      debugPrintIfDebugging('Error during failed years retry: $e');
     }
   }
 
@@ -787,7 +873,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
 
   Future<void> _determineLocation() async {
     try {
-      String city = 'London, UK';
+      String city = kDefaultLocation;
       
       // Try to get user's city via geolocation
       try {
@@ -861,7 +947,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       // Additional validation to catch obviously wrong locations
       if (_isLocationSuspicious(city)) {
         debugPrintIfDebugging('Suspicious location detected: $city, falling back to default');
-        city = 'London, UK';
+        city = kDefaultLocation;
       }
       
       debugPrintIfDebugging('_determineLocation: Final city: $city');
@@ -885,8 +971,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       debugPrintIfDebugging('_determineLocation failed: $e');
       // Set default location if everything fails
       setState(() {
-        _determinedLocation = 'London, UK';
-        _displayLocation = _extractDisplayLocation('London, UK');
+        _determinedLocation = kDefaultLocation;
+        _displayLocation = _extractDisplayLocation(kDefaultLocation);
         _isLocationDetermined = true;
         _locationDeterminedAt = DateTime.now(); // Record when location was determined
       });
@@ -991,7 +1077,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       debugPrintIfDebugging('_loadChartDataProgressive: Current time: ${now.hour}:${now.minute}, useYesterday: $useYesterday, dateToUse: $formattedDate');
 
       final service = TemperatureService();
-      String city = _determinedLocation.isNotEmpty ? _determinedLocation : 'London, UK';
+      String city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
       
       debugPrintIfDebugging('_loadChartDataProgressive: Using determined city: $city');
       final currentYear = dateToUse.year;
@@ -1076,10 +1162,18 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       final finalStartYear = startYear < 1975 ? 1975 : startYear;
       final finalEndYear = endYear > currentYear ? currentYear : endYear;
       
-      // Start with empty chart data - bars will be added progressively
+      // Create chart data with placeholder entries for all years in the range
       List<TemperatureChartData> chartData = [];
+      for (int year = finalStartYear; year <= finalEndYear; year++) {
+        chartData.add(TemperatureChartData(
+          year: year.toString(),
+          temperature: 0.0, // Placeholder value
+          isCurrentYear: year == currentYear,
+          hasData: false, // Will be set to true when data is loaded
+        ));
+      }
       
-      // Set initial result with empty chart data
+      // Set initial result with placeholder chart data
       final initialResult = _createResultMap(
         chartData: chartData,
         averageTemperature: averageTemperature,
@@ -1111,42 +1205,56 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           final temperature = tempData.temperature ?? tempData.average?.temperature;
           
           if (temperature != null) {
-            // Add the new data point to the chart data
-            final newDataPoint = TemperatureChartData(
-              year: year.toString(),
-              temperature: temperature,
-              isCurrentYear: year == currentYear,
-              hasData: true,
-            );
-            
-            // Add to the chart data list
-            chartData.add(newDataPoint);
-            
-            // Update the current data and trigger a rebuild
-            _currentData!['chartData'] = chartData;
-            
-            // Trigger a UI update to show the new bar
-            if (mounted) {
-              setState(() {});
+            // Find the existing entry for this year and update it
+            final yearIndex = chartData.indexWhere((data) => data.year == year.toString());
+            if (yearIndex != -1) {
+              chartData[yearIndex] = TemperatureChartData(
+                year: year.toString(),
+                temperature: temperature,
+                isCurrentYear: year == currentYear,
+                hasData: true,
+              );
+              
+              // Update the current data and trigger a rebuild
+              _currentData!['chartData'] = chartData;
+              
+              // Trigger a UI update to show the new bar
+              if (mounted) {
+                setState(() {});
+              }
+              
+              debugPrintIfDebugging('Updated data for year $year at index $yearIndex');
             }
-            
-            debugPrintIfDebugging('Added data for year $year at index ${chartData.length - 1}');
           } else {
-            debugPrintIfDebugging('No valid temperature data for year $year, skipping');
+            debugPrintIfDebugging('No valid temperature data for year $year, keeping as placeholder');
+            // Mark this year as failed for tracking
+            if (!_failedYears.contains(year)) {
+              _failedYears.add(year);
+            }
           }
         } catch (e) {
           debugPrintIfDebugging('Failed to fetch temperature for year $year: $e');
+          
+          // Track this year as failed
+          if (!_failedYears.contains(year)) {
+            _failedYears.add(year);
+          }
           
           // Check if it's a rate limit error
           if (e is RateLimitException) {
             debugPrintIfDebugging('Rate limit exceeded for chart data, stopping further requests');
             setState(() {
               _chartDataRateLimited = true;
+              _chartDataFailed = true;
+              _chartDataFailedDueToRateLimit = true;
             });
             break; // Stop making more requests
+          } else {
+            // Other error - mark as failed but continue trying other years
+            setState(() {
+              _chartDataFailed = true;
+            });
           }
-          
-          // Don't add missing data points to the chart - they won't be visible anyway
         }
         
         // Add a delay to make progressive loading more visible
@@ -2320,7 +2428,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     }
     
     final missingYears = chartData.where((data) => !data.hasData).map((data) => int.parse(data.year)).toList();
-    final hasGaps = missingYears.isNotEmpty || _chartDataHasGaps;
+    final hasGaps = missingYears.isNotEmpty || _chartDataHasGaps || _chartDataFailed;
     
     // Check for missing recent years (2022-2025)
     final currentYear = DateTime.now().year;
@@ -2330,18 +2438,22 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     ).toList();
     
     if (hasGaps || missingRecentYears.isNotEmpty) {
-      final missingText = _buildMissingYearsText(missingYears, missingRecentYears);
-      
       return Padding(
         padding: const EdgeInsets.only(top: kSectionTopPadding, bottom: kSectionBottomPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Note: $missingText.',
-              style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
-              textAlign: TextAlign.left,
-            ),
+            // Show chart data failure message if there was a failure
+            if (_chartDataFailed) _buildChartDataFailureMessage(),
+            // Show missing years text
+            if (missingYears.isNotEmpty || missingRecentYears.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Note: ${_buildMissingYearsText(missingYears, missingRecentYears)}.',
+                style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
+                textAlign: TextAlign.left,
+              ),
+            ],
             const SizedBox(height: 4),
             Text(
               'Data completeness: ${((chartData.where((data) => data.hasData).length / chartData.length) * 100).toStringAsFixed(0)}%',
@@ -2406,8 +2518,61 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     return missingText;
   }
 
+  Widget _buildChartDataFailureMessage() {
+    return Row(
+      children: [
+        Icon(
+          _isRetryingChartData ? Icons.hourglass_empty : 
+          _chartDataFailedDueToRateLimit ? Icons.timer : Icons.error_outline,
+          color: _isRetryingChartData ? kGreyLabelColour : 
+                 _chartDataFailedDueToRateLimit ? kGreyLabelColour : kAccentColour,
+          size: 16,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            _isRetryingChartData 
+              ? 'Retrying chart data...'
+              : _chartDataFailedDueToRateLimit 
+                ? 'API rate limit exceeded - please wait before retrying chart data'
+                : 'Failed to load some chart data',
+            style: TextStyle(
+              color: _isRetryingChartData ? kGreyLabelColour : 
+                     _chartDataFailedDueToRateLimit ? kGreyLabelColour : kAccentColour, 
+              fontSize: kFontSizeBody - 1, 
+              fontWeight: FontWeight.w400
+            ),
+            textAlign: TextAlign.left,
+          ),
+        ),
+        if (!_isRetryingChartData && !_chartDataFailedDueToRateLimit) ...[
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _retryChartData,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: kAccentColour.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'Retry',
+                style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildDataRetrySection() {
     if (_chartDataRetryCount >= _maxChartDataRetries) {
+      return const SizedBox.shrink();
+    }
+    
+    // Only show the general retry section if there's no specific chart data failure
+    if (_chartDataFailed) {
       return const SizedBox.shrink();
     }
     
@@ -2552,7 +2717,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           
           if (placemarks.isNotEmpty) {
             final placemark = placemarks.first;
-            String newCity = 'London, UK'; // Default fallback
+            String newCity = kDefaultLocation; // Default fallback
             
             if (placemark.locality != null && placemark.locality!.isNotEmpty) {
               final locality = placemark.locality!;
