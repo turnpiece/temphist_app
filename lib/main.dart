@@ -329,6 +329,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   // Track current loading operation to prevent race conditions
   bool _isLoadingOperationActive = false;
   
+  // Add timeout tracking for loading operations
+  Timer? _loadingTimeoutTimer;
+  
   // Track chart data loading failures
   bool _chartDataFailed = false;
   bool _chartDataFailedDueToRateLimit = false;
@@ -358,6 +361,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     _positionStreamSubscription?.cancel();
     _stopAverageTrendDisplayTimer();
     _splashScreenTimer?.cancel();
+    _loadingTimeoutTimer?.cancel();
     super.dispose();
   }
 
@@ -1228,6 +1232,20 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     _isLoadingOperationActive = true;
     debugPrintIfDebugging('_loadChartDataProgressive: Starting progressive chart data load');
     
+    // Set up a timeout to prevent infinite loading
+    _loadingTimeoutTimer?.cancel();
+    _loadingTimeoutTimer = Timer(const Duration(minutes: 2), () {
+      if (_isLoadingOperationActive && mounted) {
+        debugPrintIfDebugging('⚠️ Loading timeout reached, forcing completion');
+        _isLoadingOperationActive = false;
+        _isDataLoading = false;
+        _progressiveLoadingCompleted = true;
+        setState(() {
+          _chartDataFailed = true;
+        });
+      }
+    });
+    
     try {
       final now = DateTime.now();
       final useYesterday = now.hour < kUseYesterdayHourThreshold;
@@ -1350,10 +1368,22 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       
       // Load from most recent to oldest (2025 -> 1975) to create right-to-left filling effect
       debugPrintIfDebugging('Starting chart data loading for years $finalEndYear to $finalStartYear');
+      int consecutiveFailures = 0;
+      const int maxConsecutiveFailures = 5; // Stop after 5 consecutive failures
+      
       for (int year = finalEndYear; year >= finalStartYear; year--) {
         // Check if we've hit a rate limit - stop making more requests
         if (_chartDataRateLimited) {
           debugPrintIfDebugging('Rate limit detected, stopping chart data loading at year $year');
+          break;
+        }
+        
+        // Check for too many consecutive failures - might indicate API is down
+        if (consecutiveFailures >= maxConsecutiveFailures) {
+          debugPrintIfDebugging('Too many consecutive failures ($consecutiveFailures), stopping at year $year');
+          setState(() {
+            _chartDataFailed = true;
+          });
           break;
         }
         
@@ -1385,6 +1415,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
               }
               
               debugPrintIfDebugging('✓ Successfully loaded data for year $year: ${temperature.toStringAsFixed(1)}°C');
+              consecutiveFailures = 0; // Reset failure counter on success
             }
           } else {
             debugPrintIfDebugging('✗ No valid temperature data returned for year $year (tempData: $tempData)');
@@ -1392,6 +1423,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
             if (!_failedYears.contains(year)) {
               _failedYears.add(year);
             }
+            consecutiveFailures++;
           }
         } catch (e) {
           debugPrintIfDebugging('✗ Failed to fetch temperature for year $year: $e');
@@ -1400,6 +1432,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           if (!_failedYears.contains(year)) {
             _failedYears.add(year);
           }
+          consecutiveFailures++;
           
           // Check if it's a rate limit error
           if (e is RateLimitException) {
@@ -1454,10 +1487,34 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       _isDataLoading = false;
       _progressiveLoadingCompleted = true;
       
+      // Ensure we still have some data structure even on error
+      if (_currentData == null) {
+        // Create minimal data structure to show error state
+        final now = DateTime.now();
+        final useYesterday = now.hour < kUseYesterdayHourThreshold;
+        final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+        final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
+        
+        _currentData = _createResultMap(
+          chartData: <TemperatureChartData>[],
+          averageTemperature: null,
+          trendSlope: null,
+          summaryText: null,
+          dateToUse: dateToUse,
+          city: city,
+        );
+      }
+      
       rethrow;
     } finally {
-      // Always reset the loading operation flag
+      // Always reset the loading operation flag and ensure loading is marked as completed
       _isLoadingOperationActive = false;
+      _isDataLoading = false;
+      _progressiveLoadingCompleted = true;
+      
+      // Cancel the timeout timer since loading is complete
+      _loadingTimeoutTimer?.cancel();
+      _loadingTimeoutTimer = null;
     }
   }
 
@@ -1501,7 +1558,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
   Widget _buildRefreshIndicator(Widget child) {
-    debugPrintIfDebugging('_buildRefreshIndicator: futureChartData=${futureChartData != null}, _isDataLoading=$_isDataLoading');
+    debugPrintIfDebugging('_buildRefreshIndicator: futureChartData=${futureChartData != null}, _currentData=${_currentData != null}, _isDataLoading=$_isDataLoading');
     
     // In test mode, don't create RefreshIndicator to avoid async operations
     if (widget.testFuture != null) {
@@ -1509,8 +1566,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       return child;
     }
     
-    // Always show RefreshIndicator when we have data
-    if (futureChartData == null) {
+    // Show RefreshIndicator when we have data (either futureChartData or _currentData)
+    // This ensures pull-to-refresh works in both old and new loading systems
+    if (futureChartData == null && _currentData == null) {
       debugPrintIfDebugging('_buildRefreshIndicator: No data, returning child without RefreshIndicator');
       return child;
     }
@@ -2609,7 +2667,11 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       !chartData.any((data) => int.parse(data.year) == year && data.hasData)
     ).toList();
     
-    if (hasGaps || missingRecentYears.isNotEmpty) {
+    // Also check if we have very few data points (less than 10 years of data)
+    final successfulYears = chartData.where((data) => data.hasData).length;
+    final hasVeryLittleData = successfulYears < 10;
+    
+    if (hasGaps || missingRecentYears.isNotEmpty || hasVeryLittleData) {
       return Padding(
         padding: const EdgeInsets.only(top: kSectionTopPadding, bottom: kSectionBottomPadding),
         child: Column(
@@ -2617,11 +2679,13 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           children: [
             // Show chart data failure message if there was a failure
             if (_chartDataFailed) _buildChartDataFailureMessage(),
-            // Show missing years text
-            if (missingYears.isNotEmpty || missingRecentYears.isNotEmpty) ...[
+            // Show missing years text or low data warning
+            if (missingYears.isNotEmpty || missingRecentYears.isNotEmpty || hasVeryLittleData) ...[
               const SizedBox(height: 8),
               Text(
-                'Note: ${_buildMissingYearsText(missingYears, missingRecentYears)}.',
+                hasVeryLittleData && missingYears.isEmpty && missingRecentYears.isEmpty
+                  ? 'Note: Very limited data available for this location. Only $successfulYears years of data were loaded.'
+                  : 'Note: ${_buildMissingYearsText(missingYears, missingRecentYears)}.',
                 style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
                 textAlign: TextAlign.left,
               ),
