@@ -1778,23 +1778,22 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(
-                width: 16,
-                height: 16,
+                width: 24,
+                height: 24,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2,
+                  strokeWidth: 2.5,
                   color: kGreyLabelColour,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Determining your location...',
-                  style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
-                  textAlign: TextAlign.left,
-                ),
+              const SizedBox(height: 12),
+              Text(
+                'Determining your location...',
+                style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
+                textAlign: TextAlign.left,
               ),
             ],
           ),
@@ -1812,28 +1811,29 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   Widget _buildProgressiveLoadingSection() {
     return Padding(
       padding: const EdgeInsets.only(top: kSectionTopPadding, bottom: kSectionBottomPadding),
-      child: Row(
-          children: [
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: kGreyLabelColour,
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Large spinner above the text
+          const SizedBox(
+            width: 32,
+            height: 32,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              color: kGreyLabelColour,
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                _currentLoadingMessage.isNotEmpty 
-                  ? _currentLoadingMessage 
-                  : 'Loading temperature data...',
-                style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
-                textAlign: TextAlign.left,
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          // Loading message below the spinner
+          Text(
+            _currentLoadingMessage.isNotEmpty 
+              ? _currentLoadingMessage 
+              : 'Loading temperature data...',
+            style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
+            textAlign: TextAlign.left,
+          ),
+        ],
+      ),
     );
   }
 
@@ -2285,7 +2285,15 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const CircularProgressIndicator(color: kGreyLabelColour),
+          // Large spinner above the text
+          const SizedBox(
+            width: 32,
+            height: 32,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              color: kGreyLabelColour,
+            ),
+          ),
           const SizedBox(height: 16),
           Text(
             'Loading temperature data...',
