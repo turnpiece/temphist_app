@@ -18,7 +18,7 @@ import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
 
 // App color constants
-// Note: These are no longer const because they depend on runtime configuration
+// Note: These are no longer constants because they depend on runtime configuration
 // but they maintain the same interface for backward compatibility
 const kBackgroundColour = Color(0xFF242456);
 const kAccentColour = Color(0xFFFF6B6B);
@@ -271,7 +271,6 @@ class SplashScreen extends StatelessWidget {
 
 class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindingObserver {
   Future<Map<String, dynamic>?>? futureChartData;
-  bool _isShowingCachedData = false;
   Timer? _loadingMessageTimer;
   int _loadingElapsedSeconds = 0;
   String _currentLoadingMessage = '';
@@ -400,7 +399,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     }
     
     // Then start loading temperature data progressively
-    _isShowingCachedData = false;
     _isDataLoading = true;
     _progressiveLoadingCompleted = false;
     
@@ -452,7 +450,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     await _determineLocation();
     
     // Reload data with new location using progressive loading
-    _isShowingCachedData = false;
     _isDataLoading = true;
     _progressiveLoadingCompleted = false;
     
@@ -881,6 +878,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     }
   }
 
+  // if years didn't load before try loading them again
   Future<void> _retryFailedYears() async {
     if (_failedYears.isEmpty) {
       debugPrintIfDebugging('⚠️ No failed years to retry');
@@ -1524,9 +1522,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     debugPrintIfDebugging('Pull-to-refresh triggered');
     
     // Cancel any existing background refresh to prevent race conditions
-    if (_isShowingCachedData) {
-      _isShowingCachedData = false;
-    }
     
     // Stop any existing auto-retry timer
     _stopAutoRetryTimer();
@@ -1631,8 +1626,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         data['displayDate'] as String?, 
         _displayLocation.isNotEmpty ? _displayLocation : (data['city'] as String?), 
         chartHeight, 
-        _isShowingCachedData, 
-        data['cachedDate'] as String?
       );
     }
     
@@ -1670,8 +1663,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       displayDate: displayDate,
       city: city,
       chartHeight: chartHeight,
-      isCachedData: _isShowingCachedData,
-      cachedDate: data['cachedDate'] as String?,
     );
   }
 
@@ -2193,15 +2184,13 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     String? displayDate,
     String? city,
     double chartHeight,
-    bool isCachedData,
-    String? cachedDate,
   ) {
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildDateSection(displayDate, isCachedData, cachedDate),
-          _buildCitySection(city, isCachedData),
+          _buildDateSection(displayDate),
+          _buildCitySection(city),
           _buildSummarySection(summaryText),
           _buildLoadingChartSection(chartHeight),
         ],
@@ -2209,58 +2198,32 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     );
   }
 
-  Widget _buildDateSection(String? displayDate, bool isCachedData, String? cachedDate) {
+  Widget _buildDateSection(String? displayDate) {
     if (displayDate == null) return const SizedBox.shrink();
-    
-    final dateToShow = isCachedData && cachedDate != null 
-      ? _formatDayMonth(DateFormat('yyyy-MM-dd').parse(cachedDate))
-      : displayDate;
     
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
       child: Text(
-        dateToShow,
+        displayDate,
         style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
         textAlign: TextAlign.left,
       ),
     );
   }
 
-  Widget _buildCitySection(String? city, bool isCachedData) {
+  Widget _buildCitySection(String? city) {
     if (city == null) return const SizedBox.shrink();
     
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Row(
-        children: [
-          Text(
-            city,
-            style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-            textAlign: TextAlign.left,
-          ),
-          if (isCachedData) _buildCachedBadge(),
-        ],
+      child: Text(
+        city,
+        style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+        textAlign: TextAlign.left,
       ),
     );
   }
 
-  Widget _buildCachedBadge() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 8.0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
-        decoration: BoxDecoration(
-          color: kGreyLabelColour.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(4.0),
-        ),
-        child: Text(
-          'cached',
-          style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
-          textAlign: TextAlign.left,
-        ),
-      ),
-    );
-  }
 
   Widget _buildSummarySection(String? summaryText) {
     if (summaryText?.isEmpty != false) return const SizedBox.shrink();
@@ -2308,8 +2271,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     required String? displayDate,
     required String? city,
     required double chartHeight,
-    bool isCachedData = false,
-    String? cachedDate,
   }) {
     // Calculate minimum and maximum temperature for Y-axis (only from years with data)
     final validData = chartData.where((data) => data.hasData).toList();
@@ -2318,7 +2279,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // This allows the progressive loading to be visible
     if (validData.isEmpty) {
       // Show chart with empty bars - they won't be visible but the structure will be there
-      return _buildChartWithEmptyBars(chartData, averageTemperature, trendSlope, summaryText, displayDate, city, chartHeight, isCachedData, cachedDate);
+      return _buildChartWithEmptyBars(chartData, averageTemperature, trendSlope, summaryText, displayDate, city, chartHeight);
     }
     
     double yAxisMin;
@@ -2349,8 +2310,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildDateSection(displayDate, isCachedData, cachedDate),
-          _buildCitySection(city, isCachedData),
+          _buildDateSection(displayDate),
+          _buildCitySection(city),
           _buildSummarySection(summaryText),
           Padding(
             padding: const EdgeInsets.all(kChartInnerPadding),
