@@ -385,9 +385,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // Verbose logging for initialization steps
     DebugUtils.verboseLazy(() => 'Initializing app - test future: ${widget.testFuture != null}');
     
-    // Clear cache to ensure progressive loading is visible
-    await _clearCache();
-    
     // First determine location
     await _determineLocation();
     
