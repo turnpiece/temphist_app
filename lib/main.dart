@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -340,6 +341,13 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     
+    // Debug mode detection logging
+    debugPrintIfDebugging('🔧 Debug mode detection:');
+    debugPrintIfDebugging('  - kDebugMode: ${kDebugMode}');
+    debugPrintIfDebugging('  - AppConfig.isDebugMode: ${AppConfig.isDebugMode}');
+    debugPrintIfDebugging('  - AppConfig.enableDebugUI: ${AppConfig.enableDebugUI}');
+    debugPrintIfDebugging('  - AppConfig.shouldShowDebugFeatures: ${AppConfig.shouldShowDebugFeatures}');
+    
     // Start minimum splash screen timer
     _startSplashScreenTimer();
     
@@ -550,6 +558,17 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       debugPrintIfDebugging('Cache cleared for simulation mode');
     } catch (e) {
       debugPrintIfDebugging('Error clearing cache: $e');
+    }
+  }
+
+  /// Clear only location cache (for testing different locations)
+  Future<void> _clearLocationCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('cachedLocation');
+      debugPrintIfDebugging('Location cache cleared');
+    } catch (e) {
+      debugPrintIfDebugging('Error clearing location cache: $e');
     }
   }
 
@@ -1903,6 +1922,31 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     await _initializeApp();
   }
 
+  /// Clear only location cache (for testing different locations in Simulator)
+  Future<void> _handleLocationRefresh() async {
+    debugPrintIfDebugging('Location refresh triggered - clearing location cache only');
+    
+    // Clear only location cache
+    await _clearLocationCache();
+    
+    // Cancel any existing background refresh to prevent race conditions
+    _stopAutoRetryTimer();
+    
+    // Reset error states
+    _resetErrorStates();
+    
+    // Reset location determination state
+    setState(() {
+      _isLocationDetermined = false;
+      _determinedLocation = '';
+      _displayLocation = '';
+      _locationDeterminedAt = null;
+    });
+    
+    // Reinitialize the app (determine location then load data)
+    await _initializeApp();
+  }
+
   Widget _buildRefreshIndicator(Widget child) {
     debugPrintIfDebugging('_buildRefreshIndicator: futureChartData=${futureChartData != null}, _currentData=${_currentData != null}, _isDataLoading=$_isDataLoading');
     
@@ -2294,6 +2338,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                 _buildDebugToggleButton('Summary', 'summary'),
                 _buildResetAllButton(),
                 _buildForceRefreshButton(),
+                _buildLocationRefreshButton(),
               ],
             ),
             if (AppConfig.enableEndpointFailureSimulation) ...[
@@ -2432,6 +2477,35 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           'Force Refresh',
           style: TextStyle(
             color: kAccentColour,
+            fontSize: kFontSizeBody - 2,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationRefreshButton() {
+    return GestureDetector(
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location refresh - clearing location cache'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+        _handleLocationRefresh();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: kGreyLabelColour.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          'Location Refresh',
+          style: TextStyle(
+            color: kGreyLabelColour,
             fontSize: kFontSizeBody - 2,
             fontWeight: FontWeight.w500,
           ),

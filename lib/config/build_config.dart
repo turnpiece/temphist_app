@@ -1,17 +1,15 @@
 // Build configuration file
-// This file uses environment variables to determine build mode
+// This file uses Flutter's built-in debug mode detection
 // 
-// For development/debugging: flutter run --debug (automatically sets DEBUG=true)
-// For production: flutter build --release (automatically sets DEBUG=false)
-// For manual override: flutter run --dart-define=DEBUG=true
+// For development/debugging: flutter run --debug (kDebugMode=true)
+// For production: flutter build --release (kDebugMode=false)
+
+import 'package:flutter/foundation.dart';
 
 class BuildConfig {
-  // Build-time constant for conditional compilation
-  // When no DEBUG environment variable is set, this defaults to false (production mode)
-  // Flutter automatically sets this based on build mode:
-  // - Debug builds: DEBUG=true
-  // - Release builds: DEBUG=false
-  static const bool isDebugBuild = bool.fromEnvironment('DEBUG', defaultValue: false);
+  // Use Flutter's built-in debug mode detection
+  // This is more reliable than environment variables
+  static bool get isDebugBuild => kDebugMode;
   
   // This will be used by app_config.dart to determine which config to import
   static bool get shouldUseDebugConfig => isDebugBuild;
