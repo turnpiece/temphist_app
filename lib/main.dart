@@ -12,6 +12,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'dart:io' show Platform;
 import 'dart:async'; // Added for StreamSubscription and StreamController
+import 'dart:convert'; // Added for jsonEncode/jsonDecode
 
 import 'services/temperature_service.dart';
 import 'config/app_config.dart';
@@ -63,7 +64,7 @@ const double kFontSizeAxisLabel = 16.0; // Chart axis labels (years and temperat
 
 // Time constants
 const int kUseYesterdayHourThreshold = 3; // Use yesterday's data if current hour is before this (3 AM)
-const int kAverageTrendDisplayDelaySeconds = 25; // Delay before showing average/trend lines (seconds)
+const int kAverageTrendDisplayDelaySeconds = 35; // Delay before showing average/trend lines (seconds)
 const int kApiTimeoutSeconds = 35; // API timeout (must be longer than display timer to prevent race conditions)
 
 // Default location constant
@@ -384,6 +385,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // Verbose logging for initialization steps
     DebugUtils.verboseLazy(() => 'Initializing app - test future: ${widget.testFuture != null}');
     
+    // Clean up expired cache entries
+    await _cleanupExpiredCache();
+    
     // First determine location
     await _determineLocation();
     
@@ -532,6 +536,13 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     });
   }
 
+  // Cache expiration constants
+  static const Duration _locationCacheExpiration = Duration(minutes: 30);
+  static const Duration _currentDateCacheExpiration = Duration(hours: 1);
+  static const Duration _historicalDataCacheExpiration = Duration(hours: 24);
+  static const Duration _summaryCacheExpiration = Duration(hours: 1);
+  static const Duration _averageTrendCacheExpiration = Duration(hours: 6);
+
   Future<void> _clearCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -541,6 +552,223 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       debugPrintIfDebugging('Error clearing cache: $e');
     }
   }
+
+  /// Cache location data with timestamp
+  Future<void> _cacheLocation(String location, String displayLocation) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheData = {
+        'location': location,
+        'displayLocation': displayLocation,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      };
+      await prefs.setString('cachedLocation', jsonEncode(cacheData));
+      debugPrintIfDebugging('📍 Location cached: $location');
+    } catch (e) {
+      debugPrintIfDebugging('Error caching location: $e');
+    }
+  }
+
+  /// Load cached location if still valid
+  Future<Map<String, String>?> _loadCachedLocation() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedData = prefs.getString('cachedLocation');
+      if (cachedData == null) return null;
+
+      final data = jsonDecode(cachedData) as Map<String, dynamic>;
+      final timestamp = DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int);
+      final age = DateTime.now().difference(timestamp);
+
+      if (age > _locationCacheExpiration) {
+        debugPrintIfDebugging('📍 Cached location expired (${age.inMinutes} minutes old)');
+        await prefs.remove('cachedLocation');
+        return null;
+      }
+
+      debugPrintIfDebugging('📍 Using cached location: ${data['location']} (${age.inMinutes} minutes old)');
+      return {
+        'location': data['location'] as String,
+        'displayLocation': data['displayLocation'] as String,
+      };
+    } catch (e) {
+      debugPrintIfDebugging('Error loading cached location: $e');
+      return null;
+    }
+  }
+
+  /// Cache temperature data for a specific year and location
+  Future<void> _cacheTemperatureData(int year, String location, String date, Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheKey = 'tempData_${location}_${year}_${date}';
+      final cacheData = {
+        'data': data,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'year': year,
+        'location': location,
+        'date': date,
+      };
+      await prefs.setString(cacheKey, jsonEncode(cacheData));
+      debugPrintIfDebugging('🌡️ Temperature data cached: $year for $location');
+    } catch (e) {
+      debugPrintIfDebugging('Error caching temperature data: $e');
+    }
+  }
+
+  /// Load cached temperature data if still valid
+  Future<Map<String, dynamic>?> _loadCachedTemperatureData(int year, String location, String date) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheKey = 'tempData_${location}_${year}_$date';
+      final cachedData = prefs.getString(cacheKey);
+      if (cachedData == null) return null;
+
+      final data = jsonDecode(cachedData) as Map<String, dynamic>;
+      final timestamp = DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int);
+      final age = DateTime.now().difference(timestamp);
+
+      // Determine expiration based on whether it's current year or historical
+      final isCurrentYear = year == DateTime.now().year;
+      final expiration = isCurrentYear ? _currentDateCacheExpiration : _historicalDataCacheExpiration;
+
+      if (age > expiration) {
+        debugPrintIfDebugging('🌡️ Cached temperature data expired: $year (${age.inHours} hours old)');
+        await prefs.remove(cacheKey);
+        return null;
+      }
+
+      debugPrintIfDebugging('🌡️ Using cached temperature data: $year (${age.inMinutes} minutes old)');
+      return data['data'] as Map<String, dynamic>;
+    } catch (e) {
+      debugPrintIfDebugging('Error loading cached temperature data: $e');
+      return null;
+    }
+  }
+
+  /// Cache API response data (average, trend, summary)
+  Future<void> _cacheApiResponse(String endpoint, String location, String date, Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheKey = 'api_${endpoint}_${location}_$date';
+      final cacheData = {
+        'data': data,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'endpoint': endpoint,
+        'location': location,
+        'date': date,
+      };
+      await prefs.setString(cacheKey, jsonEncode(cacheData));
+      debugPrintIfDebugging('📊 API response cached: $endpoint for $location');
+    } catch (e) {
+      debugPrintIfDebugging('Error caching API response: $e');
+    }
+  }
+
+  /// Load cached API response if still valid
+  Future<Map<String, dynamic>?> _loadCachedApiResponse(String endpoint, String location, String date) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheKey = 'api_${endpoint}_${location}_$date';
+      final cachedData = prefs.getString(cacheKey);
+      if (cachedData == null) return null;
+
+      final data = jsonDecode(cachedData) as Map<String, dynamic>;
+      final timestamp = DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int);
+      final age = DateTime.now().difference(timestamp);
+
+      // Determine expiration based on endpoint type
+      Duration expiration;
+      switch (endpoint) {
+        case 'summary':
+          expiration = _summaryCacheExpiration;
+          break;
+        case 'average':
+        case 'trend':
+          expiration = _averageTrendCacheExpiration;
+          break;
+        default:
+          expiration = Duration(hours: 1); // Default to 1 hour
+      }
+
+      if (age > expiration) {
+        debugPrintIfDebugging('📊 Cached API response expired: $endpoint (${age.inHours} hours old)');
+        await prefs.remove(cacheKey);
+        return null;
+      }
+
+      debugPrintIfDebugging('📊 Using cached API response: $endpoint (${age.inMinutes} minutes old)');
+      return data['data'] as Map<String, dynamic>;
+    } catch (e) {
+      debugPrintIfDebugging('Error loading cached API response: $e');
+      return null;
+    }
+  }
+
+  /// Clean up expired cache entries
+  Future<void> _cleanupExpiredCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      final now = DateTime.now();
+      int cleanedCount = 0;
+
+      for (final key in keys) {
+        if (key.startsWith('tempData_') || key.startsWith('api_')) {
+          try {
+            final cachedData = prefs.getString(key);
+            if (cachedData != null) {
+              final data = jsonDecode(cachedData) as Map<String, dynamic>;
+              final timestamp = DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int);
+              final age = now.difference(timestamp);
+              
+              Duration expiration;
+              if (key.startsWith('tempData_')) {
+                // Temperature data cache
+                final year = data['year'] as int;
+                final isCurrentYear = year == now.year;
+                expiration = isCurrentYear ? _currentDateCacheExpiration : _historicalDataCacheExpiration;
+              } else if (key.startsWith('api_')) {
+                // API response cache
+                final endpoint = data['endpoint'] as String;
+                switch (endpoint) {
+                  case 'summary':
+                    expiration = _summaryCacheExpiration;
+                    break;
+                  case 'average':
+                  case 'trend':
+                    expiration = _averageTrendCacheExpiration;
+                    break;
+                  default:
+                    expiration = Duration(hours: 1);
+                }
+              } else {
+                continue; // Skip unknown cache types
+              }
+
+              if (age > expiration) {
+                await prefs.remove(key);
+                cleanedCount++;
+              }
+            }
+          } catch (e) {
+            // If we can't parse the data, remove it
+            await prefs.remove(key);
+            cleanedCount++;
+          }
+        }
+      }
+
+      if (cleanedCount > 0) {
+        debugPrintIfDebugging('🧹 Cleaned up $cleanedCount expired cache entries');
+      }
+    } catch (e) {
+      debugPrintIfDebugging('Error cleaning up cache: $e');
+    }
+  }
+
+
+
 
   Future<void> _retryFailedData() async {
     if (!_averageDataFailed && !_trendDataFailed && !_summaryDataFailed) {
@@ -989,6 +1217,19 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     try {
       String city = kDefaultLocation;
       
+      // Try to load cached location first
+      final cachedLocation = await _loadCachedLocation();
+      if (cachedLocation != null) {
+        debugPrintIfDebugging('Using cached location: ${cachedLocation['location']}');
+        setState(() {
+          _determinedLocation = cachedLocation['location']!;
+          _displayLocation = cachedLocation['displayLocation']!;
+          _isLocationDetermined = true;
+          _locationDeterminedAt = DateTime.now();
+        });
+        return;
+      }
+      
       // Try to get user's city via geolocation
       try {
         debugPrintIfDebugging('_determineLocation: Starting geolocation');
@@ -1076,6 +1317,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         _isLocationDetermined = true;
         _locationDeterminedAt = DateTime.now(); // Record when location was determined
       });
+      
+      // Cache the location
+      await _cacheLocation(city, _extractDisplayLocation(city));
       
       // Reset loading message timer to start temperature-related messages
       _loadingElapsedSeconds = 0;
@@ -1253,9 +1497,24 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       
       // Get average data first
       try {
-        final averageData = await _simulateEndpointFailure('average', () => 
-          service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-        );
+        // Try to load from cache first
+        final cachedAverage = await _loadCachedApiResponse('average', city, mmdd);
+        Map<String, dynamic> averageData;
+        
+        if (cachedAverage != null) {
+          debugPrintIfDebugging('📊 Using cached average data');
+          // Add a small delay to make progressive loading visible even with cached data
+          await Future.delayed(const Duration(milliseconds: 100));
+          averageData = cachedAverage;
+        } else {
+          debugPrintIfDebugging('📊 Fetching fresh average data');
+          averageData = await _simulateEndpointFailure('average', () => 
+            service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+          );
+          // Cache the successful response
+          await _cacheApiResponse('average', city, mmdd, averageData);
+        }
+        
         averageTemperature = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
         
         if (averageData['year_range'] != null) {
@@ -1281,9 +1540,24 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       
       // Get trend data
       try {
-        final trendData = await _simulateEndpointFailure('trend', () => 
-          service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-        );
+        // Try to load from cache first
+        final cachedTrend = await _loadCachedApiResponse('trend', city, mmdd);
+        Map<String, dynamic> trendData;
+        
+        if (cachedTrend != null) {
+          debugPrintIfDebugging('📊 Using cached trend data');
+          // Add a small delay to make progressive loading visible even with cached data
+          await Future.delayed(const Duration(milliseconds: 100));
+          trendData = cachedTrend;
+        } else {
+          debugPrintIfDebugging('📊 Fetching fresh trend data');
+          trendData = await _simulateEndpointFailure('trend', () => 
+            service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+          );
+          // Cache the successful response
+          await _cacheApiResponse('trend', city, mmdd, trendData);
+        }
+        
         final slope = trendData['slope'];
         trendSlope = (slope is num) ? slope.toDouble() : null;
       } catch (e) {
@@ -1298,9 +1572,24 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       
       // Get summary data
       try {
-        final summaryData = await _simulateEndpointFailure('summary', () => 
-          service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-        );
+        // Try to load from cache first
+        final cachedSummary = await _loadCachedApiResponse('summary', city, mmdd);
+        Map<String, dynamic> summaryData;
+        
+        if (cachedSummary != null) {
+          debugPrintIfDebugging('📊 Using cached summary data');
+          // Add a small delay to make progressive loading visible even with cached data
+          await Future.delayed(const Duration(milliseconds: 100));
+          summaryData = cachedSummary;
+        } else {
+          debugPrintIfDebugging('📊 Fetching fresh summary data');
+          summaryData = await _simulateEndpointFailure('summary', () => 
+            service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+          );
+          // Cache the successful response
+          await _cacheApiResponse('summary', city, mmdd, summaryData);
+        }
+        
         final summaryRaw = summaryData['summary'];
         summaryText = summaryRaw?.toString();
       } catch (e) {
@@ -1371,6 +1660,38 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         
         final dateForYear = '$year-$mmdd';
         debugPrintIfDebugging('🔄 About to fetch temperature data for year $year ($dateForYear) - attempt $totalAttempts');
+        
+        // Try to load from cache first
+        final cachedData = await _loadCachedTemperatureData(year, city, dateForYear);
+        if (cachedData != null) {
+          debugPrintIfDebugging('📦 Using cached data for year $year');
+          // Add a small delay to make progressive loading visible even with cached data
+          await Future.delayed(const Duration(milliseconds: 50));
+          // Process cached data the same way as fresh data
+          final temperature = cachedData['temperature'] ?? cachedData['average']?['temperature'];
+          if (temperature != null) {
+            final yearIndex = chartData.indexWhere((data) => data.year == year.toString());
+            if (yearIndex != -1) {
+              chartData[yearIndex] = TemperatureChartData(
+                year: year.toString(),
+                temperature: temperature,
+                isCurrentYear: year == currentYear,
+                hasData: true,
+              );
+              
+              _currentData!['chartData'] = chartData;
+              if (mounted) {
+                setState(() {});
+              }
+              
+              successfulAttempts++;
+              consecutiveFailures = 0;
+              debugPrintIfDebugging('✓ Successfully loaded cached data for year $year: ${temperature.toStringAsFixed(1)}°C');
+            }
+            continue; // Skip API call since we have cached data
+          }
+        }
+        
         try {
           // Add a timeout to individual API calls to prevent hanging
           final tempData = await service.fetchTemperature(city, dateForYear)
@@ -1401,6 +1722,14 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
               if (mounted) {
                 setState(() {});
               }
+              
+              // Cache the successful data
+              final dataToCache = {
+                'temperature': temperature,
+                'year': year,
+                'date': dateForYear,
+              };
+              await _cacheTemperatureData(year, city, dateForYear, dataToCache);
               
               successfulAttempts++;
               consecutiveFailures = 0; // Reset failure counter on success
@@ -1547,6 +1876,31 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     
     // Don't await the future here - let the FutureBuilder handle it
     // This allows the RefreshIndicator to complete its animation
+  }
+
+  /// Force refresh without using cache (for debugging/testing)
+  Future<void> _handleForceRefresh() async {
+    debugPrintIfDebugging('Force refresh triggered - clearing all cache');
+    
+    // Clear all cache to force fresh data loading
+    await _clearCache();
+    
+    // Cancel any existing background refresh to prevent race conditions
+    _stopAutoRetryTimer();
+    
+    // Reset error states
+    _resetErrorStates();
+    
+    // Reset location determination state
+    setState(() {
+      _isLocationDetermined = false;
+      _determinedLocation = '';
+      _displayLocation = '';
+      _locationDeterminedAt = null;
+    });
+    
+    // Reinitialize the app (determine location then load data)
+    await _initializeApp();
   }
 
   Widget _buildRefreshIndicator(Widget child) {
@@ -1939,6 +2293,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                 _buildDebugToggleButton('Trend', 'trend'),
                 _buildDebugToggleButton('Summary', 'summary'),
                 _buildResetAllButton(),
+                _buildForceRefreshButton(),
               ],
             ),
             if (AppConfig.enableEndpointFailureSimulation) ...[
@@ -2048,6 +2403,35 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           'Reset All',
           style: TextStyle(
             color: kGreyLabelColour,
+            fontSize: kFontSizeBody - 2,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForceRefreshButton() {
+    return GestureDetector(
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Force refresh - clearing all cache'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+        _handleForceRefresh();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: kAccentColour.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          'Force Refresh',
+          style: TextStyle(
+            color: kAccentColour,
             fontSize: kFontSizeBody - 2,
             fontWeight: FontWeight.w500,
           ),
