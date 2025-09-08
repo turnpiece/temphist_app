@@ -58,6 +58,9 @@ dependencies:
   # For caching
   shared_preferences: ^2.2.2
 
+  # For network connectivity detection
+  connectivity_plus: ^6.0.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -23,7 +23,7 @@ class DebugConfig {
   static const Duration simulatedFailureDelay = Duration(seconds: 2);
   
   // Debug-specific simulation states
-  static const bool defaultSimulateAverageFailure = true;
+  static const bool defaultSimulateAverageFailure = false;
   static const bool defaultSimulateTrendFailure = false;
   static const bool defaultSimulateSummaryFailure = false;
   
