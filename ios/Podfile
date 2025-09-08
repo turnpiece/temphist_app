@@ -1,4 +1,4 @@
-platform :ios, '13.0'
+platform :ios, '15.0'
 
 flutter_sdk_root = ENV['FLUTTER_ROOT'] or
   raise 'FLUTTER_ROOT env-var is not set; run `flutter` once or set it manually'
@@ -13,7 +13,7 @@ end
 post_install do |installer|    # or your loop + flutter_additional…
   installer.pods_project.targets.each do |t|
     t.build_configurations.each do |c|
-      c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+      c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
     end
     flutter_additional_ios_build_settings(t)
   end
