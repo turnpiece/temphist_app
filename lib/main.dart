@@ -58,10 +58,14 @@ const double kChartRightMargin = 20.0; // Extra right margin for Y-axis labels
 const double kSectionBottomPadding = 22.0; // Space below each section
 const double kSectionTopPadding = 22.0; // Space above each section
 
+// App constants
+const String kAppTitle = 'TempHist'; // Application title
+
 // Font size constants - control text sizing throughout the app
 const double kFontSizeTitle = 26.0; // Main title text (e.g., "TempHist")
 const double kFontSizeBody = 17.0; // Body text (date, location, summary, etc.)
 const double kFontSizeAxisLabel = 16.0; // Chart axis labels (years and temperatures)
+const double kIconSize = 17.0; // Standard icon size for UI elements
 
 // Time constants
 const int kUseYesterdayHourThreshold = 3; // Use yesterday's data if current hour is before this (3 AM)
@@ -70,6 +74,22 @@ const int kApiTimeoutSeconds = 35; // API timeout (must be longer than display t
 
 // Default location constant
 const String kDefaultLocation = 'London, UK';
+
+/// Helper function to get current date and location for API calls
+/// Returns a map with 'date', 'mmdd', and 'city' keys
+Map<String, String> _getCurrentDateAndLocation(String determinedLocation) {
+  final now = DateTime.now();
+  final useYesterday = now.hour < kUseYesterdayHourThreshold;
+  final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+  final mmdd = DateFormat('MM-dd').format(dateToUse);
+  final city = determinedLocation.isNotEmpty ? determinedLocation : kDefaultLocation;
+  
+  return {
+    'date': DateFormat('yyyy-MM-dd').format(dateToUse),
+    'mmdd': mmdd,
+    'city': city,
+  };
+}
 
 /// Clean up and validate location strings for better API compatibility
 String _cleanupLocationString(String location) {
@@ -186,7 +206,7 @@ class TempHist extends StatelessWidget {
     
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'TempHist',
+      title: kAppTitle,
       home: TemperatureScreen(),
       // Add a custom loading screen theme
       theme: ThemeData(
@@ -239,7 +259,7 @@ class SplashScreen extends StatelessWidget {
               const SizedBox(height: 24),
               // App title
               Text(
-                'TempHist',
+                kAppTitle,
                 style: TextStyle(
                   color: kAccentColour,
                   fontSize: 32,
@@ -259,7 +279,7 @@ class SplashScreen extends StatelessWidget {
                 'Loading...',
                 style: TextStyle(
                   color: kTextPrimaryColour,
-                  fontSize: 16,
+                  fontSize: kFontSizeBody,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -280,6 +300,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   String _displayLocation = ''; // Short location for display
   bool _isLocationDetermined = false;
   DateTime? _locationDeterminedAt; // Timestamp when location was last determined
+  DateTime? _currentDataDate; // The date for which data is currently loaded
   bool _isDataLoading = false;
   Timer? _averageTrendDisplayTimer;
   
@@ -375,8 +396,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     super.didChangeAppLifecycleState(state);
     
     if (state == AppLifecycleState.resumed) {
-      debugPrintIfDebugging('App resumed - checking if location needs refresh');
+      debugPrintIfDebugging('App resumed - checking if location or date needs refresh');
       _checkAndRefreshLocationIfNeeded();
+      _checkAndRefreshDataIfDateChanged();
     }
   }
 
@@ -445,6 +467,51 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     } else {
       debugPrintIfDebugging('Location is only ${timeSinceLastLocation.inMinutes} minutes old, keeping cached location');
     }
+  }
+
+  Future<void> _checkAndRefreshDataIfDateChanged() async {
+    // If no data has been loaded yet, don't check
+    if (_currentDataDate == null) {
+      return;
+    }
+    
+    final currentDateInfo = _getCurrentDateAndLocation(_determinedLocation);
+    final currentDate = DateTime.parse(currentDateInfo['date']!);
+    
+    // Check if the date has changed
+    if (!_isSameDate(_currentDataDate!, currentDate)) {
+      debugPrintIfDebugging('Date changed from ${_formatDayMonth(_currentDataDate!)} to ${_formatDayMonth(currentDate)}, refreshing data...');
+      await _refreshDataForNewDate();
+    } else {
+      debugPrintIfDebugging('Date unchanged (${_formatDayMonth(currentDate)}), keeping current data');
+    }
+  }
+
+  bool _isSameDate(DateTime date1, DateTime date2) {
+    return date1.year == date2.year && 
+           date1.month == date2.month && 
+           date1.day == date2.day;
+  }
+
+  Future<void> _refreshDataForNewDate() async {
+    debugPrintIfDebugging('Refreshing data for new date...');
+    
+    // Update the current data date
+    final currentDateInfo = _getCurrentDateAndLocation(_determinedLocation);
+    _currentDataDate = DateTime.parse(currentDateInfo['date']!);
+    
+    // Reload data with new date using progressive loading
+    _isDataLoading = true;
+    _progressiveLoadingCompleted = false;
+    
+    // Start the average/trend display timer
+    _startAverageTrendDisplayTimer();
+    
+    // Start progressive loading in the background
+    _loadChartDataProgressive();
+    
+    // Restart loading message timer
+    _startLoadingMessageTimer();
   }
 
   Future<void> _refreshLocationAndData() async {
@@ -787,8 +854,6 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   }
 
 
-
-
   Future<void> _retryFailedData() async {
     if (!_averageDataFailed && !_trendDataFailed && !_summaryDataFailed) {
       return; // Nothing to retry
@@ -797,11 +862,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     debugPrintIfDebugging('Retrying failed data fetches...');
     
     try {
-      final now = DateTime.now();
-      final useYesterday = now.hour < kUseYesterdayHourThreshold;
-      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
-      final mmdd = DateFormat('MM-dd').format(dateToUse);
-      final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final mmdd = dateInfo['mmdd']!;
+      final city = dateInfo['city']!;
       
       final service = TemperatureService();
       
@@ -931,11 +994,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     debugPrintIfDebugging('Retrying average data...');
     
     try {
-      final now = DateTime.now();
-      final useYesterday = now.hour < kUseYesterdayHourThreshold;
-      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
-      final mmdd = DateFormat('MM-dd').format(dateToUse);
-      final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final mmdd = dateInfo['mmdd']!;
+      final city = dateInfo['city']!;
       
       final service = TemperatureService();
       
@@ -984,11 +1045,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     debugPrintIfDebugging('Retrying trend data...');
     
     try {
-      final now = DateTime.now();
-      final useYesterday = now.hour < kUseYesterdayHourThreshold;
-      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
-      final mmdd = DateFormat('MM-dd').format(dateToUse);
-      final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final mmdd = dateInfo['mmdd']!;
+      final city = dateInfo['city']!;
       
       final service = TemperatureService();
       
@@ -1034,11 +1093,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     debugPrintIfDebugging('Retrying summary data...');
     
     try {
-      final now = DateTime.now();
-      final useYesterday = now.hour < kUseYesterdayHourThreshold;
-      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
-      final mmdd = DateFormat('MM-dd').format(dateToUse);
-      final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final mmdd = dateInfo['mmdd']!;
+      final city = dateInfo['city']!;
       
       final service = TemperatureService();
       
@@ -1135,11 +1192,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     debugPrintIfDebugging('🔄 Retrying failed years: $_failedYears');
     
     try {
-      final now = DateTime.now();
-      final useYesterday = now.hour < kUseYesterdayHourThreshold;
-      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
-      final mmdd = DateFormat('MM-dd').format(dateToUse);
-      final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final mmdd = dateInfo['mmdd']!;
+      final city = dateInfo['city']!;
       
       debugPrintIfDebugging('📍 Retry parameters - city: $city, date: $mmdd');
       
@@ -1452,9 +1507,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         newMessage = 'Loading temperature data...';
       } else if (_loadingElapsedSeconds < 25) {
         // Calculate the date that will be used (same logic as _loadChartData)
-        final now = DateTime.now();
-        final useYesterday = now.hour < kUseYesterdayHourThreshold;
-        final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+        final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+        final dateToUse = DateTime.parse(dateInfo['date']!);
         final friendlyDate = _formatDayMonth(dateToUse);
         newMessage = 'Getting temperatures on $friendlyDate over the past 50 years.';
       } else if (_loadingElapsedSeconds < 45) {
@@ -1488,14 +1542,18 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     debugPrintIfDebugging('_loadChartDataProgressive: Starting progressive chart data load');
     
     try {
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final formattedDate = dateInfo['date']!;
+      final dateToUse = DateTime.parse(formattedDate);
       final now = DateTime.now();
       final useYesterday = now.hour < kUseYesterdayHourThreshold;
-      final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
-      final formattedDate = DateFormat('yyyy-MM-dd').format(dateToUse);
       debugPrintIfDebugging('_loadChartDataProgressive: Current time: ${now.hour}:${now.minute}, useYesterday: $useYesterday, dateToUse: $formattedDate');
 
       final service = TemperatureService();
-      String city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
+      String city = dateInfo['city']!;
+      
+      // Update the current data date
+      _currentDataDate = dateToUse;
       
       debugPrintIfDebugging('_loadChartDataProgressive: Using determined city: $city');
       final currentYear = dateToUse.year;
@@ -1837,10 +1895,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       // Ensure we still have some data structure even on error
       if (_currentData == null) {
         // Create minimal data structure to show error state
-        final now = DateTime.now();
-        final useYesterday = now.hour < kUseYesterdayHourThreshold;
-        final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
-        final city = _determinedLocation.isNotEmpty ? _determinedLocation : kDefaultLocation;
+        final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+        final dateToUse = DateTime.parse(dateInfo['date']!);
+        final city = dateInfo['city']!;
         
         _currentData = _createResultMap(
           chartData: <TemperatureChartData>[],
@@ -2131,9 +2188,8 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
 
   Widget _buildLoadingDateSection() {
     // Calculate the date that will be used (same logic as _loadChartData)
-    final now = DateTime.now();
-    final useYesterday = now.hour < kUseYesterdayHourThreshold;
-    final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+    final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+    final dateToUse = DateTime.parse(dateInfo['date']!);
     final displayDate = _formatDayMonth(dateToUse);
     
     return Padding(
@@ -2269,7 +2325,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
               },
             ),
             Text(
-              'TempHist',
+              kAppTitle,
               style: TextStyle(
                 color: kAccentColour,
                 fontSize: kFontSizeTitle,
@@ -2405,7 +2461,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isSimulating ? kAccentColour : kGreyLabelColour.withOpacity(0.3),
+          color: isSimulating ? kAccentColour : kGreyLabelColour.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
@@ -2441,7 +2497,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: kGreyLabelColour.withOpacity(0.3),
+          color: kGreyLabelColour.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
@@ -2470,7 +2526,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: kAccentColour.withOpacity(0.2),
+          color: kAccentColour.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
@@ -2499,7 +2555,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: kGreyLabelColour.withOpacity(0.2),
+          color: kGreyLabelColour.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
@@ -2851,7 +2907,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                   ],
                   primaryXAxis: NumericAxis(
                     labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
-                    majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withOpacity(0.3)),
+                    majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
                     labelIntersectAction: AxisLabelIntersectAction.hide,
                     // For progressive loading, show the full year range (1975-2025) from the start
                     // This ensures consistent bar spacing as data loads and includes current year
@@ -2869,7 +2925,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                     numberFormat: NumberFormat('0'),
                     minimum: yAxisMin,
                     maximum: yAxisMax,
-                    majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withOpacity(0.3)),
+                    majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
                     labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
                     // Ensure bars start at the axis regardless of temperature values
                     plotOffset: 0,
@@ -2913,166 +2969,168 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                 textAlign: TextAlign.left,
               ),
             ),
-                    if (_averageDataFailed)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Row(
-                            children: [
-                              Icon(
-                                _isRetryingAverage ? Icons.hourglass_empty : 
-                                _averageDataRateLimited ? Icons.timer : Icons.error_outline,
-                                color: _isRetryingAverage ? kGreyLabelColour : 
-                                       _averageDataRateLimited ? kGreyLabelColour : kAccentColour,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _isRetryingAverage 
-                                    ? 'Retrying average temperature data...'
-                                    : _averageDataRateLimited 
-                                      ? 'Rate limit exceeded - please wait before retrying'
-                                      : 'Failed to load average temperature data',
-                                  style: TextStyle(
-                                    color: _isRetryingAverage ? kGreyLabelColour : 
-                                           _averageDataRateLimited ? kGreyLabelColour : kAccentColour, 
-                                    fontSize: kFontSizeBody - 1, 
-                                    fontWeight: FontWeight.w400
-                                  ),
-                                  textAlign: TextAlign.left,
-                                ),
-                              ),
-                              if (!_isRetryingAverage && !_averageDataRateLimited) ...[
-                                const SizedBox(width: 8),
-                                GestureDetector(
-                                  onTap: _retryAverageData,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: kAccentColour.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      'Retry',
-                                      style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
+          // Average data error message if it failed
+          if (_averageDataFailed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+              child: Row(
+                children: [
+                  Icon(
+                    _isRetryingAverage ? Icons.hourglass_empty : 
+                    _averageDataRateLimited ? Icons.timer : Icons.error_outline,
+                    color: _isRetryingAverage ? kGreyLabelColour : 
+                           _averageDataRateLimited ? kGreyLabelColour : kAccentColour,
+                    size: kIconSize,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _isRetryingAverage 
+                        ? 'Retrying average temperature data...'
+                        : _averageDataRateLimited 
+                          ? 'Rate limit exceeded - please wait before retrying'
+                          : 'Failed to load average temperature data',
+                      style: TextStyle(
+                        color: _isRetryingAverage ? kGreyLabelColour : 
+                               _averageDataRateLimited ? kGreyLabelColour : kAccentColour, 
+                        fontSize: kFontSizeBody - 1, 
+                        fontWeight: FontWeight.w400
                       ),
-                    // Trend text below chart (only show after loading)
-                    if (trendSlope != null && !_isDataLoading)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                      textAlign: TextAlign.left,
+                    ),
+                  ),
+                  if (!_isRetryingAverage && !_averageDataRateLimited) ...[
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: _retryAverageData,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: kAccentColour.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                         child: Text(
-                            trendSlope.abs() < 0.05
-                              ? 'Trend: Steady at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
-                              : trendSlope > 0 
-                                ? 'Trend: Rising at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
-                                : 'Trend: Falling at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
-                            style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                            textAlign: TextAlign.left,
-                          ),
+                          'Retry',
+                          style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                        ),
                       ),
-                    if (_trendDataFailed)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Row(
-                            children: [
-                              Icon(
-                                _isRetryingTrend ? Icons.hourglass_empty : Icons.error_outline,
-                                color: _isRetryingTrend ? kGreyLabelColour : kAccentColour,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _isRetryingTrend 
-                                    ? 'Retrying trend data...'
-                                    : _trendDataRateLimited 
-                                      ? 'Rate limit exceeded - please wait before retrying'
-                                      : 'Failed to load trend data',
-                                  style: TextStyle(
-                                    color: _isRetryingTrend ? kGreyLabelColour : 
-                                           _trendDataRateLimited ? kGreyLabelColour : kAccentColour, 
-                                    fontSize: kFontSizeBody - 1, 
-                                    fontWeight: FontWeight.w400
-                                  ),
-                                  textAlign: TextAlign.left,
-                                ),
-                              ),
-                              if (!_isRetryingTrend && !_trendDataRateLimited) ...[
-                                const SizedBox(width: 8),
-                                GestureDetector(
-                                  onTap: _retryTrendData,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: kAccentColour.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      'Retry',
-                                      style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          // Trend text below chart (only show after loading)
+          if (trendSlope != null && !_isDataLoading)
+            Padding(
+              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+              child: Text(
+                trendSlope.abs() < 0.05
+                  ? 'Trend: Steady at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
+                  : trendSlope > 0 
+                    ? 'Trend: Rising at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
+                    : 'Trend: Falling at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
+                style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+                textAlign: TextAlign.left,
+              ),
+            ),
+          // Trend data error message if it failed
+          if (_trendDataFailed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+              child: Row(
+                children: [
+                  Icon(
+                    _isRetryingTrend ? Icons.hourglass_empty : Icons.error_outline,
+                    color: _isRetryingTrend ? kGreyLabelColour : kAccentColour,
+                    size: kIconSize,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _isRetryingTrend 
+                        ? 'Retrying trend data...'
+                        : _trendDataRateLimited 
+                          ? 'Rate limit exceeded - please wait before retrying'
+                          : 'Failed to load trend data',
+                      style: TextStyle(
+                        color: _isRetryingTrend ? kGreyLabelColour : 
+                               _trendDataRateLimited ? kGreyLabelColour : kAccentColour, 
+                        fontSize: kFontSizeBody - 1, 
+                        fontWeight: FontWeight.w400
                       ),
-                    // Summary error message if it failed
-                    if (_summaryDataFailed)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                        child: Row(
-                            children: [
-                              Icon(
-                                _isRetryingSummary ? Icons.hourglass_empty : Icons.error_outline,
-                                color: _isRetryingSummary ? kGreyLabelColour : kAccentColour,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _isRetryingSummary 
-                                    ? 'Retrying summary data...'
-                                    : _summaryDataRateLimited 
-                                      ? 'Rate limit exceeded - please wait before retrying'
-                                      : 'Failed to load summary data',
-                                  style: TextStyle(
-                                    color: _isRetryingSummary ? kGreyLabelColour : 
-                                           _summaryDataRateLimited ? kGreyLabelColour : kAccentColour, 
-                                    fontSize: kFontSizeBody - 1, 
-                                    fontWeight: FontWeight.w400
-                                  ),
-                                  textAlign: TextAlign.left,
-                                ),
-                              ),
-                              if (!_isRetryingSummary && !_summaryDataRateLimited) ...[
-                                const SizedBox(width: 8),
-                                GestureDetector(
-                                  onTap: _retrySummaryData,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: kAccentColour.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      'Retry',
-                                      style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
+                      textAlign: TextAlign.left,
+                    ),
+                  ),
+                  if (!_isRetryingTrend && !_trendDataRateLimited) ...[
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: _retryTrendData,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: kAccentColour.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Retry',
+                          style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                        ),
                       ),
-                    // Data completeness indicator
-                    _buildDataCompletenessIndicator(chartData),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          // Summary error message if it failed
+          if (_summaryDataFailed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+              child: Row(
+                children: [
+                  Icon(
+                    _isRetryingSummary ? Icons.hourglass_empty : Icons.error_outline,
+                    color: _isRetryingSummary ? kGreyLabelColour : kAccentColour,
+                    size: kIconSize,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _isRetryingSummary 
+                        ? 'Retrying summary data...'
+                        : _summaryDataRateLimited 
+                          ? 'Rate limit exceeded - please wait before retrying'
+                          : 'Failed to load summary data',
+                      style: TextStyle(
+                        color: _isRetryingSummary ? kGreyLabelColour : 
+                               _summaryDataRateLimited ? kGreyLabelColour : kAccentColour, 
+                        fontSize: kFontSizeBody - 1, 
+                        fontWeight: FontWeight.w400
+                      ),
+                      textAlign: TextAlign.left,
+                    ),
+                  ),
+                  if (!_isRetryingSummary && !_summaryDataRateLimited) ...[
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: _retrySummaryData,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: kAccentColour.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Retry',
+                          style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          // Data completeness indicator
+          _buildDataCompletenessIndicator(chartData),
         ],
       ),
     );
@@ -3220,7 +3278,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           _chartDataFailedDueToRateLimit ? Icons.timer : Icons.error_outline,
           color: _isRetryingChartData ? kGreyLabelColour : 
                  _chartDataFailedDueToRateLimit ? kGreyLabelColour : kAccentColour,
-          size: 16,
+          size: kIconSize,
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -3242,7 +3300,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: kAccentColour.withOpacity(0.2),
+                color: kAccentColour.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
@@ -3274,7 +3332,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
             Icon(
               _isRetryingChartData ? Icons.hourglass_empty : Icons.refresh,
               color: _isRetryingChartData ? kGreyLabelColour : kAccentColour,
-              size: 16,
+              size: kIconSize,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -3297,7 +3355,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: kAccentColour.withOpacity(0.2),
+                    color: kAccentColour.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -3343,7 +3401,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                 Icon(
                   Icons.info_outline,
                   color: kGreyLabelColour,
-                  size: 16,
+                  size: kIconSize,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
