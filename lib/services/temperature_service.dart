@@ -5,6 +5,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../config/app_config.dart';
 import '../utils/debug_utils.dart';
 
+/// Extension to capitalize the first letter of a string
+extension StringExtension on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return this[0].toUpperCase() + substring(1);
+  }
+}
+
 /// Custom exception for rate limit errors
 class RateLimitException implements Exception {
   final String detail;
@@ -39,53 +47,21 @@ class TemperatureService {
   }
 
   Future<TemperatureData> fetchTemperature(String city, String date) async {
-    final token = await getAuthToken();
-    final url = Uri.parse('$apiBaseUrl/weather/$city/$date');
-
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final responseBody = response.body;
-      debugLog('API Response for $city/$date: $responseBody');
-      
-      if (responseBody.isEmpty) {
-        throw Exception('Empty response from API');
-      }
-      
-      final json = jsonDecode(responseBody);
-      if (json == null) {
-        throw Exception('API returned null response');
-      }
-      
-      return TemperatureData.fromJson(json);
-    } else {
-      debugLog('API Error Response: ${response.statusCode} - ${response.body}');
-      
-      // Check if it's a rate limit error
-      if (response.statusCode == 429) {
-        try {
-          final errorJson = jsonDecode(response.body);
-          final detail = errorJson['detail']?.toString() ?? 'Rate limit exceeded';
-          throw RateLimitException(detail);
-        } catch (e) {
-          throw RateLimitException('Rate limit exceeded');
-        }
-      }
-      
-      throw Exception('Failed to fetch temperature data: ${response.statusCode}');
-    }
+    return _fetchTemperatureData('weather', city, date);
   }
 
   Future<TemperatureData> fetchCompleteData(String city, String date) async {
-    final token = await getAuthToken();
     // Extract month-day from the date (e.g., "2025-06-18" -> "06-18")
     final monthDay = date.substring(5); // Get "06-18" from "2025-06-18"
-    final url = Uri.parse('$apiBaseUrl/data/$city/$monthDay');
+    return _fetchTemperatureData('data', city, monthDay);
+  }
+
+  /// Common helper function for fetching data from API endpoints
+  Future<Map<String, dynamic>> _fetchApiData(String endpoint, String city, String date) async {
+    final token = await getAuthToken();
+    final url = Uri.parse('$apiBaseUrl/$endpoint/$city/$date');
+
+    debugLog('Fetching /$endpoint/ for city=$city, date=$date');
 
     final response = await http.get(
       url,
@@ -96,7 +72,7 @@ class TemperatureService {
 
     if (response.statusCode == 200) {
       final responseBody = response.body;
-      debugLog('Complete API Response for $city/$monthDay: $responseBody');
+      debugLog('${endpoint.capitalize()} API Response for $city/$date: $responseBody');
       
       if (responseBody.isEmpty) {
         throw Exception('Empty response from API');
@@ -107,9 +83,9 @@ class TemperatureService {
         throw Exception('API returned null response');
       }
       
-      return TemperatureData.fromJson(json);
+      return json;
     } else {
-      debugLog('Complete API Error Response: ${response.statusCode} - ${response.body}');
+      debugLog('${endpoint.capitalize()} API Error Response: ${response.statusCode} - ${response.body}');
       
       // Check if it's a rate limit error
       if (response.statusCode == 429) {
@@ -122,138 +98,25 @@ class TemperatureService {
         }
       }
       
-      throw Exception('Failed to fetch complete temperature data: ${response.statusCode}');
+      throw Exception('Failed to fetch $endpoint data: ${response.statusCode}');
     }
+  }
+
+  /// Common helper function for fetching TemperatureData from API endpoints
+  Future<TemperatureData> _fetchTemperatureData(String endpoint, String city, String date) async {
+    final json = await _fetchApiData(endpoint, city, date);
+    return TemperatureData.fromJson(json);
   }
 
   Future<Map<String, dynamic>> fetchAverageData(String city, String date) async {
-    final token = await getAuthToken();
-    final url = Uri.parse('$apiBaseUrl/average/$city/$date');
-
-    debugLog('Fetching /average/ for city=$city, date=$date');
-
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final responseBody = response.body;
-      debugLog('Average API Response for $city/$date: $responseBody');
-      
-      if (responseBody.isEmpty) {
-        throw Exception('Empty response from API');
-      }
-      
-      final json = jsonDecode(responseBody);
-      if (json == null) {
-        throw Exception('API returned null response');
-      }
-      
-      return json;
-    } else {
-      debugLog('Average API Error Response: ${response.statusCode} - ${response.body}');
-      
-      // Check if it's a rate limit error
-      if (response.statusCode == 429) {
-        try {
-          final errorJson = jsonDecode(response.body);
-          final detail = errorJson['detail']?.toString() ?? 'Rate limit exceeded';
-          throw RateLimitException(detail);
-        } catch (e) {
-          throw RateLimitException('Rate limit exceeded');
-        }
-      }
-      
-      throw Exception('Failed to fetch average data: ${response.statusCode}');
-    }
+    return _fetchApiData('average', city, date);
   }
 
   Future<Map<String, dynamic>> fetchTrendData(String city, String date) async {
-    final token = await getAuthToken();
-    final url = Uri.parse('$apiBaseUrl/trend/$city/$date');
-
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final responseBody = response.body;
-      debugLog('Trend API Response for $city/$date: $responseBody');
-      
-      if (responseBody.isEmpty) {
-        throw Exception('Empty response from API');
-      }
-      
-      final json = jsonDecode(responseBody);
-      if (json == null) {
-        throw Exception('API returned null response');
-      }
-      
-      return json;
-    } else {
-      debugLog('Trend API Error Response: ${response.statusCode} - ${response.body}');
-      
-      // Check if it's a rate limit error
-      if (response.statusCode == 429) {
-        try {
-          final errorJson = jsonDecode(response.body);
-          final detail = errorJson['detail']?.toString() ?? 'Rate limit exceeded';
-          throw RateLimitException(detail);
-        } catch (e) {
-          throw RateLimitException('Rate limit exceeded');
-        }
-      }
-      
-      throw Exception('Failed to fetch trend data: ${response.statusCode}');
-    }
+    return _fetchApiData('trend', city, date);
   }
 
   Future<Map<String, dynamic>> fetchSummaryData(String city, String date) async {
-    final token = await getAuthToken();
-    final url = Uri.parse('$apiBaseUrl/summary/$city/$date');
-
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final responseBody = response.body;
-      debugLog('Summary API Response for $city/$date: $responseBody');
-      
-      if (responseBody.isEmpty) {
-        throw Exception('Empty response from API');
-      }
-      
-      final json = jsonDecode(responseBody);
-      if (json == null) {
-        throw Exception('API returned null response');
-      }
-      
-      return json;
-    } else {
-      debugLog('Summary API Error Response: ${response.statusCode} - ${response.body}');
-      
-      // Check if it's a rate limit error
-      if (response.statusCode == 429) {
-        try {
-          final errorJson = jsonDecode(response.body);
-          final detail = errorJson['detail']?.toString() ?? 'Rate limit exceeded';
-          throw RateLimitException(detail);
-        } catch (e) {
-          throw RateLimitException('Rate limit exceeded');
-        }
-      }
-      
-      throw Exception('Failed to fetch summary data: ${response.statusCode}');
-    }
+    return _fetchApiData('summary', city, date);
   }
 }

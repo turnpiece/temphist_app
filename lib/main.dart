@@ -1610,7 +1610,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           }
         }
         
+        debugPrintIfDebugging('📊 Average data response structure: $averageData');
+        debugPrintIfDebugging('📊 Average data keys: ${averageData.keys.toList()}');
+        debugPrintIfDebugging('📊 Looking for average key: ${averageData['average']}');
         averageTemperature = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
+        debugPrintIfDebugging('📊 Extracted average temperature: $averageTemperature');
         
         if (averageData['year_range'] != null) {
           final yearRange = averageData['year_range'];
@@ -1662,8 +1666,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           }
         }
         
+        debugPrintIfDebugging('📊 Trend data response structure: $trendData');
+        debugPrintIfDebugging('📊 Trend data keys: ${trendData.keys.toList()}');
+        debugPrintIfDebugging('📊 Looking for slope key: ${trendData['slope']}');
         final slope = trendData['slope'];
         trendSlope = (slope is num) ? slope.toDouble() : null;
+        debugPrintIfDebugging('📊 Extracted trend slope: $trendSlope');
       } catch (e) {
         debugPrintIfDebugging('Failed to fetch trend data: $e');
         setState(() {
@@ -1914,10 +1922,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         debugPrintIfDebugging('⚠️ Chart data loading had failures - rate limited: $_chartDataFailedDueToRateLimit');
       }
       
-      // Start auto-retry timer if there are failed endpoints
-      if (_averageDataFailed || _trendDataFailed || _summaryDataFailed) {
-        _startAutoRetryTimer();
-      }
+      // Don't start auto-retry timer here - it will be started after loading completes
+      // This prevents immediate retry while the first request might still be running
       
     } catch (e) {
       debugPrintIfDebugging('_loadChartDataProgressive failed: $e');
@@ -1951,6 +1957,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       _isLoadingOperationActive = false;
       _isDataLoading = false;
       _progressiveLoadingCompleted = true;
+      
+      // Start auto-retry timer if there are failed endpoints (after loading completes)
+      if (_averageDataFailed || _trendDataFailed || _summaryDataFailed) {
+        _startAutoRetryTimer();
+      }
     }
   }
 
@@ -2516,7 +2527,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     return GestureDetector(
       onTap: () {
         setState(() {
-          _simulateAverageFailure = true;
+          _simulateAverageFailure = false;
           _simulateTrendFailure = false;
           _simulateSummaryFailure = false;
         });
@@ -2527,7 +2538,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             duration: const Duration(seconds: 1),
           ),
         );
-        // If we're enabling a simulation, trigger a refresh to see the failure
+        // Clear cache and refresh to ensure clean state
+        _clearCache();
         _handleRefresh();
       },
       child: Container(
@@ -3619,12 +3631,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       debugPrintIfDebugging('Simulating trend endpoint failure');
       await Future.delayed(const Duration(seconds: 2)); // Simulate delay
       throw Exception('Simulated trend endpoint failure for testing');
-    }
-    
-    if (endpointName == 'summary' && _simulateSummaryFailure) {
-      debugPrintIfDebugging('Simulating summary endpoint failure');
-      await Future.delayed(const Duration(seconds: 2)); // Simulate delay
-      throw Exception('Simulated summary endpoint failure for testing');
     }
     
     // If no failure is simulated, proceed with normal call
