@@ -135,12 +135,9 @@ bool _isLocationSuspicious(String location) {
 }
 
 /// Legacy function for backward compatibility.
-/// Calls are stripped out entirely in release builds.
+/// @deprecated Use DebugUtils.logLazy() directly for better performance and consistency.
 void debugPrintIfDebugging(Object? message) {
-  assert(() {
-    DebugUtils.logLazy(() => message.toString());
-    return true;
-  }());
+  DebugUtils.logLazy(() => message);
 }
 
 
@@ -199,6 +196,8 @@ Future<void> _ensureSignedIn() async {
 }
 
 class TempHist extends StatelessWidget {
+  const TempHist({super.key});
+
   @override
   Widget build(BuildContext context) {
     // Ensure system UI overlay is set correctly
@@ -225,13 +224,15 @@ class TemperatureScreen extends StatefulWidget {
   final Future<Map<String, dynamic>?>? testFuture;
   final AsyncSnapshot<Map<String, dynamic>?>? testSnapshot;
 
-  TemperatureScreen({this.testFuture, this.testSnapshot});
+  const TemperatureScreen({super.key, this.testFuture, this.testSnapshot});
 
   @override
-  _TemperatureScreenState createState() => _TemperatureScreenState();
+  TemperatureScreenState createState() => TemperatureScreenState();
 }
 
 class SplashScreen extends StatelessWidget {
+  const SplashScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -291,7 +292,7 @@ class SplashScreen extends StatelessWidget {
   }
 }
 
-class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindingObserver {
+class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindingObserver {
   Future<Map<String, dynamic>?>? futureChartData;
   Timer? _loadingMessageTimer;
   int _loadingElapsedSeconds = 0;
@@ -355,7 +356,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   // Track chart data loading failures
   bool _chartDataFailed = false;
   bool _chartDataFailedDueToRateLimit = false;
-  List<int> _failedYears = []; // Track which years failed to load
+  final List<int> _failedYears = []; // Track which years failed to load
 
   @override
   void initState() {
@@ -364,7 +365,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     
     // Debug mode detection logging
     debugPrintIfDebugging('🔧 Debug mode detection:');
-    debugPrintIfDebugging('  - kDebugMode: ${kDebugMode}');
+    debugPrintIfDebugging('  - kDebugMode: $kDebugMode');
     debugPrintIfDebugging('  - AppConfig.isDebugMode: ${AppConfig.isDebugMode}');
     debugPrintIfDebugging('  - AppConfig.enableDebugUI: ${AppConfig.enableDebugUI}');
     debugPrintIfDebugging('  - AppConfig.shouldShowDebugFeatures: ${AppConfig.shouldShowDebugFeatures}');
@@ -687,7 +688,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   Future<void> _cacheTemperatureData(int year, String location, String date, Map<String, dynamic> data) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final cacheKey = 'tempData_${location}_${year}_${date}';
+      final cacheKey = 'tempData_${location}_${year}_$date';
       final cacheData = {
         'data': data,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
@@ -1317,7 +1318,9 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
           if (permission == geo.LocationPermission.whileInUse || permission == geo.LocationPermission.always) {
             try {
               geo.Position position = await geo.Geolocator.getCurrentPosition(
-                desiredAccuracy: geo.LocationAccuracy.low,
+                locationSettings: const geo.LocationSettings(
+                  accuracy: geo.LocationAccuracy.low,
+                ),
               ).timeout(const Duration(seconds: 10));
               
               debugPrintIfDebugging('_determineLocation: Position obtained - lat: ${position.latitude}, lon: ${position.longitude}');
@@ -2124,12 +2127,12 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
   Widget _buildRetryButton(VoidCallback onPressed) {
     return ElevatedButton(
       onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: kAccentColour,
+      ),
       child: const Text(
         'Retry',
         style: TextStyle(color: kTextPrimaryColour),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: kAccentColour,
       ),
     );
   }
@@ -2400,7 +2403,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
             if (AppConfig.enableEndpointFailureSimulation) ...[
               const SizedBox(height: 8),
               Text(
-                'Simulation Active: ${_simulateAverageFailure ? "Average" : ""}${_simulateTrendFailure ? (_simulateAverageFailure ? ", " : "") + "Trend" : ""}${_simulateSummaryFailure ? ((_simulateAverageFailure || _simulateTrendFailure) ? ", " : "") + "Summary" : ""}',
+                'Simulation Active: ${_simulateAverageFailure ? "Average" : ""}${_simulateTrendFailure ? "${_simulateAverageFailure ? ", " : ""}Trend" : ""}${_simulateSummaryFailure ? "${(_simulateAverageFailure || _simulateTrendFailure) ? ", " : ""}Summary" : ""}',
                 style: TextStyle(
                   color: kAccentColour,
                   fontSize: kFontSizeBody - 2,
@@ -2582,7 +2585,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
         final contentWidth = constraints.maxWidth > maxContentWidth ? maxContentWidth : constraints.maxWidth;
         final horizontalMargin = isTablet ? (constraints.maxWidth - contentWidth) / 2 : 0.0;
         
-        return Container(
+        return SizedBox(
           width: constraints.maxWidth,
           child: Center(
             child: Container(
@@ -2863,7 +2866,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          '$year: ${temp}°C',
+                          '$year: $temp°C',
                           style: TextStyle(color: Colors.white, fontSize: kFontSizeBody - 4),
                         ),
                       );
@@ -3531,7 +3534,7 @@ class _TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindi
     // Show splash screen while app is initializing OR minimum time hasn't elapsed
     // Skip splash screen in test mode
     if (widget.testFuture == null && (!_isAppInitialized || !_splashScreenMinTimeElapsed)) {
-      return SplashScreen();
+      return const SplashScreen();
     }
     
     final double chartHeight = 800;

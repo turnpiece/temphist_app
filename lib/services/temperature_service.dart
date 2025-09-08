@@ -17,8 +17,9 @@ class RateLimitException implements Exception {
 }
 
 // Debug logging function that can be controlled globally
+// @deprecated Use DebugUtils.logLazy() or DebugUtils.logSimple() directly for better performance
 void debugLog(String message) {
-  DebugUtils.log(message);
+  DebugUtils.logLazy(() => message);
 }
 
 class TemperatureService {

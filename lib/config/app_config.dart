@@ -33,5 +33,5 @@ class AppConfig {
   static String get appVersion => _isDebugBuild ? debug_config.DebugConfig.appVersion : production_config.ProductionConfig.appVersion;
   static String get buildNumber => _isDebugBuild ? debug_config.DebugConfig.buildNumber : production_config.ProductionConfig.buildNumber;
   static String get releaseDate => _isDebugBuild ? debug_config.DebugConfig.releaseDate : production_config.ProductionConfig.releaseDate;
-  static String get fullVersion => 'v${appVersion}+${buildNumber}';
+  static String get fullVersion => 'v$appVersion+$buildNumber';
 }

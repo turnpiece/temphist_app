@@ -1,6 +1,3 @@
-/// Build-time constants for the application
-/// These can be controlled via --dart-define flags or environment variables
-
 /// Enable verbose logging in production builds
 /// Usage: flutter build ios --dart-define=VERBOSE_LOGS=true
 /// Or set environment variable: VERBOSE_LOGS=true

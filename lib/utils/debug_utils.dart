@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
 import '../constants.dart';
 
-/// Debug utility functions that are only active in debug mode
+/// Centralized debug utility functions that are only active in debug mode
 /// Uses kDebugMode for zero-cost production builds
 class DebugUtils {
   /// Legacy: keep this if you still want to pass a string.
@@ -15,12 +15,22 @@ class DebugUtils {
     }
   }
 
-  /// Preferred: pass a closure so expensive string building only runs if enabled.
+  /// Main debug logging method - pass a closure so expensive string building only runs if enabled.
   /// This is zero-cost in production builds - the closure is never called.
+  /// Use this for all new debug logging.
   static void logLazy(Object? Function() messageBuilder) {
     if (kDebugMode) {
       // ignore: avoid_print
       print('DEBUG: ${messageBuilder()}');
+    }
+  }
+
+  /// Convenience method for simple string messages
+  /// Use logLazy() for better performance with complex string building
+  static void logSimple(String message) {
+    if (kDebugMode) {
+      // ignore: avoid_print
+      print('DEBUG: $message');
     }
   }
   
