@@ -959,7 +959,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         });
         
         try {
-          final summaryData = await service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds));
+          final summaryData = await _simulateEndpointFailure('summary', () => 
+            service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+          );
           final newSummary = summaryData['summary']?.toString();
           if (newSummary != null && newSummary.isNotEmpty) {
             setState(() {
@@ -1057,7 +1059,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       });
       
       try {
-        final trendData = await service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds));
+        final trendData = await _simulateEndpointFailure('trend', () => 
+          service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+        );
         final newSlope = trendData['slope'];
         if (newSlope != null) {
           setState(() {
@@ -1105,7 +1109,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       });
       
       try {
-        final summaryData = await service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds));
+        final summaryData = await _simulateEndpointFailure('summary', () => 
+          service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+        );
         final newSummary = summaryData['summary']?.toString();
         if (newSummary != null && newSummary.isNotEmpty) {
           setState(() {
@@ -1577,22 +1583,31 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       // Get average data first
       try {
-        // Try to load from cache first
-        final cachedAverage = await _loadCachedApiResponse('average', city, mmdd);
         Map<String, dynamic> averageData;
         
-        if (cachedAverage != null) {
-          debugPrintIfDebugging('📊 Using cached average data');
-          // Add a small delay to make progressive loading visible even with cached data
-          await Future.delayed(const Duration(milliseconds: 100));
-          averageData = cachedAverage;
-        } else {
-          debugPrintIfDebugging('📊 Fetching fresh average data');
+        // Skip cache if simulation is enabled to ensure simulation always runs
+        if (_simulateAverageFailure) {
+          debugPrintIfDebugging('📊 Simulation enabled - bypassing cache for average data');
           averageData = await _simulateEndpointFailure('average', () => 
             service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
           );
-          // Cache the successful response
-          await _cacheApiResponse('average', city, mmdd, averageData);
+        } else {
+          // Try to load from cache first
+          final cachedAverage = await _loadCachedApiResponse('average', city, mmdd);
+          
+          if (cachedAverage != null) {
+            debugPrintIfDebugging('📊 Using cached average data');
+            // Add a small delay to make progressive loading visible even with cached data
+            await Future.delayed(const Duration(milliseconds: 100));
+            averageData = cachedAverage;
+          } else {
+            debugPrintIfDebugging('📊 Fetching fresh average data');
+            averageData = await _simulateEndpointFailure('average', () => 
+              service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+            );
+            // Cache the successful response
+            await _cacheApiResponse('average', city, mmdd, averageData);
+          }
         }
         
         averageTemperature = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
@@ -1620,22 +1635,31 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       // Get trend data
       try {
-        // Try to load from cache first
-        final cachedTrend = await _loadCachedApiResponse('trend', city, mmdd);
         Map<String, dynamic> trendData;
         
-        if (cachedTrend != null) {
-          debugPrintIfDebugging('📊 Using cached trend data');
-          // Add a small delay to make progressive loading visible even with cached data
-          await Future.delayed(const Duration(milliseconds: 100));
-          trendData = cachedTrend;
-        } else {
-          debugPrintIfDebugging('📊 Fetching fresh trend data');
+        // Skip cache if simulation is enabled to ensure simulation always runs
+        if (_simulateTrendFailure) {
+          debugPrintIfDebugging('📊 Simulation enabled - bypassing cache for trend data');
           trendData = await _simulateEndpointFailure('trend', () => 
             service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
           );
-          // Cache the successful response
-          await _cacheApiResponse('trend', city, mmdd, trendData);
+        } else {
+          // Try to load from cache first
+          final cachedTrend = await _loadCachedApiResponse('trend', city, mmdd);
+          
+          if (cachedTrend != null) {
+            debugPrintIfDebugging('📊 Using cached trend data');
+            // Add a small delay to make progressive loading visible even with cached data
+            await Future.delayed(const Duration(milliseconds: 100));
+            trendData = cachedTrend;
+          } else {
+            debugPrintIfDebugging('📊 Fetching fresh trend data');
+            trendData = await _simulateEndpointFailure('trend', () => 
+              service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+            );
+            // Cache the successful response
+            await _cacheApiResponse('trend', city, mmdd, trendData);
+          }
         }
         
         final slope = trendData['slope'];
@@ -1652,22 +1676,31 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       // Get summary data
       try {
-        // Try to load from cache first
-        final cachedSummary = await _loadCachedApiResponse('summary', city, mmdd);
         Map<String, dynamic> summaryData;
         
-        if (cachedSummary != null) {
-          debugPrintIfDebugging('📊 Using cached summary data');
-          // Add a small delay to make progressive loading visible even with cached data
-          await Future.delayed(const Duration(milliseconds: 100));
-          summaryData = cachedSummary;
-        } else {
-          debugPrintIfDebugging('📊 Fetching fresh summary data');
+        // Skip cache if simulation is enabled to ensure simulation always runs
+        if (_simulateSummaryFailure) {
+          debugPrintIfDebugging('📊 Simulation enabled - bypassing cache for summary data');
           summaryData = await _simulateEndpointFailure('summary', () => 
             service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
           );
-          // Cache the successful response
-          await _cacheApiResponse('summary', city, mmdd, summaryData);
+        } else {
+          // Try to load from cache first
+          final cachedSummary = await _loadCachedApiResponse('summary', city, mmdd);
+          
+          if (cachedSummary != null) {
+            debugPrintIfDebugging('📊 Using cached summary data');
+            // Add a small delay to make progressive loading visible even with cached data
+            await Future.delayed(const Duration(milliseconds: 100));
+            summaryData = cachedSummary;
+          } else {
+            debugPrintIfDebugging('📊 Fetching fresh summary data');
+            summaryData = await _simulateEndpointFailure('summary', () => 
+              service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+            );
+            // Cache the successful response
+            await _cacheApiResponse('summary', city, mmdd, summaryData);
+          }
         }
         
         final summaryRaw = summaryData['summary'];
