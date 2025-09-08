@@ -25,6 +25,7 @@ import 'utils/debug_utils.dart';
 // Note: These are no longer constants because they depend on runtime configuration
 // but they maintain the same interface for backward compatibility
 const kBackgroundColour = Color(0xFF242456);
+const kBackgroundColourDark = Color(0xFF343499);
 const kAccentColour = Color(0xFFFF6B6B);
 const kTextPrimaryColour = Color(0xFFECECEC);
 const kSummaryColour = Color(0xFF51CF66);
@@ -394,20 +395,26 @@ class SplashScreen extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF242456), // Top color
-              Color(0xFF343499), // Bottom color
+              kBackgroundColour, // Top color
+              kBackgroundColourDark, // Bottom color
             ],
           ),
         ),
         child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+          child: Padding(
+            padding: const EdgeInsets.only(left: 24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               // Logo
-              SvgPicture.asset(
-                'assets/logo.svg',
-                width: 80,
-                height: 80,
+              Transform.translate(
+                offset: const Offset(-30.0, 0.0), // Negative left margin to compensate for SVG padding
+                child: SvgPicture.asset(
+                  'assets/logo.svg',
+                  width: 150,
+                  height: 150,
+                ),
               ),
               const SizedBox(height: 24),
               // App title
@@ -437,6 +444,7 @@ class SplashScreen extends StatelessWidget {
                 ),
               ),
             ],
+            ),
           ),
         ),
       ),
@@ -2555,8 +2563,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF242456), // Top color
-              Color(0xFF343499), // Bottom color
+              kBackgroundColour, // Top color
+              kBackgroundColourDark, // Bottom color
             ],
           ),
         ),
