@@ -3350,6 +3350,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                         width: 2,
                         name: 'Average Temperature',
                         markerSettings: MarkerSettings(isVisible: false),
+                        enableTooltip: false, // Disable tooltips for average line
                       ),
                     if (trendSlope != null && !_isDataLoading)
                       LineSeries<TemperatureChartData, int>(
@@ -3360,6 +3361,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                         width: 2,
                         name: 'Trend',
                         markerSettings: MarkerSettings(isVisible: false),
+                        enableTooltip: false, // Disable tooltips for trend line
                       ),
                   ],
                   primaryXAxis: NumericAxis(
