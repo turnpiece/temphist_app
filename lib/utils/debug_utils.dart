@@ -9,7 +9,7 @@ class DebugUtils {
   /// Note: String building still happens even in production builds.
   @Deprecated('Use DebugUtils.logLazy(() => ...) instead for zero-cost when disabled.')
   static void log(String message) {
-    if (kDebugMode) {
+    if (kDebugMode && AppConfig.isDebugMode) {
       // ignore: avoid_print
       print('DEBUG: $message');
     }
@@ -19,7 +19,7 @@ class DebugUtils {
   /// This is zero-cost in production builds - the closure is never called.
   /// Use this for all new debug logging.
   static void logLazy(Object? Function() messageBuilder) {
-    if (kDebugMode) {
+    if (kDebugMode && AppConfig.isDebugMode) {
       // ignore: avoid_print
       print('DEBUG: ${messageBuilder()}');
     }
@@ -28,7 +28,7 @@ class DebugUtils {
   /// Convenience method for simple string messages
   /// Use logLazy() for better performance with complex string building
   static void logSimple(String message) {
-    if (kDebugMode) {
+    if (kDebugMode && AppConfig.isDebugMode) {
       // ignore: avoid_print
       print('DEBUG: $message');
     }
@@ -36,7 +36,7 @@ class DebugUtils {
   
   /// Print debug message with timestamp
   static void logWithTimestamp(String message) {
-    if (kDebugMode) {
+    if (kDebugMode && AppConfig.isDebugMode) {
       final timestamp = DateTime.now().toIso8601String();
       // ignore: avoid_print
       print('DEBUG [$timestamp]: $message');
@@ -45,7 +45,7 @@ class DebugUtils {
   
   /// Print debug message with timestamp using lazy evaluation
   static void logWithTimestampLazy(Object? Function() messageBuilder) {
-    if (kDebugMode) {
+    if (kDebugMode && AppConfig.isDebugMode) {
       final timestamp = DateTime.now().toIso8601String();
       // ignore: avoid_print
       print('DEBUG [$timestamp]: ${messageBuilder()}');
@@ -54,7 +54,7 @@ class DebugUtils {
   
   /// Print debug message with context
   static void logWithContext(String context, String message) {
-    if (kDebugMode) {
+    if (kDebugMode && AppConfig.isDebugMode) {
       // ignore: avoid_print
       print('DEBUG [$context]: $message');
     }
@@ -62,7 +62,7 @@ class DebugUtils {
   
   /// Print debug message with context using lazy evaluation
   static void logWithContextLazy(String context, Object? Function() messageBuilder) {
-    if (kDebugMode) {
+    if (kDebugMode && AppConfig.isDebugMode) {
       // ignore: avoid_print
       print('DEBUG [$context]: ${messageBuilder()}');
     }
@@ -71,7 +71,7 @@ class DebugUtils {
   /// Print debug message only in verbose mode
   /// Uses verboseLogs constant for production builds
   static void verbose(String message) {
-    if (kDebugMode || verboseLogs) {
+    if ((kDebugMode && AppConfig.isDebugMode) || verboseLogs) {
       // ignore: avoid_print
       print('VERBOSE: $message');
     }
@@ -80,7 +80,7 @@ class DebugUtils {
   /// Print verbose message using lazy evaluation
   /// Uses verboseLogs constant for production builds
   static void verboseLazy(Object? Function() messageBuilder) {
-    if (kDebugMode || verboseLogs) {
+    if ((kDebugMode && AppConfig.isDebugMode) || verboseLogs) {
       // ignore: avoid_print
       print('VERBOSE: ${messageBuilder()}');
     }
@@ -89,7 +89,7 @@ class DebugUtils {
   /// Print verbose message with timestamp
   /// Uses verboseLogs constant for production builds
   static void verboseWithTimestamp(String message) {
-    if (kDebugMode || verboseLogs) {
+    if ((kDebugMode && AppConfig.isDebugMode) || verboseLogs) {
       final timestamp = DateTime.now().toIso8601String();
       // ignore: avoid_print
       print('VERBOSE [$timestamp]: $message');
@@ -99,7 +99,7 @@ class DebugUtils {
   /// Print verbose message with timestamp using lazy evaluation
   /// Uses verboseLogs constant for production builds
   static void verboseWithTimestampLazy(Object? Function() messageBuilder) {
-    if (kDebugMode || verboseLogs) {
+    if ((kDebugMode && AppConfig.isDebugMode) || verboseLogs) {
       final timestamp = DateTime.now().toIso8601String();
       // ignore: avoid_print
       print('VERBOSE [$timestamp]: ${messageBuilder()}');
@@ -109,7 +109,7 @@ class DebugUtils {
   /// Print verbose message with context
   /// Uses verboseLogs constant for production builds
   static void verboseWithContext(String context, String message) {
-    if (kDebugMode || verboseLogs) {
+    if ((kDebugMode && AppConfig.isDebugMode) || verboseLogs) {
       // ignore: avoid_print
       print('VERBOSE [$context]: $message');
     }
@@ -118,17 +118,17 @@ class DebugUtils {
   /// Print verbose message with context using lazy evaluation
   /// Uses verboseLogs constant for production builds
   static void verboseWithContextLazy(String context, Object? Function() messageBuilder) {
-    if (kDebugMode || verboseLogs) {
+    if ((kDebugMode && AppConfig.isDebugMode) || verboseLogs) {
       // ignore: avoid_print
       print('VERBOSE [$context]: ${messageBuilder()}');
     }
   }
   
-  /// Check if debug mode is enabled (uses kDebugMode for zero-cost)
-  static bool get isEnabled => kDebugMode;
+  /// Check if debug mode is enabled (uses kDebugMode and custom config for zero-cost)
+  static bool get isEnabled => kDebugMode && AppConfig.isDebugMode;
   
   /// Check if verbose logging is enabled (uses verboseLogs constant)
-  static bool get isVerboseEnabled => kDebugMode || verboseLogs;
+  static bool get isVerboseEnabled => (kDebugMode && AppConfig.isDebugMode) || verboseLogs;
   
   /// Check if debug UI should be shown (still uses AppConfig for app-specific settings)
   static bool get shouldShowDebugUI => AppConfig.shouldShowDebugFeatures;
