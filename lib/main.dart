@@ -1096,6 +1096,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         } catch (e) {
           debugPrintIfDebugging('Retry of average data failed: $e');
           
+          // Check if it's a network error and immediately set offline state
+          if (_isNetworkError(e.toString())) {
+            debugPrintIfDebugging('🌐 Network error detected during average data retry, setting offline state');
+            _isOnline = false;
+            if (mounted) {
+              setState(() {});
+            }
+            return; // Stop retrying if we're offline
+          }
+          
           // Check if it's a rate limit error - don't retry these
           if (e is RateLimitException) {
             setState(() {
@@ -1142,6 +1152,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           }
         } catch (e) {
           debugPrintIfDebugging('Retry of trend data failed: $e');
+          
+          // Check if it's a network error and immediately set offline state
+          if (_isNetworkError(e.toString())) {
+            debugPrintIfDebugging('🌐 Network error detected during trend data retry, setting offline state');
+            _isOnline = false;
+            if (mounted) {
+              setState(() {});
+            }
+            return; // Stop retrying if we're offline
+          }
+          
           setState(() {
             _isRetryingTrend = false;
           });
@@ -1177,6 +1198,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           }
         } catch (e) {
           debugPrintIfDebugging('Retry of summary data failed: $e');
+          
+          // Check if it's a network error and immediately set offline state
+          if (_isNetworkError(e.toString())) {
+            debugPrintIfDebugging('🌐 Network error detected during summary data retry, setting offline state');
+            _isOnline = false;
+            if (mounted) {
+              setState(() {});
+            }
+            return; // Stop retrying if we're offline
+          }
+          
           setState(() {
             _isRetryingSummary = false;
           });
@@ -1226,6 +1258,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         }
       } catch (e) {
         debugPrintIfDebugging('Retry of average data failed: $e');
+        
+        // Check if it's a network error and immediately set offline state
+        if (_isNetworkError(e.toString())) {
+          debugPrintIfDebugging('🌐 Network error detected during average data retry, setting offline state');
+          _isOnline = false;
+          if (mounted) {
+            setState(() {});
+          }
+          return; // Stop retrying if we're offline
+        }
+        
         setState(() {
           _isRetryingAverage = false;
         });
@@ -1408,7 +1451,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         return;
       }
       
-      List<TemperatureChartData> chartData = List<TemperatureChartData>.from(currentData['chartData']);
+      List<TemperatureChartData> chartData = List<TemperatureChartData>.from(
+        (currentData['chartData'] as List<TemperatureChartData>?) ?? []
+      );
       int successCount = 0;
       
       // Retry each failed year
@@ -1438,6 +1483,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           }
         } catch (e) {
           debugPrintIfDebugging('❌ Failed to retry year $year: $e');
+          
+          // Check if this is a network error and immediately set offline state
+          if (_isNetworkError(e.toString())) {
+            debugPrintIfDebugging('🌐 Network error detected during retry, setting offline state');
+            _isOnline = false;
+            if (mounted) {
+              setState(() {});
+            }
+            break; // Stop retrying if we're offline
+          }
+          
           if (e is RateLimitException) {
             debugPrintIfDebugging('⚠️ Rate limit hit during retry, stopping');
             setState(() {
@@ -1787,108 +1843,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       int startYear = currentYear - 50;
       int endYear = currentYear;
       
-      // Get average data first
-      try {
-        Map<String, dynamic> averageData;
-        
-        // Skip cache if simulation is enabled to ensure simulation always runs
-        if (_simulateAverageFailure) {
-          debugPrintIfDebugging('📊 Simulation enabled - bypassing cache for average data');
-          averageData = await _simulateEndpointFailure('average', () => 
-            service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-          );
-        } else {
-          // Try to load from cache first
-          final cachedAverage = await _loadCachedApiResponse('average', city, mmdd);
-          
-          if (cachedAverage != null) {
-            debugPrintIfDebugging('📊 Using cached average data');
-            // Add a small delay to make progressive loading visible even with cached data
-            await Future.delayed(const Duration(milliseconds: 100));
-            averageData = cachedAverage;
-          } else {
-            debugPrintIfDebugging('📊 Fetching fresh average data');
-            averageData = await _simulateEndpointFailure('average', () => 
-              service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-            );
-            // Cache the successful response
-            await _cacheApiResponse('average', city, mmdd, averageData);
-          }
-        }
-        
-        debugPrintIfDebugging('📊 Average data response structure: $averageData');
-        debugPrintIfDebugging('📊 Average data keys: ${averageData.keys.toList()}');
-        debugPrintIfDebugging('📊 Looking for average key: ${averageData['average']}');
-        averageTemperature = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
-        debugPrintIfDebugging('📊 Extracted average temperature: $averageTemperature');
-        
-        if (averageData['year_range'] != null) {
-          final yearRange = averageData['year_range'];
-          if (yearRange is Map<String, dynamic>) {
-            final start = yearRange['start'];
-            final end = yearRange['end'];
-            if (start is int && end is int) {
-              startYear = start;
-              endYear = end;
-            }
-          }
-        }
-      } catch (e) {
-        debugPrintIfDebugging('Failed to fetch average data: $e');
-        setState(() {
-          _averageDataFailed = true;
-          if (e is RateLimitException) {
-            _averageDataRateLimited = true;
-          }
-        });
-      }
-      
-      // Get trend data
-      try {
-        Map<String, dynamic> trendData;
-        
-        // Skip cache if simulation is enabled to ensure simulation always runs
-        if (_simulateTrendFailure) {
-          debugPrintIfDebugging('📊 Simulation enabled - bypassing cache for trend data');
-          trendData = await _simulateEndpointFailure('trend', () => 
-            service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-          );
-        } else {
-          // Try to load from cache first
-          final cachedTrend = await _loadCachedApiResponse('trend', city, mmdd);
-          
-          if (cachedTrend != null) {
-            debugPrintIfDebugging('📊 Using cached trend data');
-            // Add a small delay to make progressive loading visible even with cached data
-            await Future.delayed(const Duration(milliseconds: 100));
-            trendData = cachedTrend;
-          } else {
-            debugPrintIfDebugging('📊 Fetching fresh trend data');
-            trendData = await _simulateEndpointFailure('trend', () => 
-              service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-            );
-            // Cache the successful response
-            await _cacheApiResponse('trend', city, mmdd, trendData);
-          }
-        }
-        
-        debugPrintIfDebugging('📊 Trend data response structure: $trendData');
-        debugPrintIfDebugging('📊 Trend data keys: ${trendData.keys.toList()}');
-        debugPrintIfDebugging('📊 Looking for slope key: ${trendData['slope']}');
-        final slope = trendData['slope'];
-        trendSlope = (slope is num) ? slope.toDouble() : null;
-        debugPrintIfDebugging('📊 Extracted trend slope: $trendSlope');
-      } catch (e) {
-        debugPrintIfDebugging('Failed to fetch trend data: $e');
-        setState(() {
-          _trendDataFailed = true;
-          if (e is RateLimitException) {
-            _trendDataRateLimited = true;
-          }
-        });
-      }
-      
-      // Get summary data
+      // Get summary data first (displayed at the top)
       try {
         Map<String, dynamic> summaryData;
         
@@ -2081,6 +2036,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           consecutiveFailures++;
           debugPrintIfDebugging('⚠️ Consecutive failures: $consecutiveFailures/$maxConsecutiveFailures (successful: $successfulAttempts/$totalAttempts)');
           
+          // Check if it's a network error and immediately set offline state
+          if (_isNetworkError(e.toString())) {
+            debugPrintIfDebugging('🌐 Network error detected during data loading, setting offline state');
+            _isOnline = false;
+            if (mounted) {
+              setState(() {});
+            }
+            break; // Stop loading if we're offline
+          }
+          
           // Check if it's a rate limit error
           if (e is RateLimitException) {
             debugPrintIfDebugging('⚠️ Rate limit exceeded for chart data, stopping further requests at year $year');
@@ -2135,6 +2100,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Don't start auto-retry timer here - it will be started after loading completes
       // This prevents immediate retry while the first request might still be running
       
+      // Load average and trend data after chart data is complete
+      await _loadAverageAndTrendData(city, mmdd);
+      
     } catch (e) {
       debugPrintIfDebugging('_loadChartDataProgressive failed: $e');
       
@@ -2171,6 +2139,190 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Start auto-retry timer if there are failed endpoints (after loading completes)
       if (_averageDataFailed || _trendDataFailed || _summaryDataFailed) {
         _startAutoRetryTimer();
+      }
+    }
+  }
+
+  /// Load average and trend data after chart data is complete
+  Future<void> _loadAverageAndTrendData(String city, String mmdd) async {
+    debugPrintIfDebugging('📊 Loading average and trend data after chart completion');
+    
+    final service = TemperatureService();
+    
+    // Load average and trend data in parallel for better performance
+    final futures = <Future>[];
+    
+    // Load average data
+    futures.add(_loadAverageData(service, city, mmdd));
+    
+    // Load trend data  
+    futures.add(_loadTrendData(service, city, mmdd));
+    
+    // Wait for both to complete
+    await Future.wait(futures);
+    
+    debugPrintIfDebugging('📊 Average and trend data loading completed');
+  }
+
+  /// Load average data
+  Future<void> _loadAverageData(TemperatureService service, String city, String mmdd) async {
+    try {
+      Map<String, dynamic> averageData;
+      
+      // Skip cache if simulation is enabled to ensure simulation always runs
+      if (_simulateAverageFailure) {
+        debugPrintIfDebugging('📊 Simulation enabled - bypassing cache for average data');
+        averageData = await _simulateEndpointFailure('average', () => 
+          service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+        );
+      } else {
+        // Try to load from cache first
+        final cachedAverage = await _loadCachedApiResponse('average', city, mmdd);
+        
+        if (cachedAverage != null) {
+          debugPrintIfDebugging('📊 Using cached average data');
+          averageData = cachedAverage;
+        } else {
+          debugPrintIfDebugging('📊 Fetching fresh average data');
+          averageData = await _simulateEndpointFailure('average', () => 
+            service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+          );
+          // Cache the successful response
+          await _cacheApiResponse('average', city, mmdd, averageData);
+        }
+      }
+      
+      final averageTemperature = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
+      debugPrintIfDebugging('📊 Extracted average temperature: $averageTemperature');
+      
+      // Update the current data with average temperature
+      if (_currentData != null && averageTemperature != null) {
+        _currentData!['averageTemperature'] = averageTemperature;
+        if (mounted) {
+          setState(() {});
+        }
+      }
+      
+    } catch (e) {
+      debugPrintIfDebugging('Failed to fetch average data: $e');
+      setState(() {
+        _averageDataFailed = true;
+        if (e is RateLimitException) {
+          _averageDataRateLimited = true;
+        }
+      });
+    }
+  }
+
+  /// Load trend data
+  Future<void> _loadTrendData(TemperatureService service, String city, String mmdd) async {
+    try {
+      Map<String, dynamic> trendData;
+      
+      // Skip cache if simulation is enabled to ensure simulation always runs
+      if (_simulateTrendFailure) {
+        debugPrintIfDebugging('📊 Simulation enabled - bypassing cache for trend data');
+        trendData = await _simulateEndpointFailure('trend', () => 
+          service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+        );
+      } else {
+        // Try to load from cache first
+        final cachedTrend = await _loadCachedApiResponse('trend', city, mmdd);
+        
+        if (cachedTrend != null) {
+          debugPrintIfDebugging('📊 Using cached trend data');
+          trendData = cachedTrend;
+        } else {
+          debugPrintIfDebugging('📊 Fetching fresh trend data');
+          trendData = await _simulateEndpointFailure('trend', () => 
+            service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
+          );
+          // Cache the successful response
+          await _cacheApiResponse('trend', city, mmdd, trendData);
+        }
+      }
+      
+      final slope = trendData['slope'];
+      final trendSlope = (slope is num) ? slope.toDouble() : null;
+      debugPrintIfDebugging('📊 Extracted trend slope: $trendSlope');
+      
+      // Update the current data with trend slope
+      if (_currentData != null && trendSlope != null) {
+        _currentData!['trendSlope'] = trendSlope;
+        if (mounted) {
+          setState(() {});
+        }
+      }
+      
+    } catch (e) {
+      debugPrintIfDebugging('Failed to fetch trend data: $e');
+      setState(() {
+        _trendDataFailed = true;
+        if (e is RateLimitException) {
+          _trendDataRateLimited = true;
+        }
+      });
+    }
+  }
+
+  /// Handle retry when offline - intelligently decide what to retry
+  Future<void> _handleOfflineRetry() async {
+    debugPrintIfDebugging('🔄 Offline retry triggered');
+    
+    // Check if we're actually online now
+    if (_isOnline) {
+      debugPrintIfDebugging('🌐 Network is now online, resuming data loading');
+      
+      // If we have partial data, resume loading missing years
+      if (_currentData != null && _progressiveLoadingCompleted) {
+        debugPrintIfDebugging('📊 Resuming missing years loading');
+        await _loadMissingYears();
+      } else if (_currentData == null) {
+        debugPrintIfDebugging('📊 No data available, doing full refresh');
+        await _handleRefresh();
+      } else {
+        debugPrintIfDebugging('📊 Data loading in progress, no action needed');
+      }
+    } else {
+      debugPrintIfDebugging('📡 Still offline, checking connectivity...');
+      
+      // Try to detect if we're actually online by making a quick test request
+      try {
+        final service = TemperatureService();
+        final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+        final city = dateInfo['city']!;
+        final mmdd = dateInfo['mmdd']!;
+        
+        // Make a quick test request to see if we're actually online
+        await service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 5));
+        
+        // If we get here, we're actually online
+        debugPrintIfDebugging('🌐 Connectivity test successful, network is online');
+        _isOnline = true;
+        if (mounted) {
+          setState(() {});
+        }
+        
+        // Now resume loading
+        if (_currentData != null && _progressiveLoadingCompleted) {
+          debugPrintIfDebugging('📊 Resuming missing years loading after connectivity test');
+          await _loadMissingYears();
+        } else if (_currentData == null) {
+          debugPrintIfDebugging('📊 No data available, doing full refresh after connectivity test');
+          await _handleRefresh();
+        }
+        
+      } catch (e) {
+        debugPrintIfDebugging('📡 Connectivity test failed, still offline: $e');
+        // Show a brief message that we're still offline
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Still no internet connection. Please check your network settings.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       }
     }
   }
@@ -2341,7 +2493,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           } else if (snapshot.hasData) {
             final data = snapshot.data!;
             return _buildChartContent(
-              chartData: data['chartData'] as List<TemperatureChartData>,
+              chartData: (data['chartData'] as List<TemperatureChartData>?) ?? [],
               averageTemperature: data['averageTemperature'] as double?,
               trendSlope: data['trendSlope'] as double?,
               summaryText: data['summary'] as String?,
@@ -2362,7 +2514,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }
     
     final data = _currentData!;
-    final chartData = data['chartData'] as List<TemperatureChartData>;
+    final chartData = (data['chartData'] as List<TemperatureChartData>?) ?? [];
     
     // If we're loading and have no data yet, show loading state
     if (chartData.isEmpty && _isDataLoading) {
@@ -2486,11 +2638,19 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                   const SizedBox(height: 16),
                 ],
                 
-                Text(
-                  message,
-                  style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody),
-                  textAlign: TextAlign.left,
-                ),
+                // Show general error message if not handled by specific error types above
+                if (!_isStorageSpaceError(message) && 
+                    !_isLocationPermissionError(message) && 
+                    !_isRateLimitError(message) && 
+                    !_isNetworkError(message)) ...[
+                  _buildErrorIndicator(
+                    icon: Icons.error_outline,
+                    title: 'No temperature data available',
+                    message: message,
+                    color: Colors.red,
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 
                 // Show helpful tips based on error type
                 if (_isNetworkError(message) && _isOnline) ...[
@@ -2740,7 +2900,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         children: [
           Icon(
             icon,
-            color: color,
+            color: Colors.red,
             size: kIconSize,
           ),
           const SizedBox(width: 12),
@@ -2751,7 +2911,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 Text(
                   title,
                   style: TextStyle(
-                    color: color,
+                    color: Colors.red,
                     fontSize: kFontSizeBody - 1,
                     fontWeight: FontWeight.w600,
                   ),
@@ -2760,7 +2920,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 Text(
                   message,
                   style: TextStyle(
-                    color: color,
+                    color: Colors.red,
                     fontSize: kFontSizeBody - 2,
                     fontWeight: FontWeight.w400,
                   ),
@@ -2973,12 +3133,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         
         // Show feedback
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${isSimulating ? 'Disabled' : 'Enabled'} $label failure simulation'),
-              duration: const Duration(seconds: 1),
-            ),
-          );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${isSimulating ? 'Disabled' : 'Enabled'} $label failure simulation'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
         }
         
         // If we're enabling a simulation, trigger a refresh to see the failure
@@ -2986,7 +3146,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           // Clear cache when enabling simulation to ensure fresh data loading
           await _clearCache();
           if (mounted) {
-            _handleRefresh();
+          _handleRefresh();
           }
         }
       },
@@ -3418,6 +3578,27 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Show offline indicator if not online
+          if (!_isOnline) ...[
+            Builder(
+              builder: (context) {
+                debugPrintIfDebugging('🚫 Displaying offline indicator - _isOnline: $_isOnline');
+                return _buildErrorIndicator(
+                  icon: Icons.wifi_off,
+                  title: 'No internet connection',
+                  message: 'Please check your internet connection and try again.',
+                  color: kAccentColour,
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildRetryButton(() {
+              debugPrintIfDebugging('Retry button pressed while offline');
+              _handleOfflineRetry();
+            }),
+            const SizedBox(height: 16),
+          ],
+          
           _buildDateSection(displayDate),
           _buildCitySection(city),
           _buildSummarySection(summaryText),
@@ -3983,7 +4164,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Only show the "genuinely incomplete" message if we didn't hit a timeout
       // and we have a reasonable amount of data (more than 10 years)
       final successfulYears = _currentData != null ? 
-        (_currentData!['chartData'] as List<TemperatureChartData>).where((data) => data.hasData).length : 0;
+        ((_currentData!['chartData'] as List<TemperatureChartData>?) ?? []).where((data) => data.hasData).length : 0;
       
       if (!_chartDataFailed && successfulYears >= 10) {
         const message = 'Data appears to be incomplete for this location. Some years may not have data available.';
@@ -4068,6 +4249,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         
         // Update UI to reflect connectivity state
         if (mounted) {
+          debugPrintIfDebugging('🌐 Updating UI for connectivity state: ${_isOnline ? "online" : "offline"}');
           setState(() {});
         }
       },
@@ -4084,6 +4266,96 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         _chartDataFailed) {
       debugPrintIfDebugging('🔄 Network restored, refreshing failed data');
       _handleRefresh();
+    } else if (_currentData != null && _progressiveLoadingCompleted) {
+      // If we have partial data but loading is complete, try to load missing years
+      debugPrintIfDebugging('🔄 Network restored, attempting to load missing years');
+      _loadMissingYears();
+    }
+  }
+
+  /// Load missing years when network is restored
+  Future<void> _loadMissingYears() async {
+    if (_currentData == null) return;
+    
+    final chartData = (_currentData!['chartData'] as List<TemperatureChartData>?) ?? [];
+    final currentYear = DateTime.now().year;
+    
+    // Find years that are missing data
+    final missingYears = <int>[];
+    for (int year = currentYear; year >= 1975; year--) {
+      final yearData = chartData.where((data) => data.year == year.toString()).firstOrNull;
+      if (yearData == null || !yearData.hasData) {
+        missingYears.add(year);
+      }
+    }
+    
+    if (missingYears.isEmpty) {
+      debugPrintIfDebugging('📊 No missing years to load');
+      return;
+    }
+    
+    debugPrintIfDebugging('📊 Loading missing years: ${missingYears.take(10).join(', ')}${missingYears.length > 10 ? '...' : ''}');
+    
+    // Set loading state
+    setState(() {
+      _isDataLoading = true;
+    });
+    
+    try {
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final mmdd = dateInfo['mmdd']!;
+      final city = dateInfo['city']!;
+      final service = TemperatureService();
+      
+      int successCount = 0;
+      for (int year in missingYears) {
+        final dateForYear = '$year-$mmdd';
+        debugPrintIfDebugging('🔄 Loading missing year $year ($dateForYear)');
+        
+        try {
+          final tempData = await service.fetchTemperature(city, dateForYear)
+              .timeout(const Duration(seconds: 30));
+          
+          final temperature = tempData.temperature ?? tempData.average?.temperature;
+          
+          if (temperature != null) {
+            // Find and update the entry for this year
+            final yearIndex = chartData.indexWhere((data) => data.year == year.toString());
+            if (yearIndex != -1) {
+              chartData[yearIndex] = TemperatureChartData(
+                year: year.toString(),
+                temperature: temperature,
+                isCurrentYear: year == currentYear,
+                hasData: true,
+              );
+              
+              // Update the current data
+              _currentData!['chartData'] = chartData;
+              
+              successCount++;
+              debugPrintIfDebugging('✅ Successfully loaded missing year $year: ${temperature.toStringAsFixed(1)}°C');
+            }
+          }
+        } catch (e) {
+          debugPrintIfDebugging('❌ Failed to load missing year $year: $e');
+          // Continue with next year instead of breaking
+        }
+        
+        // Add a small delay between requests
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      
+      debugPrintIfDebugging('📊 Missing years loading completed: $successCount/${missingYears.length} years loaded successfully');
+      
+      // Update UI once after all missing years are loaded
+      if (mounted && successCount > 0) {
+        setState(() {});
+      }
+      
+    } finally {
+      setState(() {
+        _isDataLoading = false;
+      });
     }
   }
 
