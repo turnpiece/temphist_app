@@ -665,7 +665,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Check if the date has changed
     if (!_isSameDate(_currentDataDate!, currentDate)) {
       debugPrintIfDebugging('Date changed from ${_formatDayMonth(_currentDataDate!)} to ${_formatDayMonth(currentDate)}, refreshing data...');
-      await _refreshDataForNewDate();
+      await _refreshDataForNewDate(currentDateInfo);
     } else {
       debugPrintIfDebugging('Date unchanged (${_formatDayMonth(currentDate)}), keeping current data');
     }
@@ -677,16 +677,24 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
            date1.day == date2.day;
   }
 
-  Future<void> _refreshDataForNewDate() async {
+  Future<void> _refreshDataForNewDate([Map<String, String>? dateInfo]) async {
     debugPrintIfDebugging('Refreshing data for new date...');
     
-    // Update the current data date
-    final currentDateInfo = _getCurrentDateAndLocation(_determinedLocation);
+    // Use provided date info or get current date info
+    final currentDateInfo = dateInfo ?? _getCurrentDateAndLocation(_determinedLocation);
     _currentDataDate = DateTime.parse(currentDateInfo['date']!);
+    
+    // Clear existing data to show clean loading state
+    _currentData = null;
     
     // Reload data with new date using progressive loading
     _isDataLoading = true;
     _progressiveLoadingCompleted = false;
+    
+    // Immediately update UI to show loading state
+    if (mounted) {
+      setState(() {});
+    }
     
     // Start the average/trend display timer
     _startAverageTrendDisplayTimer();
@@ -805,8 +813,31 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<void> _clearCache() async {
     await _safeSharedPreferencesOperation(() async {
       final prefs = await SharedPreferences.getInstance();
+      
+      // Get all keys to find cache entries
+      final keys = prefs.getKeys();
+      
+      // Clear chart data cache
       await prefs.remove('cachedChartData');
-      debugPrintIfDebugging('Cache cleared for simulation mode');
+      
+      // Clear API response caches (average, trend, summary)
+      for (final key in keys) {
+        if (key.startsWith('api_')) {
+          await prefs.remove(key);
+        }
+      }
+      
+      // Clear temperature data caches
+      for (final key in keys) {
+        if (key.startsWith('tempData_')) {
+          await prefs.remove(key);
+        }
+      }
+      
+      // Clear location cache
+      await prefs.remove('cachedLocation');
+      
+      debugPrintIfDebugging('All cache cleared: chart data, API responses, temperature data, and location');
     }, 'clear cache');
   }
 
@@ -2086,6 +2117,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       _isDataLoading = false;
       _progressiveLoadingCompleted = true;
       
+      // Reset chart data failure flag since loading completed successfully
+      // (even if some individual years failed, the overall loading process succeeded)
+      _chartDataFailed = false;
+      
       // Log final results
       final successfulYears = chartData.where((data) => data.hasData).length;
       final totalYears = chartData.length;
@@ -2226,6 +2261,42 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     await _initializeApp();
   }
 
+  /// Test date change detection (for debugging)
+  Future<void> _handleTestDateChange() async {
+    debugPrintIfDebugging('Test date change triggered - simulating date change detection');
+    
+    // Simulate a date change by temporarily setting the stored date to yesterday
+    // This will make the date comparison think the date has changed
+    if (_currentDataDate != null) {
+      final yesterday = _currentDataDate!.subtract(const Duration(days: 1));
+      _currentDataDate = yesterday;
+      debugPrintIfDebugging('Simulated date change: stored date set to ${_formatDayMonth(yesterday)}');
+      
+      // Now call the date change detection logic
+      await _checkAndRefreshDataIfDateChanged();
+    } else {
+      debugPrintIfDebugging('No current data date available for testing');
+    }
+  }
+
+  /// Clear all cache (for debugging)
+  Future<void> _handleClearCache() async {
+    debugPrintIfDebugging('Clear cache triggered - clearing all cached data');
+    
+    // Clear all cache
+    await _clearCache();
+    
+    // Show feedback only if widget is still mounted
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cache cleared successfully'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
+  }
+
   Widget _buildRefreshIndicator(Widget child) {
     debugPrintIfDebugging('_buildRefreshIndicator: futureChartData=${futureChartData != null}, _currentData=${_currentData != null}, _isDataLoading=$_isDataLoading');
     
@@ -2331,6 +2402,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     final city = _displayLocation.isNotEmpty ? _displayLocation : (data['city'] as String?);
     
     debugPrintIfDebugging('Average temperature for plot band: $averageTemperature°C');
+
 
     return _buildChartContent(
       chartData: chartData, // Pass all chart data (including empty placeholders)
@@ -2849,6 +2921,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 _buildResetAllButton(),
                 _buildForceRefreshButton(),
                 _buildLocationRefreshButton(),
+                _buildTestDateChangeButton(),
+                _buildClearCacheButton(),
               ],
             ),
             if (AppConfig.enableEndpointFailureSimulation) ...[
@@ -2898,18 +2972,22 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         });
         
         // Show feedback
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${isSimulating ? 'Disabled' : 'Enabled'} $label failure simulation'),
-            duration: const Duration(seconds: 1),
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${isSimulating ? 'Disabled' : 'Enabled'} $label failure simulation'),
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        }
         
         // If we're enabling a simulation, trigger a refresh to see the failure
         if (!isSimulating) {
           // Clear cache when enabling simulation to ensure fresh data loading
           await _clearCache();
-          _handleRefresh();
+          if (mounted) {
+            _handleRefresh();
+          }
         }
       },
       child: Container(
@@ -3017,6 +3095,64 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           'Location Refresh',
           style: TextStyle(
             color: kGreyLabelColour,
+            fontSize: kFontSizeBody - 2,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTestDateChangeButton() {
+    return GestureDetector(
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Simulating date change - clearing data and reloading...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        _handleTestDateChange();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          'Test Date Change',
+          style: TextStyle(
+            color: Colors.orange,
+            fontSize: kFontSizeBody - 2,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClearCacheButton() {
+    return GestureDetector(
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Clearing all cache...'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+        _handleClearCache();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.red.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          'Clear Cache',
+          style: TextStyle(
+            color: Colors.red,
             fontSize: kFontSizeBody - 2,
             fontWeight: FontWeight.w500,
           ),
@@ -3233,6 +3369,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       ),
     );
   }
+
 
   Widget _buildChartContent({
     required List<TemperatureChartData> chartData,
@@ -4155,6 +4292,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       debugPrintIfDebugging('Simulating trend endpoint failure');
       await Future.delayed(const Duration(seconds: 2)); // Simulate delay
       throw Exception('Simulated trend endpoint failure for testing');
+    }
+    
+    if (endpointName == 'summary' && _simulateSummaryFailure) {
+      debugPrintIfDebugging('Simulating summary endpoint failure');
+      await Future.delayed(const Duration(seconds: 2)); // Simulate delay
+      throw Exception('Simulated summary endpoint failure for testing');
     }
     
     // If no failure is simulated, proceed with normal call
