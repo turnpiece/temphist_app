@@ -1408,7 +1408,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         return;
       }
       
-      List<TemperatureChartData> chartData = List<TemperatureChartData>.from(currentData['chartData']);
+      List<TemperatureChartData> chartData = List<TemperatureChartData>.from(
+        (currentData['chartData'] as List<TemperatureChartData>?) ?? []
+      );
       int successCount = 0;
       
       // Retry each failed year
@@ -2341,7 +2343,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           } else if (snapshot.hasData) {
             final data = snapshot.data!;
             return _buildChartContent(
-              chartData: data['chartData'] as List<TemperatureChartData>,
+              chartData: (data['chartData'] as List<TemperatureChartData>?) ?? [],
               averageTemperature: data['averageTemperature'] as double?,
               trendSlope: data['trendSlope'] as double?,
               summaryText: data['summary'] as String?,
@@ -2362,7 +2364,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }
     
     final data = _currentData!;
-    final chartData = data['chartData'] as List<TemperatureChartData>;
+    final chartData = (data['chartData'] as List<TemperatureChartData>?) ?? [];
     
     // If we're loading and have no data yet, show loading state
     if (chartData.isEmpty && _isDataLoading) {
@@ -3983,7 +3985,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Only show the "genuinely incomplete" message if we didn't hit a timeout
       // and we have a reasonable amount of data (more than 10 years)
       final successfulYears = _currentData != null ? 
-        (_currentData!['chartData'] as List<TemperatureChartData>).where((data) => data.hasData).length : 0;
+        ((_currentData!['chartData'] as List<TemperatureChartData>?) ?? []).where((data) => data.hasData).length : 0;
       
       if (!_chartDataFailed && successfulYears >= 10) {
         const message = 'Data appears to be incomplete for this location. Some years may not have data available.';
