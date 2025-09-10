@@ -1096,6 +1096,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         } catch (e) {
           debugPrintIfDebugging('Retry of average data failed: $e');
           
+          // Check if it's a network error and immediately set offline state
+          if (_isNetworkError(e.toString())) {
+            debugPrintIfDebugging('🌐 Network error detected during average data retry, setting offline state');
+            _isOnline = false;
+            if (mounted) {
+              setState(() {});
+            }
+            return; // Stop retrying if we're offline
+          }
+          
           // Check if it's a rate limit error - don't retry these
           if (e is RateLimitException) {
             setState(() {
@@ -1142,6 +1152,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           }
         } catch (e) {
           debugPrintIfDebugging('Retry of trend data failed: $e');
+          
+          // Check if it's a network error and immediately set offline state
+          if (_isNetworkError(e.toString())) {
+            debugPrintIfDebugging('🌐 Network error detected during trend data retry, setting offline state');
+            _isOnline = false;
+            if (mounted) {
+              setState(() {});
+            }
+            return; // Stop retrying if we're offline
+          }
+          
           setState(() {
             _isRetryingTrend = false;
           });
@@ -1177,6 +1198,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           }
         } catch (e) {
           debugPrintIfDebugging('Retry of summary data failed: $e');
+          
+          // Check if it's a network error and immediately set offline state
+          if (_isNetworkError(e.toString())) {
+            debugPrintIfDebugging('🌐 Network error detected during summary data retry, setting offline state');
+            _isOnline = false;
+            if (mounted) {
+              setState(() {});
+            }
+            return; // Stop retrying if we're offline
+          }
+          
           setState(() {
             _isRetryingSummary = false;
           });
@@ -1226,6 +1258,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         }
       } catch (e) {
         debugPrintIfDebugging('Retry of average data failed: $e');
+        
+        // Check if it's a network error and immediately set offline state
+        if (_isNetworkError(e.toString())) {
+          debugPrintIfDebugging('🌐 Network error detected during average data retry, setting offline state');
+          _isOnline = false;
+          if (mounted) {
+            setState(() {});
+          }
+          return; // Stop retrying if we're offline
+        }
+        
         setState(() {
           _isRetryingAverage = false;
         });
@@ -1440,6 +1483,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           }
         } catch (e) {
           debugPrintIfDebugging('❌ Failed to retry year $year: $e');
+          
+          // Check if this is a network error and immediately set offline state
+          if (_isNetworkError(e.toString())) {
+            debugPrintIfDebugging('🌐 Network error detected during retry, setting offline state');
+            _isOnline = false;
+            if (mounted) {
+              setState(() {});
+            }
+            break; // Stop retrying if we're offline
+          }
+          
           if (e is RateLimitException) {
             debugPrintIfDebugging('⚠️ Rate limit hit during retry, stopping');
             setState(() {
@@ -2082,6 +2136,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           }
           consecutiveFailures++;
           debugPrintIfDebugging('⚠️ Consecutive failures: $consecutiveFailures/$maxConsecutiveFailures (successful: $successfulAttempts/$totalAttempts)');
+          
+          // Check if it's a network error and immediately set offline state
+          if (_isNetworkError(e.toString())) {
+            debugPrintIfDebugging('🌐 Network error detected during data loading, setting offline state');
+            _isOnline = false;
+            if (mounted) {
+              setState(() {});
+            }
+            break; // Stop loading if we're offline
+          }
           
           // Check if it's a rate limit error
           if (e is RateLimitException) {
@@ -2742,7 +2806,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         children: [
           Icon(
             icon,
-            color: color,
+            color: Colors.red,
             size: kIconSize,
           ),
           const SizedBox(width: 12),
@@ -2753,7 +2817,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 Text(
                   title,
                   style: TextStyle(
-                    color: color,
+                    color: Colors.red,
                     fontSize: kFontSizeBody - 1,
                     fontWeight: FontWeight.w600,
                   ),
@@ -2762,7 +2826,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 Text(
                   message,
                   style: TextStyle(
-                    color: color,
+                    color: Colors.red,
                     fontSize: kFontSizeBody - 2,
                     fontWeight: FontWeight.w400,
                   ),
@@ -3420,6 +3484,24 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Show offline indicator if not online
+          if (!_isOnline) ...[
+            _buildErrorIndicator(
+              icon: Icons.wifi_off,
+              title: 'No internet connection',
+              message: 'Please check your internet connection and try again.',
+              color: kAccentColour,
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: _buildRetryButton(() {
+                debugPrintIfDebugging('Retry button pressed while offline');
+                _handleRefresh();
+              }),
+            ),
+            const SizedBox(height: 16),
+          ],
+          
           _buildDateSection(displayDate),
           _buildCitySection(city),
           _buildSummarySection(summaryText),
@@ -4086,6 +4168,96 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         _chartDataFailed) {
       debugPrintIfDebugging('🔄 Network restored, refreshing failed data');
       _handleRefresh();
+    } else if (_currentData != null && _progressiveLoadingCompleted) {
+      // If we have partial data but loading is complete, try to load missing years
+      debugPrintIfDebugging('🔄 Network restored, attempting to load missing years');
+      _loadMissingYears();
+    }
+  }
+
+  /// Load missing years when network is restored
+  Future<void> _loadMissingYears() async {
+    if (_currentData == null) return;
+    
+    final chartData = (_currentData!['chartData'] as List<TemperatureChartData>?) ?? [];
+    final currentYear = DateTime.now().year;
+    
+    // Find years that are missing data
+    final missingYears = <int>[];
+    for (int year = currentYear; year >= 1975; year--) {
+      final yearData = chartData.where((data) => data.year == year.toString()).firstOrNull;
+      if (yearData == null || !yearData.hasData) {
+        missingYears.add(year);
+      }
+    }
+    
+    if (missingYears.isEmpty) {
+      debugPrintIfDebugging('📊 No missing years to load');
+      return;
+    }
+    
+    debugPrintIfDebugging('📊 Loading missing years: ${missingYears.take(10).join(', ')}${missingYears.length > 10 ? '...' : ''}');
+    
+    // Set loading state
+    setState(() {
+      _isDataLoading = true;
+    });
+    
+    try {
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final mmdd = dateInfo['mmdd']!;
+      final city = dateInfo['city']!;
+      final service = TemperatureService();
+      
+      int successCount = 0;
+      for (int year in missingYears) {
+        final dateForYear = '$year-$mmdd';
+        debugPrintIfDebugging('🔄 Loading missing year $year ($dateForYear)');
+        
+        try {
+          final tempData = await service.fetchTemperature(city, dateForYear)
+              .timeout(const Duration(seconds: 30));
+          
+          final temperature = tempData.temperature ?? tempData.average?.temperature;
+          
+          if (temperature != null) {
+            // Find and update the entry for this year
+            final yearIndex = chartData.indexWhere((data) => data.year == year.toString());
+            if (yearIndex != -1) {
+              chartData[yearIndex] = TemperatureChartData(
+                year: year.toString(),
+                temperature: temperature,
+                isCurrentYear: year == currentYear,
+                hasData: true,
+              );
+              
+              // Update the current data
+              _currentData!['chartData'] = chartData;
+              
+              successCount++;
+              debugPrintIfDebugging('✅ Successfully loaded missing year $year: ${temperature.toStringAsFixed(1)}°C');
+              
+              // Update UI after each successful load
+              if (mounted) {
+                setState(() {});
+              }
+            }
+          }
+        } catch (e) {
+          debugPrintIfDebugging('❌ Failed to load missing year $year: $e');
+          // Continue with next year instead of breaking
+        }
+        
+        // Add a small delay between requests
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      
+      debugPrintIfDebugging('📊 Missing years loading completed: $successCount/${missingYears.length} years loaded successfully');
+      
+    } finally {
+      setState(() {
+        _isDataLoading = false;
+      });
     }
   }
 
