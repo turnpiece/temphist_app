@@ -1,8 +1,8 @@
 // Debug configuration - only included in debug builds
 class DebugConfig {
-  static const bool enableDebugLogging = true;
-  static const bool enableEndpointFailureSimulation = true;
-  static const bool enableDebugUI = true;
+  static const bool enableDebugLogging = false;
+  static const bool enableEndpointFailureSimulation = false;
+  static const bool enableDebugUI = false;
   
   // Debug-specific constants
   static const String apiBaseUrl = 'https://api.temphist.com';
@@ -16,5 +16,5 @@ class DebugConfig {
   // App version information
   static const String appVersion = '1.0.0';
   static const String buildNumber = '1';
-  static const String releaseDate = 'Development Build';
+  static const String releaseDate = 'Production Build';
 }
