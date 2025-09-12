@@ -25,14 +25,26 @@ jobs:
         working-directory: ios
         run: bundle exec pod install
 
+      - name: 🔑 Create API Key File
+        run: |
+          echo "Creating App Store Connect API key file..."
+          cat > /tmp/app_store_connect_api_key.json << EOF
+          {
+            "key_id": "${{ secrets.APP_STORE_KEY_ID }}",
+            "issuer_id": "${{ secrets.APP_STORE_ISSUER_ID }}",
+            "key_content": "${{ secrets.APP_STORE_PRIVATE_KEY }}",
+            "is_key_content_base64": true
+          }
+          EOF
+
       - name: 🔐 Nuke Existing Certificates
         working-directory: ios
         run: |
           echo "🗑️ Nuking development certificates..."
-          bundle exec fastlane match nuke development --readonly false
+          bundle exec fastlane match nuke development --readonly false --api_key_path /tmp/app_store_connect_api_key.json
           
           echo "🗑️ Nuking distribution certificates..."
-          bundle exec fastlane match nuke distribution --readonly false
+          bundle exec fastlane match nuke distribution --readonly false --api_key_path /tmp/app_store_connect_api_key.json
         env:
           APP_STORE_KEY_ID: ${{ secrets.APP_STORE_KEY_ID }}
           APP_STORE_ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}
@@ -45,10 +57,10 @@ jobs:
         working-directory: ios
         run: |
           echo "🆕 Generating development certificates..."
-          bundle exec fastlane match development --readonly false
+          bundle exec fastlane match development --readonly false --api_key_path /tmp/app_store_connect_api_key.json
           
           echo "🆕 Generating distribution certificates..."
-          bundle exec fastlane match appstore --readonly false
+          bundle exec fastlane match appstore --readonly false --api_key_path /tmp/app_store_connect_api_key.json
         env:
           APP_STORE_KEY_ID: ${{ secrets.APP_STORE_KEY_ID }}
           APP_STORE_ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}
