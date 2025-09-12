@@ -71,12 +71,24 @@ platform :ios do
       build_number: Time.now.utc.strftime("%Y%m%d%H%M")
     )
 
+    # Create API key file for xcodebuild authentication
+    api_key_file = "/tmp/app_store_connect_api_key.json"
+    api_key_json = {
+      "key_id" => ENV["APP_STORE_KEY_ID"],
+      "issuer_id" => ENV["APP_STORE_ISSUER_ID"],
+      "key" => Base64.decode64(ENV["APP_STORE_PRIVATE_KEY"]),
+      "is_key_content_base64" => false,
+      "in_house" => false
+    }.to_json
+    
+    File.write(api_key_file, api_key_json)
+
     build_app(
       scheme:        "Runner",
       configuration: "Release",
       export_method: "app-store",
       destination:   "generic/platform=iOS",
-      xcargs: %Q(DEVELOPMENT_TEAM=77X2NFV437 -allowProvisioningUpdates)
+      xcargs: %Q(DEVELOPMENT_TEAM=77X2NFV437 -allowProvisioningUpdates -authenticationKeyID #{ENV["APP_STORE_KEY_ID"]} -authenticationKeyIssuerID #{ENV["APP_STORE_ISSUER_ID"]} -authenticationKeyPath #{api_key_file})
     )
 
     upload_to_testflight(api_key: api_key)
