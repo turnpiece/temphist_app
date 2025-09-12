@@ -62,19 +62,8 @@ platform :ios do
     # Clear any existing keychain issues
     clear_derived_data
 
-    # Code signing with match - use readonly to avoid conflicts
-    match(
-      api_key: api_key,
-      type: "appstore",
-      readonly: false,
-      force_for_new_devices: true
-    )
-
     # Build with Flutter
     sh("cd .. && bundle exec flutter build ios --release --no-codesign")
-
-    profile_specifier =
-    lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING][ENV['APP_IDENTIFIER']]
   
     # bump build number to current UTC timestamp YYYYMMDDHHMM
     increment_build_number(
@@ -87,11 +76,7 @@ platform :ios do
       configuration: "Release",
       export_method: "app-store",
       destination:   "generic/platform=iOS",
-      skip_profile_detection: true,
-      xcargs: %Q(CODE_SIGN_STYLE=Manual \
-                CODE_SIGN_IDENTITY="Apple Distribution" \
-                PROVISIONING_PROFILE_SPECIFIER="#{profile_specifier}" \
-                DEVELOPMENT_TEAM=77X2NFV437)
+      xcargs: %Q(DEVELOPMENT_TEAM=77X2NFV437)
     )
 
     upload_to_testflight(api_key: api_key)
