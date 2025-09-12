@@ -76,7 +76,8 @@ platform :ios do
       configuration: "Release",
       export_method: "app-store",
       destination:   "generic/platform=iOS",
-      xcargs: %Q(DEVELOPMENT_TEAM=77X2NFV437 -allowProvisioningUpdates)
+      xcargs: %Q(DEVELOPMENT_TEAM=77X2NFV437 -allowProvisioningUpdates),
+      api_key: api_key
     )
 
     upload_to_testflight(api_key: api_key)
