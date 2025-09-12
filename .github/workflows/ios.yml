@@ -95,9 +95,12 @@ jobs:
         working-directory: ios
         run: bundle install
 
-      - name: 📦 Install CocoaPods dependencies
+      - name: 📦 Clean and Install CocoaPods dependencies
         working-directory: ios
-        run: bundle exec pod install
+        run: |
+          rm -rf Pods
+          rm -f Podfile.lock
+          bundle exec pod install
 
       - name: 🔍 List available iOS simulators
         run: xcrun simctl list devices available
