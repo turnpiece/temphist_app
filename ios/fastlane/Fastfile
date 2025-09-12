@@ -63,11 +63,14 @@ platform :ios do
     clear_derived_data
 
     # Create API key file for authentication
+    # Decode the base64-encoded private key to get the actual PEM content
+    decoded_private_key = Base64.decode64(ENV["APP_STORE_PRIVATE_KEY"])
+    
     api_key_content = {
       "key_id" => ENV["APP_STORE_KEY_ID"],
       "issuer_id" => ENV["APP_STORE_ISSUER_ID"],
-      "key" => ENV["APP_STORE_PRIVATE_KEY"],
-      "is_key_content_base64" => true,
+      "key" => decoded_private_key,
+      "is_key_content_base64" => false,
       "in_house" => false
     }.to_json
     
