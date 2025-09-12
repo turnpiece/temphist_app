@@ -14,6 +14,9 @@ post_install do |installer|    # or your loop + flutter_additional…
   installer.pods_project.targets.each do |t|
     t.build_configurations.each do |c|
       c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+      # Set all pods to use automatic provisioning profiles
+      c.build_settings['PROVISIONING_PROFILE_SPECIFIER'] = 'Automatic'
+      c.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
     end
     flutter_additional_ios_build_settings(t)
   end

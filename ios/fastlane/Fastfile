@@ -90,11 +90,7 @@ platform :ios do
       xcargs: %Q(CODE_SIGN_STYLE=Manual \
                 CODE_SIGN_IDENTITY="Apple Distribution" \
                 PROVISIONING_PROFILE_SPECIFIER="#{profile_specifier}" \
-                DEVELOPMENT_TEAM=77X2NFV437 \
-                PROVISIONING_PROFILE_SPECIFIER_FIREBASE_CORE=Automatic \
-                PROVISIONING_PROFILE_SPECIFIER_GOOGLEUTILITIES=Automatic \
-                PROVISIONING_PROFILE_SPECIFIER_FIREBASEAUTHINTEROP=Automatic \
-                PROVISIONING_PROFILE_SPECIFIER_GTMSESSIONFETCHER=Automatic)
+                DEVELOPMENT_TEAM=77X2NFV437)
     )
 
     upload_to_testflight(api_key: api_key)
