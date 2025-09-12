@@ -76,8 +76,8 @@ platform :ios do
     api_key_json = {
       "key_id" => ENV["APP_STORE_KEY_ID"],
       "issuer_id" => ENV["APP_STORE_ISSUER_ID"],
-      "key" => Base64.decode64(ENV["APP_STORE_PRIVATE_KEY"]),
-      "is_key_content_base64" => false,
+      "key" => ENV["APP_STORE_PRIVATE_KEY"],
+      "is_key_content_base64" => true,
       "in_house" => false
     }.to_json
     
