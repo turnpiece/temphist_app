@@ -31,19 +31,19 @@ platform :ios do
     # Clear any existing keychain issues
     clear_derived_data
 
-    # Nuke existing certificates
+    # Nuke existing certificates first
     match(
       api_key: api_key,
       type: "development",
-      readonly: false,
-      force_for_new_devices: true
+      nuke_certificates: true,
+      readonly: false
     )
     
     match(
       api_key: api_key,
       type: "appstore",
-      readonly: false,
-      force_for_new_devices: true
+      nuke_certificates: true,
+      readonly: false
     )
 
     UI.success("✅ Certificate regeneration complete!")
