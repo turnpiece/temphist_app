@@ -28,17 +28,16 @@ platform :ios do
       is_key_content_base64: true
     )
 
-    # development profile (same bundle ID)
-    match(
-      api_key: api_key,
-      type:    "development",
-      readonly: false 
-    )
+    # Clear any existing keychain issues
+    clear_derived_data
+    clear_cache
 
-    # Code signing with match
+    # Code signing with match - use readonly to avoid conflicts
     match(
       api_key: api_key,
       type: "appstore",
+      readonly: false,
+      force_for_new_devices: true
     )
 
     # Build with Flutter
@@ -60,7 +59,8 @@ platform :ios do
       destination:   "generic/platform=iOS",
       xcargs: %Q(CODE_SIGN_STYLE=Manual \
                 CODE_SIGN_IDENTITY="Apple Distribution" \
-                PROVISIONING_PROFILE_SPECIFIER="#{profile_specifier}")
+                PROVISIONING_PROFILE_SPECIFIER="#{profile_specifier}" \
+                DEVELOPMENT_TEAM=77X2NFV437)
     )
 
     upload_to_testflight(api_key: api_key)

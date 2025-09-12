@@ -68,6 +68,17 @@ jobs:
       - name: Clean DerivedData
         run: rm -rf ~/Library/Developer/Xcode/DerivedData
 
+      - name: Clean keychains
+        run: |
+          security delete-keychain /Users/runner/Library/Keychains/fastlane_tmp_keychain-db || true
+          rm -rf /Users/runner/Library/Keychains/fastlane_tmp_keychain-db
+
+      - name: Create keychain
+        run: |
+          security create-keychain -p "" /Users/runner/Library/Keychains/fastlane_tmp_keychain-db
+          security set-keychain-settings -t 3600 -l /Users/runner/Library/Keychains/fastlane_tmp_keychain-db
+          security list-keychains -d user -s /Users/runner/Library/Keychains/fastlane_tmp_keychain-db
+
       - name: Select latest Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
 
