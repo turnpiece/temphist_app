@@ -30,7 +30,6 @@ platform :ios do
 
     # Clear any existing keychain issues
     clear_derived_data
-    clear_cache
 
     # Code signing with match - use readonly to avoid conflicts
     match(
