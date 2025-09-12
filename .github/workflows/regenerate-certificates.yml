@@ -42,10 +42,10 @@ jobs:
         working-directory: ios
         run: |
           echo "🗑️ Nuking development certificates..."
-          bundle exec fastlane match nuke development --readonly false --api_key_path /tmp/app_store_connect_api_key.json
+          bundle exec fastlane match nuke development --readonly false --api_key_path /tmp/app_store_connect_api_key.json --skip_confirmation
           
           echo "🗑️ Nuking distribution certificates..."
-          bundle exec fastlane match nuke distribution --readonly false --api_key_path /tmp/app_store_connect_api_key.json
+          bundle exec fastlane match nuke distribution --readonly false --api_key_path /tmp/app_store_connect_api_key.json --skip_confirmation
         env:
           APP_STORE_KEY_ID: ${{ secrets.APP_STORE_KEY_ID }}
           APP_STORE_ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}
