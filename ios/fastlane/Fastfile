@@ -63,15 +63,15 @@ platform :ios do
     clear_derived_data
 
     # Create API key file for authentication
-    sh("cat > /tmp/app_store_connect_api_key.json << EOF
-{
-  \"key_id\": \"#{ENV["APP_STORE_KEY_ID"]}\",
-  \"issuer_id\": \"#{ENV["APP_STORE_ISSUER_ID"]}\",
-  \"key\": \"#{ENV["APP_STORE_PRIVATE_KEY"]}\",
-  \"is_key_content_base64\": true,
-  \"in_house\": false
-}
-EOF")
+    api_key_content = {
+      "key_id" => ENV["APP_STORE_KEY_ID"],
+      "issuer_id" => ENV["APP_STORE_ISSUER_ID"],
+      "key" => ENV["APP_STORE_PRIVATE_KEY"],
+      "is_key_content_base64" => true,
+      "in_house" => false
+    }.to_json
+    
+    File.write("/tmp/app_store_connect_api_key.json", api_key_content)
 
     # Build with Flutter
     sh("cd .. && bundle exec flutter build ios --release --no-codesign")
