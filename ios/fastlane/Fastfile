@@ -62,14 +62,6 @@ platform :ios do
     # Clear any existing keychain issues
     clear_derived_data
 
-    # Use match to get certificates and provisioning profiles
-    match(
-      api_key: api_key,
-      type: "appstore",
-      readonly: false,
-      force_for_new_devices: true
-    )
-
     # Build with Flutter
     sh("cd .. && bundle exec flutter build ios --release --no-codesign")
   
@@ -79,15 +71,13 @@ platform :ios do
       build_number: Time.now.utc.strftime("%Y%m%d%H%M")
     )
 
-    # Get the provisioning profile specifier from match
-    profile_specifier = lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING][ENV['APP_IDENTIFIER']]
-
     build_app(
       scheme:        "Runner",
       configuration: "Release",
       export_method: "app-store",
       destination:   "generic/platform=iOS",
-      xcargs: %Q(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Apple Distribution" PROVISIONING_PROFILE_SPECIFIER="#{profile_specifier}" DEVELOPMENT_TEAM=77X2NFV437)
+      skip_profile_detection: true,
+      xcargs: %Q(DEVELOPMENT_TEAM=77X2NFV437 -allowProvisioningUpdates)
     )
 
     upload_to_testflight(api_key: api_key)
