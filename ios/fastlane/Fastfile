@@ -35,14 +35,12 @@ platform :ios do
     match(
       api_key: api_key,
       type: "development",
-      nuke_certificates: true,
       readonly: false
     )
     
     match(
       api_key: api_key,
-      type: "appstore",
-      nuke_certificates: true,
+      type: "distribution",
       readonly: false
     )
 
