@@ -33,7 +33,8 @@ jobs:
             "key_id": "${{ secrets.APP_STORE_KEY_ID }}",
             "issuer_id": "${{ secrets.APP_STORE_ISSUER_ID }}",
             "key": "${{ secrets.APP_STORE_PRIVATE_KEY }}",
-            "is_key_content_base64": true
+            "is_key_content_base64": true,
+            "in_house": false
           }
           EOF
 
