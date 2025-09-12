@@ -71,6 +71,12 @@ platform :ios do
       build_number: Time.now.utc.strftime("%Y%m%d%H%M")
     )
 
+    # Set up authentication for automatic signing
+    ENV["SPACESHIP_CONNECT_API_KEY_ID"] = ENV["APP_STORE_KEY_ID"]
+    ENV["SPACESHIP_CONNECT_API_ISSUER_ID"] = ENV["APP_STORE_ISSUER_ID"]
+    ENV["SPACESHIP_CONNECT_API_PRIVATE_KEY_CONTENT"] = ENV["APP_STORE_PRIVATE_KEY"]
+    ENV["SPACESHIP_CONNECT_API_IN_HOUSE"] = "false"
+
     build_app(
       scheme:        "Runner",
       configuration: "Release",
