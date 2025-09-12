@@ -1,0 +1,54 @@
+name: Regenerate iOS Certificates
+
+on:
+  workflow_dispatch: # Manual trigger only
+
+jobs:
+  regenerate-certificates:
+    runs-on: macos-latest
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v3
+
+      - name: 🚀 Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.8"
+          channel: "stable"
+
+      - name: 🛠️ Install Fastlane
+        working-directory: ios
+        run: bundle install
+
+      - name: 📦 Install CocoaPods dependencies
+        working-directory: ios
+        run: bundle exec pod install
+
+      - name: 🔐 Regenerate Certificates
+        working-directory: ios
+        run: |
+          # Set up API key for App Store Connect
+          api_key="{\"key_id\":\"${{ secrets.APP_STORE_KEY_ID }}\",\"issuer_id\":\"${{ secrets.APP_STORE_ISSUER_ID }}\",\"key_content\":\"${{ secrets.APP_STORE_PRIVATE_KEY }}\",\"is_key_content_base64\":true}"
+
+          echo "🗑️ Nuking existing certificates..."
+          bundle exec fastlane match nuke development --api_key "$api_key" --readonly false
+          bundle exec fastlane match nuke distribution --api_key "$api_key" --readonly false
+
+          echo "🆕 Generating new certificates..."
+          bundle exec fastlane match development --api_key "$api_key" --readonly false
+          bundle exec fastlane match appstore --api_key "$api_key" --readonly false
+
+          echo "✅ Certificate regeneration complete!"
+        env:
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_URL: https://x-access-token:${{ secrets.MATCH_GIT_PAT }}@github.com/turnpiece/apple-certs.git
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+
+      - name: 📝 Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Regenerate iOS certificates via GitHub Actions" || echo "No changes to commit"
+          git push || echo "Nothing to push"
