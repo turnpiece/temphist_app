@@ -96,7 +96,8 @@ platform :ios do
       export_method: "app-store",
       destination:   "generic/platform=iOS",
       skip_profile_detection: true,
-      xcargs: %Q(DEVELOPMENT_TEAM=77X2NFV437 -allowProvisioningUpdates)
+      xcode_path: "/Applications/Xcode_16.4.app",
+      xcargs: %Q(DEVELOPMENT_TEAM=77X2NFV437 CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER=match\\ AppStore\\ *** -allowProvisioningUpdates)
     )
 
     upload_to_testflight(api_key: api_key)
