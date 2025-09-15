@@ -25,38 +25,39 @@ jobs:
       # Make absolutely sure both PATH and Fastlane use the same Xcode,
       # clear any conflicting env, and install the iPhoneOS platform there.
       - name: Finalize Xcode and install iPhoneOS platform
-        shell: bash
         run: |
           set -euo pipefail
 
-          # Force xcode-select and DEVELOPER_DIR to exactly the same bundle the action chose
+          # Keep setup-xcode's choice and reflect it in both xcode-select and env
           SELECTED_DIR="$(xcode-select -p)"
           echo "Selected by setup-xcode: ${SELECTED_DIR}"
           sudo xcode-select -s "${SELECTED_DIR}"
-
-          # Make it available to *this* shell AND to later steps
           export DEVELOPER_DIR="${SELECTED_DIR}"
           echo "DEVELOPER_DIR=${SELECTED_DIR}" >> "$GITHUB_ENV"
 
-          # Guard against stray RC/Beta env affecting SDK lookup (clear now and for later steps)
+          # Nuke any stray SDK root that can confuse xcrun/xcodebuild
           unset MD_APPLE_SDK_ROOT || true
           echo "MD_APPLE_SDK_ROOT=" >> "$GITHUB_ENV"
 
-          # Make sure additional components are initialized
+          # First launch bits (idempotent)
           sudo xcodebuild -license accept || true
           sudo xcodebuild -runFirstLaunch || true
 
-          # Install iPhoneOS platform if missing
-          if ! xcrun --sdk iphoneos --show-sdk-version >/dev/null 2>&1; then
-            echo "Installing iOS platform into: ${DEVELOPER_DIR}"
-            sudo xcodebuild -downloadPlatform iOS
-          fi
+          echo "Before download, existing iPhoneOS SDKs:"
+          ls -1 "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" || true
+
+          # *** Do this unconditionally — some runners report SDK version but still lack the platform ***
+          echo "Downloading iOS platform (idempotent)"
+          sudo xcodebuild -downloadPlatform iOS || true
+
+          echo "After download, installed iPhoneOS SDKs:"
+          ls -1 "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" || true
 
           echo "Using Xcode:"
           xcodebuild -version
           echo "DEVELOPER_DIR=$DEVELOPER_DIR"
-          echo "Installed iPhoneOS SDKs:"
-          ls -1 "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" || true
+          echo "SDK version per xcrun:"
+          xcrun --sdk iphoneos --show-sdk-version || true
 
           echo "Destinations for sanity:"
           xcodebuild -showdestinations -workspace ios/Runner.xcworkspace -scheme Runner || true
