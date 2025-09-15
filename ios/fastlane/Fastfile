@@ -57,10 +57,24 @@ platform :ios do
 
     setup_ci 
 
-    # Ensure Fastlane uses same Xcode as the workflow
+    # Use the same Xcode as the workflow picked
     if ENV["DEVELOPER_DIR"].to_s != ""
       xcode_select(ENV["DEVELOPER_DIR"].sub(%r{/Contents/Developer$}, ""))
     end
+
+    # If the runner's Xcode still lacks the iPhoneOS platform, try to install it and re-check
+    begin
+      sh "xcodebuild -showdestinations -workspace #{File.join('ios', 'Runner.xcworkspace')} -scheme Runner"
+    rescue => _
+      UI.message("Destinations check failed; attempting to install iPhoneOS platform via xcodebuild -downloadPlatform iOS")
+      sh "sudo xcodebuild -downloadPlatform iOS"
+      sh "xcodebuild -showdestinations -workspace #{File.join('ios', 'Runner.xcworkspace')} -scheme Runner"
+    end
+
+    # Log the exact SDK and key signing bits we'll use
+    sh %q[xcrun --sdk iphoneos --show-sdk-version || true]
+    sh %q[security find-identity -v -p codesigning ~/Library/Keychains/fastlane_tmp_keychain-db || true]
+    sh %q[ls -l ~/Library/MobileDevice/Provisioning\ Profiles || true]
 
     # Set up API key for App Store Connect
     api_key = app_store_connect_api_key(
@@ -136,6 +150,11 @@ platform :ios do
         sh("xcrun --sdk iphoneos --show-sdk-version")
       rescue
         UI.user_error!("iPhoneOS SDK not available for the selected Xcode. The workflow must run `sudo xcodebuild -downloadPlatform iOS` after selecting Xcode.")
+      end
+
+      out = sh("xcodebuild -showdestinations -workspace #{File.join('ios', 'Runner.xcworkspace')} -scheme Runner 2>&1", log: false)
+      if out.include?("is not installed") || !out.include?("platform:iOS")
+        UI.user_error!("iPhoneOS platform not installed for the selected Xcode (#{ENV['DEVELOPER_DIR']}). See the workflow step 'Finalize Xcode & ensure iPhoneOS platform'.")
       end
 
       # archive with gym (workspace path is correct from ios/)
