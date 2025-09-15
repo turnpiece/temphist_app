@@ -17,63 +17,45 @@ jobs:
       - name: ⬇️ Checkout code
         uses: actions/checkout@v3
 
-      - name: Ensure stable Xcode and install iPhoneOS SDK if missing
+      - name: Select Xcode 16.0 (stable)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "16.0"
+
+      # Make absolutely sure both PATH and Fastlane use the same Xcode,
+      # clear any conflicting env, and install the iPhoneOS platform there.
+      - name: Finalize Xcode and install iPhoneOS platform
         shell: bash
         run: |
-          set -eo pipefail
+          set -euo pipefail
 
-          echo "Current DEVELOPER_DIR: ${DEVELOPER_DIR:-<unset>}"
+          # Force xcode-select and DEVELOPER_DIR to exactly the same bundle the action chose
+          SELECTED_DIR="$(xcode-select -p)"
+          echo "Selected by setup-xcode: ${SELECTED_DIR}"
+          sudo xcode-select -s "${SELECTED_DIR}"
+          echo "DEVELOPER_DIR=${SELECTED_DIR}" >> "$GITHUB_ENV"
 
-          need_switch=0
-          if [[ "${DEVELOPER_DIR:-}" == *"Beta"* || "${DEVELOPER_DIR:-}" == *"Release_Candidate"* ]]; then
-            echo "DEVELOPER_DIR points to Beta/RC; will switch."
-            need_switch=1
-          fi
-          if [[ ! -d "${DEVELOPER_DIR:-}/Platforms/iPhoneOS.platform/Developer/SDKs" ]]; then
-            echo "Current Xcode lacks iPhoneOS.platform SDK dir; will switch or install."
-            need_switch=1
-          fi
+          # Guard against stray RC/Beta env (this bit people earlier)
+          echo "MD_APPLE_SDK_ROOT=" >> "$GITHUB_ENV"
 
-          if [[ $need_switch -eq 1 ]]; then
-            echo "Searching for a stable Xcode with iPhoneOS SDK..."
-            target=""
-            for app in /Applications/Xcode*.app; do
-              [[ -d "$app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs" ]] || continue
-              [[ "$app" == *"Beta"* || "$app" == *"Release_Candidate"* ]] && continue
-              target="$app"
-              break
-            done
-            if [[ -n "$target" ]]; then
-              echo "Switching to: $target"
-              export DEVELOPER_DIR="$target/Contents/Developer"
-              echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
-              sudo xcode-select -s "$DEVELOPER_DIR"
-            else
-              echo "No stable Xcode with iPhoneOS SDK found; will use current and download the platform."
-            fi
-          fi
+          # Make sure additional components are initialized
+          sudo xcodebuild -license accept || true
+          sudo xcodebuild -runFirstLaunch || true
 
-          # Some hosted images set this to an RC; unset to avoid confusion
-          if [[ -n "${MD_APPLE_SDK_ROOT:-}" ]]; then
-            unset MD_APPLE_SDK_ROOT
-            echo "MD_APPLE_SDK_ROOT=" >> "$GITHUB_ENV"
+          # Install iPhoneOS platform if missing
+          if ! xcrun --sdk iphoneos --show-sdk-version >/dev/null 2>&1; then
+            echo "Installing iOS platform into: ${SELECTED_DIR}"
+            sudo xcodebuild -downloadPlatform iOS
           fi
 
           echo "Using Xcode:"
           xcodebuild -version
-          echo "DEVELOPER_DIR=${DEVELOPER_DIR:-$(xcode-select -p)}"
-
-          sdk_dir="${DEVELOPER_DIR:-$(xcode-select -p)}/Platforms/iPhoneOS.platform/Developer/SDKs"
-          if ! ls "$sdk_dir"/iPhoneOS*.sdk >/dev/null 2>&1; then
-            echo "No iPhoneOS SDKs present in $sdk_dir — downloading iOS platform…"
-            sudo xcodebuild -license accept || true
-            sudo xcodebuild -downloadPlatform iOS
-          fi
-
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR"
           echo "Installed iPhoneOS SDKs:"
-          ls -1 "$sdk_dir" || true
-          echo "iphoneos sdk version:"
-          xcrun --sdk iphoneos --show-sdk-version
+          ls -1 "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" || true
+
+          echo "Destinations for sanity:"
+          xcodebuild -showdestinations -workspace ios/Runner.xcworkspace -scheme Runner || true
 
       - name: Update version for release
         run: |
