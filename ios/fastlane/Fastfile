@@ -68,13 +68,15 @@ platform :ios do
     # Clear any existing keychain issues
     clear_derived_data
 
-    # Prepare Flutter deps without invoking an Xcode build here
-    IOS_DIR   = File.expand_path('..', __dir__)        # .../ios
-    REPO_ROOT = File.expand_path('..', IOS_DIR)        # repo root
+    IOS_DIR   = File.expand_path('..', __dir__)   # .../ios
+    REPO_ROOT = File.expand_path('..', IOS_DIR)   # repo root
 
+    # Prepare Flutter deps (repo root)
     Dir.chdir(REPO_ROOT) { sh("flutter pub get") }
+
+    # Ensure pods are installed (ios dir)
     Dir.chdir(IOS_DIR)   { sh("bundle exec pod install --repo-update") }
-  
+
     # bump build number to current UTC timestamp YYYYMMDDHHMM
     increment_build_number(
       xcodeproj: "Runner.xcodeproj",
@@ -94,43 +96,50 @@ platform :ios do
       readonly: true
     )
 
-    spec = "match AppStore #{ENV['IOS_BUNDLE_ID'] || 'com.turnpiece.temphist'}"
-    profile_found = sh(%Q[grep -l "#{spec}" ~/Library/MobileDevice/Provisioning\\ Profiles/*.mobileprovision || true]).to_s.strip
-    UI.user_error!("Provisioning profile specifier '#{spec}' not found in installed profiles") if profile_found.empty?
+    # Verify scheme, print signing, and build (ios dir)
+    Dir.chdir(IOS_DIR) do
+      # quick context
+      sh "pwd && ls -la"
+      sh "xcrun --sdk iphoneos --show-sdk-version || true"
 
-    # Verify the Runner scheme exists and is shared
-    sh %q[xcodebuild -list -workspace ./Runner.xcworkspace | sed -n '/Schemes:/,$p']
-    out = sh(%q[xcodebuild -list -workspace ./Runner.xcworkspace | grep -E '^\s*Runner$' || true]).to_s.strip
-    UI.user_error!("Xcode scheme 'Runner' is not shared or missing. In Xcode: Product > Scheme > Manage Schemes… check 'Shared' for Runner, then commit the .xcscheme.") if out.empty?
+      UI.user_error!("Runner.xcworkspace not found in #{IOS_DIR}") unless File.exist?(File.join(IOS_DIR, "Runner.xcworkspace"))
 
-    sh %q[xcodebuild -showBuildSettings -workspace ./Runner.xcworkspace -scheme Runner -configuration Release | egrep "CODE_SIGN|PROVISION|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGNING_ALLOWED"]
-    sh %q[security find-identity -v -p codesigning ~/Library/Keychains/fastlane_tmp_keychain-db || true]
-    sh %q[ls -l ~/Library/MobileDevice/Provisioning\ Profiles || true]
+      # verify the scheme is shared
+      sh %q[xcodebuild -list -workspace ./Runner.xcworkspace | sed -n '/Schemes:/,$p']
+      out = sh(%q[xcodebuild -list -workspace ./Runner.xcworkspace | grep -E '^\s*Runner$' || true]).to_s.strip
+      UI.user_error!("Xcode scheme 'Runner' is not shared or missing. In Xcode: Product > Scheme > Manage Schemes… check 'Shared' for Runner, then commit the .xcscheme.") if out.empty?
 
-    sh "pwd && ls -la"
-    sh "xcrun --sdk iphoneos --show-sdk-version || true"
+      # assert the installed provisioning profile matches our specifier
+      spec = "match AppStore #{ENV['IOS_BUNDLE_ID'] || 'com.turnpiece.temphist'}"
+      sh %Q[grep -l "#{spec}" ~/Library/MobileDevice/Provisioning\\ Profiles/*.mobileprovision || true]
 
-    build_app(
-      workspace: "./Runner.xcworkspace",
-      scheme: "Runner",
-      configuration: "Release",
-      export_method: "app-store",
-      skip_profile_detection: true,
-      # Signing overrides (Manual)
-      xcargs: %Q[
-        CODE_SIGN_STYLE=Manual
-        DEVELOPMENT_TEAM=#{ENV["APPLE_TEAM_ID"] || "77X2NFV437"}
-        CODE_SIGN_IDENTITY="Apple Distribution"
-        PROVISIONING_PROFILE_SPECIFIER="match AppStore #{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}"
-      ],
-      export_options: {
-        provisioningProfiles: {
-          "#{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}" => "match AppStore #{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}"
-        }
-      },
-      destination: "generic/platform=iOS",
-      buildlog_path: "~/Library/Logs/gym"
-    )
+      # print signing settings
+      sh %q[xcodebuild -showBuildSettings -workspace ./Runner.xcworkspace -scheme Runner -configuration Release | egrep "CODE_SIGN|PROVISION|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGNING_ALLOWED"]
+      sh %q[security find-identity -v -p codesigning ~/Library/Keychains/fastlane_tmp_keychain-db || true]
+      sh %q[ls -l ~/Library/MobileDevice/Provisioning\ Profiles || true]
+
+      # archive with gym (workspace path is correct from ios/)
+      build_app(
+        workspace: "./Runner.xcworkspace",
+        scheme: "Runner",
+        configuration: "Release",
+        export_method: "app-store",
+        skip_profile_detection: true,
+        xcargs: %Q[
+          CODE_SIGN_STYLE=Manual
+          DEVELOPMENT_TEAM=#{ENV["APPLE_TEAM_ID"] || "77X2NFV437"}
+          CODE_SIGN_IDENTITY="Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER="match AppStore #{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}"
+        ],
+        export_options: {
+          provisioningProfiles: {
+            "#{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}" => "match AppStore #{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}"
+          }
+        },
+        destination: "generic/platform=iOS",
+        buildlog_path: "~/Library/Logs/gym"
+      )
+    end
 
     upload_to_testflight(api_key: api_key)
   end
