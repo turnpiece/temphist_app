@@ -128,10 +128,12 @@ platform :ios do
 
       # archive with gym (workspace path is correct from ios/)
       build_app(
-        workspace: "./Runner.xcworkspace",
+        workspace: File.join(IOS_DIR, "Runner.xcworkspace"),
         scheme: "Runner",
         configuration: "Release",
         export_method: "app-store",
+        sdk: "iphoneos",
+        destination: "generic/platform=iOS",
         skip_profile_detection: true,
         xcargs: %Q[
           CODE_SIGN_STYLE=Manual
@@ -144,8 +146,6 @@ platform :ios do
             "#{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}" => "match AppStore #{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}"
           }
         },
-        sdk: "iphoneos",
-        destination: "generic/platform=iOS",
         buildlog_path: "~/Library/Logs/gym"
       )
     end

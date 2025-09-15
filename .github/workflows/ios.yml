@@ -27,27 +27,27 @@ jobs:
           xcodebuild -version
           echo "DEVELOPER_DIR=$DEVELOPER_DIR"
           xcrun --sdk iphoneos --show-sdk-version || true
-          xcrun --sdk iphonesimulator --show-sdk-version || true
           ls -1 /Applications | sed -n 's/^Xcode.*\.app$/\0/p'
 
-      # Guard: refuse Beta/RC or Xcode without iPhoneOS SDK, then switch to a stable one
-      - name: Ensure iPhoneOS SDK exists (switch if needed)
+      - name: Ensure stable Xcode with iPhoneOS SDK (switch if needed)
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
+          need_switch=0
+          # Refuse Beta/RC or missing iPhoneOS platform
           if [[ "${DEVELOPER_DIR:-}" == *"Beta"* || "${DEVELOPER_DIR:-}" == *"Release_Candidate"* ]]; then
             echo "Current DEVELOPER_DIR points to Beta/RC: $DEVELOPER_DIR"
             need_switch=1
           fi
-          if ! xcrun --sdk iphoneos --show-sdk-version >/dev/null 2>&1; then
-            echo "Current Xcode lacks iPhoneOS SDK."
+          if [[ ! -d "${DEVELOPER_DIR:-}/Platforms/iPhoneOS.platform/Developer/SDKs" ]]; then
+            echo "Current Xcode lacks iPhoneOS.platform SDKs."
             need_switch=1
           fi
-          if [[ "${need_switch:-0}" -eq 1 ]]; then
-            echo "Searching for an installed Xcode with iPhoneOS.platform..."
+          if [[ $need_switch -eq 1 ]]; then
+            echo "Searching for an installed stable Xcode with iPhoneOS.platform..."
             best=""
             for app in /Applications/Xcode*.app; do
-              [[ -d "$app/Contents/Developer/Platforms/iPhoneOS.platform" ]] || continue
+              [[ -d "$app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs" ]] || continue
               [[ "$app" == *"Beta"* || "$app" == *"Release_Candidate"* ]] && continue
               best="$app"
               break
