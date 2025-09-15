@@ -104,17 +104,22 @@ platform :ios do
 
       UI.user_error!("Runner.xcworkspace not found in #{IOS_DIR}") unless File.exist?(File.join(IOS_DIR, "Runner.xcworkspace"))
 
-      # verify the scheme is shared
+      # verify the scheme is shared (keep as-is)
       sh %q[xcodebuild -list -workspace ./Runner.xcworkspace | sed -n '/Schemes:/,$p']
       out = sh(%q[xcodebuild -list -workspace ./Runner.xcworkspace | grep -E '^\s*Runner$' || true]).to_s.strip
       UI.user_error!("Xcode scheme 'Runner' is not shared or missing. In Xcode: Product > Scheme > Manage Schemes… check 'Shared' for Runner, then commit the .xcscheme.") if out.empty?
 
-      # assert the installed provisioning profile matches our specifier
+      # helpful: what destinations are available?
+      sh %q[xcodebuild -showdestinations -workspace ./Runner.xcworkspace -scheme Runner || true]
+
+      # assert the installed provisioning profile matches our specifier (keep)
       spec = "match AppStore #{ENV['IOS_BUNDLE_ID'] || 'com.turnpiece.temphist'}"
       sh %Q[grep -l "#{spec}" ~/Library/MobileDevice/Provisioning\\ Profiles/*.mobileprovision || true]
 
-      # print signing settings
-      sh %q[xcodebuild -showBuildSettings -workspace ./Runner.xcworkspace -scheme Runner -configuration Release | egrep "CODE_SIGN|PROVISION|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGNING_ALLOWED"]
+      # print signing settings – add a destination so Xcode resolves settings
+      sh %q[xcodebuild -showBuildSettings -workspace ./Runner.xcworkspace -scheme Runner -configuration Release -destination 'generic/platform=iOS' | egrep "CODE_SIGN|PROVISION|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGNING_ALLOWED" || true]
+
+      # identities + installed profiles (keep)
       sh %q[security find-identity -v -p codesigning ~/Library/Keychains/fastlane_tmp_keychain-db || true]
       sh %q[ls -l ~/Library/MobileDevice/Provisioning\ Profiles || true]
 
@@ -136,6 +141,7 @@ platform :ios do
             "#{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}" => "match AppStore #{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}"
           }
         },
+        sdk: "iphoneos",
         destination: "generic/platform=iOS",
         buildlog_path: "~/Library/Logs/gym"
       )
