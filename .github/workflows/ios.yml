@@ -33,9 +33,13 @@ jobs:
           SELECTED_DIR="$(xcode-select -p)"
           echo "Selected by setup-xcode: ${SELECTED_DIR}"
           sudo xcode-select -s "${SELECTED_DIR}"
+
+          # Make it available to *this* shell AND to later steps
+          export DEVELOPER_DIR="${SELECTED_DIR}"
           echo "DEVELOPER_DIR=${SELECTED_DIR}" >> "$GITHUB_ENV"
 
-          # Guard against stray RC/Beta env (this bit people earlier)
+          # Guard against stray RC/Beta env affecting SDK lookup (clear now and for later steps)
+          unset MD_APPLE_SDK_ROOT || true
           echo "MD_APPLE_SDK_ROOT=" >> "$GITHUB_ENV"
 
           # Make sure additional components are initialized
@@ -44,7 +48,7 @@ jobs:
 
           # Install iPhoneOS platform if missing
           if ! xcrun --sdk iphoneos --show-sdk-version >/dev/null 2>&1; then
-            echo "Installing iOS platform into: ${SELECTED_DIR}"
+            echo "Installing iOS platform into: ${DEVELOPER_DIR}"
             sudo xcodebuild -downloadPlatform iOS
           fi
 
