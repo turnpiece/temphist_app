@@ -17,59 +17,62 @@ jobs:
       - name: ⬇️ Checkout code
         uses: actions/checkout@v3
 
-      - name: Select Xcode (latest stable)
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      - name: Print selected Xcode + SDKs
-        run: |
-          xcodebuild -version
-          echo "DEVELOPER_DIR=$DEVELOPER_DIR"
-          xcrun --sdk iphoneos --show-sdk-version || true
-          ls -1 /Applications | sed -n 's/^Xcode.*\.app$/\0/p'
-
-      - name: Ensure stable Xcode with iPhoneOS SDK (switch if needed)
+      - name: Ensure stable Xcode and install iPhoneOS SDK if missing
         shell: bash
         run: |
           set -eo pipefail
-          need_switch=0
 
-          # If pre-release or lacking iPhoneOS SDK, we'll switch
+          echo "Current DEVELOPER_DIR: ${DEVELOPER_DIR:-<unset>}"
+
+          need_switch=0
           if [[ "${DEVELOPER_DIR:-}" == *"Beta"* || "${DEVELOPER_DIR:-}" == *"Release_Candidate"* ]]; then
-            echo "Current DEVELOPER_DIR points to Beta/RC: ${DEVELOPER_DIR:-<unset>}"
+            echo "DEVELOPER_DIR points to Beta/RC; will switch."
             need_switch=1
           fi
           if [[ ! -d "${DEVELOPER_DIR:-}/Platforms/iPhoneOS.platform/Developer/SDKs" ]]; then
-            echo "Current Xcode lacks iPhoneOS.platform SDKs."
+            echo "Current Xcode lacks iPhoneOS.platform SDK dir; will switch or install."
             need_switch=1
           fi
 
           if [[ $need_switch -eq 1 ]]; then
-            echo "Searching for an installed stable Xcode with iPhoneOS.platform..."
-            best=""
+            echo "Searching for a stable Xcode with iPhoneOS SDK..."
+            target=""
             for app in /Applications/Xcode*.app; do
               [[ -d "$app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs" ]] || continue
               [[ "$app" == *"Beta"* || "$app" == *"Release_Candidate"* ]] && continue
-              best="$app"
+              target="$app"
               break
             done
-            if [[ -z "$best" ]]; then
-              echo "No suitable stable Xcode with iPhoneOS SDK found." >&2
-              exit 1
+            if [[ -n "$target" ]]; then
+              echo "Switching to: $target"
+              export DEVELOPER_DIR="$target/Contents/Developer"
+              echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+              sudo xcode-select -s "$DEVELOPER_DIR"
+            else
+              echo "No stable Xcode with iPhoneOS SDK found; will use current and download the platform."
             fi
-            echo "Switching to: $best"
-            export DEVELOPER_DIR="$best/Contents/Developer"
-            echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
-            # Some tools prefer this unset; it pointed at the RC in your run
+          fi
+
+          # Some hosted images set this to an RC; unset to avoid confusion
+          if [[ -n "${MD_APPLE_SDK_ROOT:-}" ]]; then
             unset MD_APPLE_SDK_ROOT
             echo "MD_APPLE_SDK_ROOT=" >> "$GITHUB_ENV"
-            sudo xcode-select -s "$DEVELOPER_DIR"
           fi
 
           echo "Using Xcode:"
           xcodebuild -version
-          echo "DEVELOPER_DIR=${DEVELOPER_DIR:-<unset>}"
+          echo "DEVELOPER_DIR=${DEVELOPER_DIR:-$(xcode-select -p)}"
+
+          sdk_dir="${DEVELOPER_DIR:-$(xcode-select -p)}/Platforms/iPhoneOS.platform/Developer/SDKs"
+          if ! ls "$sdk_dir"/iPhoneOS*.sdk >/dev/null 2>&1; then
+            echo "No iPhoneOS SDKs present in $sdk_dir — downloading iOS platform…"
+            sudo xcodebuild -license accept || true
+            sudo xcodebuild -downloadPlatform iOS
+          fi
+
+          echo "Installed iPhoneOS SDKs:"
+          ls -1 "$sdk_dir" || true
+          echo "iphoneos sdk version:"
           xcrun --sdk iphoneos --show-sdk-version
 
       - name: Update version for release
@@ -166,14 +169,15 @@ jobs:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
           FASTLANE_DISABLE_COLORS: 1
 
-      - name: Upload Xcode logs
+      - name: Upload Xcode logs and SDK layout
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: xcode-logs
+          name: xcode-logs-and-sdk
           path: |
             ~/Library/Logs/gym
             ~/Library/Developer/Xcode/DerivedData/**/Logs
+            $DEVELOPER_DIR/Platforms/iPhoneOS.platform/Developer/SDKs
 
       - name: ✅ Archive output
         run: |

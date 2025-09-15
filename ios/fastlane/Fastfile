@@ -126,6 +126,13 @@ platform :ios do
       xver = sh("xcodebuild -version | head -n1").strip
       UI.user_error!("Refusing to build with pre-release Xcode: #{xver}") if xver =~ /Beta|Release Candidate/i
 
+      # Preflight: make sure iphoneos SDK is actually available
+      begin
+        sh("xcrun --sdk iphoneos --show-sdk-version")
+      rescue
+        UI.user_error!("iPhoneOS SDK not available. In the workflow, add a step to run `sudo xcodebuild -downloadPlatform iOS` after selecting Xcode.")
+      end
+
       # archive with gym (workspace path is correct from ios/)
       build_app(
         workspace: File.join(IOS_DIR, "Runner.xcworkspace"),
