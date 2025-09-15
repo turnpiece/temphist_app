@@ -49,6 +49,12 @@ platform :ios do
 
   desc "Push a new beta build to TestFlight"
   lane :beta do
+    # Canonical paths (so every shell call uses the right location regardless of current dir)
+    IOS_DIR      = File.expand_path("..", __dir__)           # .../ios
+    REPO_ROOT    = File.expand_path("..", IOS_DIR)            # repo root
+    XCWORKSPACE  = File.join(IOS_DIR, "Runner.xcworkspace")
+    SCHEME       = "Runner"
+
     # Set up authentication for automatic signing FIRST (before setup_ci)
     ENV["SPACESHIP_CONNECT_API_KEY_ID"] = ENV["APP_STORE_KEY_ID"]
     ENV["SPACESHIP_CONNECT_API_ISSUER_ID"] = ENV["APP_STORE_ISSUER_ID"]
@@ -57,21 +63,28 @@ platform :ios do
 
     setup_ci 
 
-    # Use the same Xcode as the workflow picked
+    # Prepare deps (from repo root), then install pods (inside ios/)
+    sh("cd #{REPO_ROOT} && flutter pub get")
+    sh("cd #{IOS_DIR} && bundle exec pod install --repo-update")
+
+    # Ensure the workspace now exists (CocoaPods creates it)
+    UI.user_error!("Workspace not found at #{XCWORKSPACE}. Did CocoaPods run?") unless File.exist?(XCWORKSPACE)
+
+    # Match workflow's selected Xcode
     if ENV["DEVELOPER_DIR"].to_s != ""
       xcode_select(ENV["DEVELOPER_DIR"].sub(%r{/Contents/Developer$}, ""))
     end
 
-    # If the runner's Xcode still lacks the iPhoneOS platform, try to install it and re-check
+    # iPhoneOS platform self-heal (idempotent)
     begin
-      sh "xcodebuild -showdestinations -workspace #{File.join('ios', 'Runner.xcworkspace')} -scheme Runner"
-    rescue => _
-      UI.message("Destinations check failed; attempting to install iPhoneOS platform via xcodebuild -downloadPlatform iOS")
-      sh "sudo xcodebuild -downloadPlatform iOS"
-      sh "xcodebuild -showdestinations -workspace #{File.join('ios', 'Runner.xcworkspace')} -scheme Runner"
+      sh("xcodebuild -showdestinations -workspace #{XCWORKSPACE} -scheme #{SCHEME}")
+    rescue
+      UI.message("Destinations check failed; installing iPhoneOS platform…")
+      sh("sudo xcodebuild -downloadPlatform iOS || true")
+      sh("xcodebuild -showdestinations -workspace #{XCWORKSPACE} -scheme #{SCHEME}")
     end
 
-    # Log the exact SDK and key signing bits we'll use
+    # Useful diagnostics
     sh %q[xcrun --sdk iphoneos --show-sdk-version || true]
     sh %q[security find-identity -v -p codesigning ~/Library/Keychains/fastlane_tmp_keychain-db || true]
     sh %q[ls -l ~/Library/MobileDevice/Provisioning\ Profiles || true]
@@ -86,15 +99,6 @@ platform :ios do
 
     # Clear any existing keychain issues
     clear_derived_data
-
-    IOS_DIR   = File.expand_path('..', __dir__)   # .../ios
-    REPO_ROOT = File.expand_path('..', IOS_DIR)   # repo root
-
-    # Prepare Flutter deps (repo root)
-    Dir.chdir(REPO_ROOT) { sh("flutter pub get") }
-
-    # Ensure pods are installed (ios dir)
-    Dir.chdir(IOS_DIR)   { sh("bundle exec pod install --repo-update") }
 
     # bump build number to current UTC timestamp YYYYMMDDHHMM
     increment_build_number(
@@ -152,21 +156,19 @@ platform :ios do
         UI.user_error!("iPhoneOS SDK not available for the selected Xcode. The workflow must run `sudo xcodebuild -downloadPlatform iOS` after selecting Xcode.")
       end
 
-      out = sh("xcodebuild -showdestinations -workspace #{File.join('ios', 'Runner.xcworkspace')} -scheme Runner 2>&1", log: false)
+      out = sh("xcodebuild -showdestinations -workspace #{XCWORKSPACE} -scheme #{SCHEME} 2>&1", log: false)
       if out.include?("is not installed") || !out.include?("platform:iOS")
         UI.user_error!("iPhoneOS platform not installed for the selected Xcode (#{ENV['DEVELOPER_DIR']}). See the workflow step 'Finalize Xcode & ensure iPhoneOS platform'.")
       end
 
-      # archive with gym (workspace path is correct from ios/)
       build_app(
-        workspace: File.join(IOS_DIR, "Runner.xcworkspace"),
-        scheme: "Runner",
+        workspace: XCWORKSPACE,
+        scheme: SCHEME,
         configuration: "Release",
         export_method: "app-store",
-        sdk: "iphoneos",
         destination: "generic/platform=iOS",
         skip_profile_detection: true,
-        xcargs: %Q[
+        xcargs: %q[
           CODE_SIGN_STYLE=Manual
           DEVELOPMENT_TEAM=#{ENV["APPLE_TEAM_ID"] || "77X2NFV437"}
           CODE_SIGN_IDENTITY="Apple Distribution"

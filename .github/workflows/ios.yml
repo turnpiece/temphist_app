@@ -26,17 +26,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          # Match setup-xcode's choice in both xcode-select and env
           SELECTED_DIR="$(xcode-select -p)"
           echo "Selected by setup-xcode: ${SELECTED_DIR}"
           sudo xcode-select -s "${SELECTED_DIR}"
 
-          # Export DEVELOPER_DIR for this shell and all later steps
-          export DEVELOPER_DIR="${SELECTED_DIR}"
+          # Export for all later steps BEFORE referencing it (prevents 'unbound variable')
           echo "DEVELOPER_DIR=${SELECTED_DIR}" >> "$GITHUB_ENV"
+          export DEVELOPER_DIR="${SELECTED_DIR}"
 
-          # Guard against stray SDK root that confuses tools
+          # Neutralize stray SDK roots that can confuse xcrun/xcodebuild
           unset MD_APPLE_SDK_ROOT || true
           echo "MD_APPLE_SDK_ROOT=" >> "$GITHUB_ENV"
 
@@ -44,24 +42,20 @@ jobs:
           sudo xcodebuild -license accept || true
           sudo xcodebuild -runFirstLaunch || true
 
-          echo "Before download; existing iPhoneOS SDKs (if any):"
+          echo "Existing iPhoneOS SDKs (pre):"
           ls -1 "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" || true
 
-          # Always attempt to install the iOS platform; safe if already present
           echo "Downloading iOS platform (idempotent)"
           sudo xcodebuild -downloadPlatform iOS || true
 
-          echo "After download; installed iPhoneOS SDKs:"
+          echo "Installed iPhoneOS SDKs (post):"
           ls -1 "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" || true
 
           echo "Using Xcode:"
           xcodebuild -version
           echo "DEVELOPER_DIR=${DEVELOPER_DIR}"
-          echo "xcrun iphoneos SDK version:"
+          echo "iphoneos SDK version:"
           xcrun --sdk iphoneos --show-sdk-version || true
-
-          echo "Destinations sanity check:"
-          xcodebuild -showdestinations -workspace ios/Runner.xcworkspace -scheme Runner || true
 
       - name: Update version for release
         run: |
