@@ -80,6 +80,12 @@ platform :ios do
     # Ensure we have the right certificates and profiles
     match(
       api_key: api_key,
+      type: "development",
+      readonly: true
+    )
+    
+    match(
+      api_key: api_key,
       type: "appstore",
       readonly: true
     )
