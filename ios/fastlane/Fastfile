@@ -68,8 +68,9 @@ platform :ios do
     # Clear any existing keychain issues
     clear_derived_data
 
-    # Build with Flutter
-    sh("cd .. && bundle exec flutter build ios --release --no-codesign")
+    # Prepare Flutter deps but don't invoke Xcode build here
+    sh(%q[cd .. && flutter pub get])
+    sh(%q[cd ios && bundle exec pod install --repo-update])
   
     # bump build number to current UTC timestamp YYYYMMDDHHMM
     increment_build_number(
@@ -93,6 +94,11 @@ platform :ios do
     spec = "match AppStore #{ENV['IOS_BUNDLE_ID'] || 'com.turnpiece.temphist'}"
     profile_found = sh(%Q[grep -l "#{spec}" ~/Library/MobileDevice/Provisioning\\ Profiles/*.mobileprovision || true]).to_s.strip
     UI.user_error!("Provisioning profile specifier '#{spec}' not found in installed profiles") if profile_found.empty?
+
+    # Verify the Runner scheme exists and is shared
+    sh %q[xcodebuild -list -workspace ./Runner.xcworkspace | sed -n '/Schemes:/,$p']
+    out = sh(%q[xcodebuild -list -workspace ./Runner.xcworkspace | grep -E '^\s*Runner$' || true]).to_s.strip
+    UI.user_error!("Xcode scheme 'Runner' is not shared or missing. In Xcode: Product > Scheme > Manage Schemes… check 'Shared' for Runner, then commit the .xcscheme.") if out.empty?
 
     sh %q[xcodebuild -showBuildSettings -workspace ./Runner.xcworkspace -scheme Runner -configuration Release | egrep "CODE_SIGN|PROVISION|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGNING_ALLOWED"]
     sh %q[security find-identity -v -p codesigning ~/Library/Keychains/fastlane_tmp_keychain-db || true]

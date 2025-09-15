@@ -36,6 +36,9 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
+      - name: Print iOS SDK version
+        run: xcrun --sdk iphoneos --show-sdk-version
+
       - name: Update version for release
         run: |
           # Check if this is a tag push or branch push
