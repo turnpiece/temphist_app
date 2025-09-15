@@ -32,17 +32,19 @@ jobs:
       - name: Ensure stable Xcode with iPhoneOS SDK (switch if needed)
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
           need_switch=0
-          # Refuse Beta/RC or missing iPhoneOS platform
+
+          # If pre-release or lacking iPhoneOS SDK, we'll switch
           if [[ "${DEVELOPER_DIR:-}" == *"Beta"* || "${DEVELOPER_DIR:-}" == *"Release_Candidate"* ]]; then
-            echo "Current DEVELOPER_DIR points to Beta/RC: $DEVELOPER_DIR"
+            echo "Current DEVELOPER_DIR points to Beta/RC: ${DEVELOPER_DIR:-<unset>}"
             need_switch=1
           fi
           if [[ ! -d "${DEVELOPER_DIR:-}/Platforms/iPhoneOS.platform/Developer/SDKs" ]]; then
             echo "Current Xcode lacks iPhoneOS.platform SDKs."
             need_switch=1
           fi
+
           if [[ $need_switch -eq 1 ]]; then
             echo "Searching for an installed stable Xcode with iPhoneOS.platform..."
             best=""
@@ -57,12 +59,17 @@ jobs:
               exit 1
             fi
             echo "Switching to: $best"
-            echo "DEVELOPER_DIR=$best/Contents/Developer" >> "$GITHUB_ENV"
-            sudo xcode-select -s "$best/Contents/Developer"
+            export DEVELOPER_DIR="$best/Contents/Developer"
+            echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+            # Some tools prefer this unset; it pointed at the RC in your run
+            unset MD_APPLE_SDK_ROOT
+            echo "MD_APPLE_SDK_ROOT=" >> "$GITHUB_ENV"
+            sudo xcode-select -s "$DEVELOPER_DIR"
           fi
+
           echo "Using Xcode:"
           xcodebuild -version
-          echo "DEVELOPER_DIR=$DEVELOPER_DIR"
+          echo "DEVELOPER_DIR=${DEVELOPER_DIR:-<unset>}"
           xcrun --sdk iphoneos --show-sdk-version
 
       - name: Update version for release
