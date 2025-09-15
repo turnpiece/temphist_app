@@ -26,34 +26,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           SELECTED_DIR="$(xcode-select -p)"
           echo "Selected by setup-xcode: ${SELECTED_DIR}"
           sudo xcode-select -s "${SELECTED_DIR}"
 
-          # Export for all later steps BEFORE referencing it (prevents 'unbound variable')
+          # Make DEVELOPER_DIR available to all later steps and to sudo-invoked xcodebuild
           echo "DEVELOPER_DIR=${SELECTED_DIR}" >> "$GITHUB_ENV"
           export DEVELOPER_DIR="${SELECTED_DIR}"
 
-          # Neutralize stray SDK roots that can confuse xcrun/xcodebuild
+          # Guard against wrong SDK root leaking from the image
           unset MD_APPLE_SDK_ROOT || true
           echo "MD_APPLE_SDK_ROOT=" >> "$GITHUB_ENV"
 
-          # First-launch bits (idempotent)
           sudo xcodebuild -license accept || true
           sudo xcodebuild -runFirstLaunch || true
 
-          echo "Existing iPhoneOS SDKs (pre):"
-          ls -1 "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" || true
-
-          echo "Downloading iOS platform (idempotent)"
-          sudo xcodebuild -downloadPlatform iOS || true
-
-          echo "Installed iPhoneOS SDKs (post):"
-          ls -1 "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" || true
+          # If iPhoneOS platform SDKs are missing/empty, install *device* platforms
+          if [ ! -d "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" ] || \
+            [ -z "$(ls -1 "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" 2>/dev/null || true)" ]; then
+            echo "Installing iOS device platform into: ${DEVELOPER_DIR}"
+            # This pulls device platforms, not just the Simulator runtime
+            sudo DEVELOPER_DIR="${DEVELOPER_DIR}" xcodebuild -downloadAllPlatforms || true
+          fi
 
           echo "Using Xcode:"
           xcodebuild -version
           echo "DEVELOPER_DIR=${DEVELOPER_DIR}"
+
+          echo "Installed iPhoneOS SDKs:"
+          ls -l "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" || true
+
           echo "iphoneos SDK version:"
           xcrun --sdk iphoneos --show-sdk-version || true
 

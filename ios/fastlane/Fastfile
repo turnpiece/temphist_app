@@ -156,9 +156,10 @@ platform :ios do
         UI.user_error!("iPhoneOS SDK not available for the selected Xcode. The workflow must run `sudo xcodebuild -downloadPlatform iOS` after selecting Xcode.")
       end
 
+      # Preflight destination probe (keep, but don’t abort the lane)
       out = sh("xcodebuild -showdestinations -workspace #{XCWORKSPACE} -scheme #{SCHEME} 2>&1", log: false)
       if out.include?("is not installed") || !out.include?("platform:iOS")
-        UI.user_error!("iPhoneOS platform not installed for the selected Xcode (#{ENV['DEVELOPER_DIR']}). See the workflow step 'Finalize Xcode & ensure iPhoneOS platform'.")
+        UI.important("Generic iOS destination not listed yet; proceeding. If platform is really missing, gym will fail and logs above will show why.")
       end
 
       build_app(
