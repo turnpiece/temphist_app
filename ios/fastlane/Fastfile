@@ -77,27 +77,47 @@ platform :ios do
       build_number: Time.now.utc.strftime("%Y%m%d%H%M")
     )
 
+    # Debug information
+    UI.message("Using bundle id: #{ENV['IOS_BUNDLE_ID'] || 'com.turnpiece.temphist'}")
+    UI.message("Using team id: #{ENV['APPLE_TEAM_ID'] || '77X2NFV437'}")
+    UI.message("Provisioning profile specifier: match AppStore #{ENV['IOS_BUNDLE_ID'] || 'com.turnpiece.temphist'}")
+    UI.message("DEVELOPER_DIR: #{ENV['DEVELOPER_DIR']}")
+
     # Ensure we have the right certificates and profiles
-    match(
-      api_key: api_key,
-      type: "development",
-      readonly: true
-    )
-    
     match(
       api_key: api_key,
       type: "appstore",
       readonly: true
     )
 
+    spec = "match AppStore #{ENV['IOS_BUNDLE_ID'] || 'com.turnpiece.temphist'}"
+    profile_found = sh(%Q[grep -l "#{spec}" ~/Library/MobileDevice/Provisioning\\ Profiles/*.mobileprovision || true]).to_s.strip
+    UI.user_error!("Provisioning profile specifier '#{spec}' not found in installed profiles") if profile_found.empty?
+
+    sh %q[xcodebuild -showBuildSettings -workspace ./Runner.xcworkspace -scheme Runner -configuration Release | egrep "CODE_SIGN|PROVISION|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGNING_ALLOWED"]
+    sh %q[security find-identity -v -p codesigning ~/Library/Keychains/fastlane_tmp_keychain-db || true]
+    sh %q[ls -l ~/Library/MobileDevice/Provisioning\ Profiles || true]
+
     build_app(
-      scheme:        "Runner",
+      workspace: "./Runner.xcworkspace",
+      scheme: "Runner",
       configuration: "Release",
       export_method: "app-store",
-      destination:   "generic/platform=iOS",
       skip_profile_detection: true,
-      xcode_path: "/Applications/Xcode_16.4.app",
-      xcargs: %Q(DEVELOPMENT_TEAM=77X2NFV437 CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER=match\\ AppStore\\ *** -allowProvisioningUpdates)
+      # Signing overrides (Manual)
+      xcargs: %Q[
+        CODE_SIGN_STYLE=Manual
+        DEVELOPMENT_TEAM=#{ENV["APPLE_TEAM_ID"] || "77X2NFV437"}
+        CODE_SIGN_IDENTITY="Apple Distribution"
+        PROVISIONING_PROFILE_SPECIFIER="match AppStore #{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}"
+      ],
+      export_options: {
+        provisioningProfiles: {
+          "#{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}" => "match AppStore #{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}"
+        }
+      },
+      destination: "generic/platform=iOS",
+      buildlog_path: "~/Library/Logs/gym"
     )
 
     upload_to_testflight(api_key: api_key)

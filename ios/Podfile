@@ -12,6 +12,20 @@ end
 
 post_install do |installer|
   installer.pods_project.targets.each do |t|
+    if t.name == 'Pods-Runner'
+      t.build_configurations.each do |c|
+        if c.name == 'Release'
+          c.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+          c.build_settings['CODE_SIGN_STYLE'] = 'Manual'
+        end
+      end
+    end
+    if t.name == 'geocoding_ios'
+      phase = t.resources_build_phase
+      phase.files_references
+           .select { |fr| fr.path.end_with?('PrivacyInfo.xcprivacy') }
+           .each   { |fr| phase.remove_file_reference(fr) }
+    end
     t.build_configurations.each do |c|
       c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
     end
