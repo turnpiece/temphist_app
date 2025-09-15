@@ -68,9 +68,12 @@ platform :ios do
     # Clear any existing keychain issues
     clear_derived_data
 
-    # Prepare Flutter deps but don't invoke Xcode build here
-    sh(%q[cd .. && flutter pub get])
-    sh(%q[cd ios && bundle exec pod install --repo-update])
+    # Prepare Flutter deps without invoking an Xcode build here
+    IOS_DIR   = File.expand_path('..', __dir__)        # .../ios
+    REPO_ROOT = File.expand_path('..', IOS_DIR)        # repo root
+
+    Dir.chdir(REPO_ROOT) { sh("flutter pub get") }
+    Dir.chdir(IOS_DIR)   { sh("bundle exec pod install --repo-update") }
   
     # bump build number to current UTC timestamp YYYYMMDDHHMM
     increment_build_number(
@@ -103,6 +106,9 @@ platform :ios do
     sh %q[xcodebuild -showBuildSettings -workspace ./Runner.xcworkspace -scheme Runner -configuration Release | egrep "CODE_SIGN|PROVISION|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGNING_ALLOWED"]
     sh %q[security find-identity -v -p codesigning ~/Library/Keychains/fastlane_tmp_keychain-db || true]
     sh %q[ls -l ~/Library/MobileDevice/Provisioning\ Profiles || true]
+
+    sh "pwd && ls -la"
+    sh "xcrun --sdk iphoneos --show-sdk-version || true"
 
     build_app(
       workspace: "./Runner.xcworkspace",
