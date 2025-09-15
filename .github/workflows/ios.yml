@@ -17,27 +17,53 @@ jobs:
       - name: ⬇️ Checkout code
         uses: actions/checkout@v3
 
-      - name: Select Xcode
+      - name: Select Xcode (latest stable)
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
 
-      - name: List installed Xcodes
-        run: |
-          for x in /Applications/Xcode*.app; do
-            v=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$x/Contents/Info.plist" 2>/dev/null || true)
-            echo "Found Xcode $v at $x"
-          done
-      - name: Print DEVELOPER_DIR
-        run: echo "DEVELOPER_DIR=$DEVELOPER_DIR"
-
-      - name: Print Xcode version
+      - name: Print selected Xcode + SDKs
         run: |
           xcodebuild -version
-          xcrun --sdk iphoneos --show-sdk-version
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR"
+          xcrun --sdk iphoneos --show-sdk-version || true
+          xcrun --sdk iphonesimulator --show-sdk-version || true
+          ls -1 /Applications | sed -n 's/^Xcode.*\.app$/\0/p'
 
-      - name: Print iOS SDK version
-        run: xcrun --sdk iphoneos --show-sdk-version
+      # Guard: refuse Beta/RC or Xcode without iPhoneOS SDK, then switch to a stable one
+      - name: Ensure iPhoneOS SDK exists (switch if needed)
+        shell: bash
+        run: |
+          set -e
+          if [[ "${DEVELOPER_DIR:-}" == *"Beta"* || "${DEVELOPER_DIR:-}" == *"Release_Candidate"* ]]; then
+            echo "Current DEVELOPER_DIR points to Beta/RC: $DEVELOPER_DIR"
+            need_switch=1
+          fi
+          if ! xcrun --sdk iphoneos --show-sdk-version >/dev/null 2>&1; then
+            echo "Current Xcode lacks iPhoneOS SDK."
+            need_switch=1
+          fi
+          if [[ "${need_switch:-0}" -eq 1 ]]; then
+            echo "Searching for an installed Xcode with iPhoneOS.platform..."
+            best=""
+            for app in /Applications/Xcode*.app; do
+              [[ -d "$app/Contents/Developer/Platforms/iPhoneOS.platform" ]] || continue
+              [[ "$app" == *"Beta"* || "$app" == *"Release_Candidate"* ]] && continue
+              best="$app"
+              break
+            done
+            if [[ -z "$best" ]]; then
+              echo "No suitable stable Xcode with iPhoneOS SDK found." >&2
+              exit 1
+            fi
+            echo "Switching to: $best"
+            echo "DEVELOPER_DIR=$best/Contents/Developer" >> "$GITHUB_ENV"
+            sudo xcode-select -s "$best/Contents/Developer"
+          fi
+          echo "Using Xcode:"
+          xcodebuild -version
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR"
+          xcrun --sdk iphoneos --show-sdk-version
 
       - name: Update version for release
         run: |

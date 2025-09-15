@@ -123,6 +123,9 @@ platform :ios do
       sh %q[security find-identity -v -p codesigning ~/Library/Keychains/fastlane_tmp_keychain-db || true]
       sh %q[ls -l ~/Library/MobileDevice/Provisioning\ Profiles || true]
 
+      xver = sh("xcodebuild -version | head -n1").strip
+      UI.user_error!("Refusing to build with pre-release Xcode: #{xver}") if xver =~ /Beta|Release Candidate/i
+
       # archive with gym (workspace path is correct from ios/)
       build_app(
         workspace: "./Runner.xcworkspace",
