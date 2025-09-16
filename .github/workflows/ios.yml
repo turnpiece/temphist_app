@@ -76,26 +76,30 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Make sure we are using the stock Xcode that actually has iPhoneOS.platform
+          # Use the stock Xcode (has iPhoneOS.platform)
           sudo xcode-select -s /Applications/Xcode.app
 
-          # Export DEVELOPER_DIR so all child steps agree on the same Xcode
-          echo "DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          # Capture and export DEVELOPER_DIR for THIS step and future steps
+          SELECTED_DIR="$(xcode-select -p)"
+          export DEVELOPER_DIR="$SELECTED_DIR"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
 
-          # Guard against stray toolchain overrides that break destination discovery
+          # Guard against stray overrides
           echo "MD_APPLE_SDK_ROOT=" >> "$GITHUB_ENV"
 
-          # Accept license / first-run quietly (idempotent)
+          # Accept license / first-run (idempotent)
           sudo xcodebuild -license accept || true
           sudo xcodebuild -runFirstLaunch || true
 
-          # Sanity check: confirm the device SDK is present
-          xcrun --sdk iphoneos --show-sdk-version
-          test -d "$DEVELOPER_DIR/Platforms/iPhoneOS.platform/Developer/SDKs" || {
-            echo "ERROR: iPhoneOS.platform SDKs not found in $DEVELOPER_DIR"; exit 1;
-          }
+          # Sanity checks
+          echo "iphoneos SDK version: $(xcrun --sdk iphoneos --show-sdk-version)"
+          if [ ! -d "$DEVELOPER_DIR/Platforms/iPhoneOS.platform/Developer/SDKs" ]; then
+            echo "ERROR: iPhoneOS.platform SDKs not found in $DEVELOPER_DIR"
+            ls -la "$DEVELOPER_DIR/Platforms" || true
+            exit 1
+          fi
 
-          # Optional: list destinations (workspace exists after `pod install`)
+          # (Optional) only do this AFTER pod install creates the workspace:
           # xcodebuild -showdestinations -workspace ios/Runner.xcworkspace -scheme Runner || true
 
       - name: Verify Xcode version
