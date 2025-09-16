@@ -21,6 +21,7 @@ import 'dart:io' as io;
 import 'services/temperature_service.dart';
 import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
+import 'widgets/date_location_pill.dart';
 
 // App color constants
 // Note: These are no longer constants because they depend on runtime configuration
@@ -2852,13 +2853,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                     );
               },
             ),
-            Text(
-              kAppTitle,
-              style: TextStyle(
-                color: kAccentColour,
-                fontSize: kFontSizeTitle,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
+            // Date/Location Pill
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _buildDateLocationPill(),
               ),
             ),
           ],
@@ -2866,6 +2865,23 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
+  Widget _buildDateLocationPill() {
+    // Get current date info
+    final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+    final dateToUse = DateTime.parse(dateInfo['date']!);
+    final displayCity = _displayLocation.isNotEmpty ? _displayLocation : null;
+    
+    return DateLocationPill(
+      date: dateToUse,
+      city: displayCity,
+      onLocationChange: _handleLocationChange,
+    );
+  }
+
+  void _handleLocationChange() {
+    // Trigger location refresh
+    _refreshLocationAndData();
+  }
 
   /// Build error indicator with icon, title, and message
   Widget _buildErrorIndicator({
@@ -3460,8 +3476,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildDateSection(displayDate),
-          _buildCitySection(city),
           _buildSummarySection(summaryText),
           _buildLoadingChartSection(chartHeight),
         ],
@@ -3469,31 +3483,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  Widget _buildDateSection(String? displayDate) {
-    if (displayDate == null) return const SizedBox.shrink();
-    
-    return Padding(
-      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Text(
-        displayDate,
-        style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-        textAlign: TextAlign.left,
-      ),
-    );
-  }
-
-  Widget _buildCitySection(String? city) {
-    if (city == null) return const SizedBox.shrink();
-    
-    return Padding(
-      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Text(
-        city,
-        style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-        textAlign: TextAlign.left,
-      ),
-    );
-  }
 
 
   Widget _buildSummarySection(String? summaryText) {
@@ -3603,8 +3592,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             const SizedBox(height: 16),
           ],
           
-          _buildDateSection(displayDate),
-          _buildCitySection(city),
           _buildSummarySection(summaryText),
           Padding(
             padding: const EdgeInsets.all(kChartInnerPadding),
