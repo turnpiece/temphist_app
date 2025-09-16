@@ -91,12 +91,15 @@ jobs:
           sudo xcodebuild -runFirstLaunch || true
 
           # Sanity checks
-          echo "iphoneos SDK version: $(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iphoneos SDK version: $(xcrun --sdk iphoneos --show-sdk-version)" >/dev/null
           if [ ! -d "$DEVELOPER_DIR/Platforms/iPhoneOS.platform/Developer/SDKs" ]; then
             echo "ERROR: iPhoneOS.platform SDKs not found in $DEVELOPER_DIR"
-            ls -la "$DEVELOPER_DIR/Platforms" || true
+            ls -la "$DEVELOPER_DIR/Platforms" || true >/dev/null
             exit 1
           fi
+
+          xcrun --sdk iphoneos --show-sdk-version >/dev/null
+          test -d "$DEVELOPER_DIR/Platforms/iPhoneOS.platform/Developer/SDKs" >/dev/null
 
           # (Optional) only do this AFTER pod install creates the workspace:
           # xcodebuild -showdestinations -workspace ios/Runner.xcworkspace -scheme Runner || true
@@ -116,7 +119,9 @@ jobs:
 
       - name: 📦 Install CocoaPods dependencies
         working-directory: ios
-        run: bundle exec pod install
+        run: |
+          bundle exec pod install
+          ! grep -q "PROVISIONING_PROFILE" ios/Pods/Pods.xcodeproj/project.pbxproj
 
       - name: 🔍 List available iOS simulators
         run: xcrun simctl list devices available
