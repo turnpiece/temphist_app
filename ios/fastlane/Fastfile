@@ -16,78 +16,9 @@
 default_platform(:ios)
 
 platform :ios do
-  desc "Regenerate certificates (nuke and recreate)"
-  lane :regenerate_certificates do
-    setup_ci 
-
-    # Set up API key for App Store Connect
-    api_key = app_store_connect_api_key(
-      key_id: ENV["APP_STORE_KEY_ID"],
-      issuer_id: ENV["APP_STORE_ISSUER_ID"],
-      key_content: ENV["APP_STORE_PRIVATE_KEY"],
-      is_key_content_base64: true
-    )
-
-    # Clear any existing keychain issues
-    clear_derived_data
-
-    # Nuke existing certificates first
-    match(
-      api_key: api_key,
-      type: "development",
-      readonly: false
-    )
-    
-    match(
-      api_key: api_key,
-      type: "distribution",
-      readonly: false
-    )
-
-    UI.success("✅ Certificate regeneration complete!")
-  end
-
   desc "Push a new beta build to TestFlight"
   lane :beta do
-    # Canonical paths (so every shell call uses the right location regardless of current dir)
-    IOS_DIR      = File.expand_path("..", __dir__)           # .../ios
-    REPO_ROOT    = File.expand_path("..", IOS_DIR)            # repo root
-    XCWORKSPACE  = File.join(IOS_DIR, "Runner.xcworkspace")
-    SCHEME       = "Runner"
-
-    # Set up authentication for automatic signing FIRST (before setup_ci)
-    ENV["SPACESHIP_CONNECT_API_KEY_ID"] = ENV["APP_STORE_KEY_ID"]
-    ENV["SPACESHIP_CONNECT_API_ISSUER_ID"] = ENV["APP_STORE_ISSUER_ID"]
-    ENV["SPACESHIP_CONNECT_API_PRIVATE_KEY_CONTENT"] = ENV["APP_STORE_PRIVATE_KEY"]
-    ENV["SPACESHIP_CONNECT_API_IN_HOUSE"] = "false"
-
     setup_ci 
-
-    # Prepare deps (from repo root), then install pods (inside ios/)
-    sh("cd #{REPO_ROOT} && flutter pub get")
-    sh("cd #{IOS_DIR} && bundle exec pod install --repo-update")
-
-    # Ensure the workspace now exists (CocoaPods creates it)
-    UI.user_error!("Workspace not found at #{XCWORKSPACE}. Did CocoaPods run?") unless File.exist?(XCWORKSPACE)
-
-    # Match workflow's selected Xcode
-    if ENV["DEVELOPER_DIR"].to_s != ""
-      xcode_select(ENV["DEVELOPER_DIR"].sub(%r{/Contents/Developer$}, ""))
-    end
-
-    # iPhoneOS platform self-heal (idempotent)
-    begin
-      sh("xcodebuild -showdestinations -workspace #{XCWORKSPACE} -scheme #{SCHEME}")
-    rescue
-      UI.message("Destinations check failed; installing iPhoneOS platform…")
-      sh("sudo xcodebuild -downloadPlatform iOS || true")
-      sh("xcodebuild -showdestinations -workspace #{XCWORKSPACE} -scheme #{SCHEME}")
-    end
-
-    # Useful diagnostics
-    sh %q[xcrun --sdk iphoneos --show-sdk-version || true]
-    sh %q[security find-identity -v -p codesigning ~/Library/Keychains/fastlane_tmp_keychain-db || true]
-    sh %q[ls -l ~/Library/MobileDevice/Provisioning\ Profiles || true]
 
     # Set up API key for App Store Connect
     api_key = app_store_connect_api_key(
@@ -97,92 +28,40 @@ platform :ios do
       is_key_content_base64: true
     )
 
-    # Clear any existing keychain issues
-    clear_derived_data
+    # development profile (same bundle ID)
+    match(
+      api_key: api_key,
+      type:    "development",
+      readonly: false 
+    )
 
+    # Code signing with match
+    match(
+      api_key: api_key,
+      type: "appstore",
+    )
+
+    # Build with Flutter
+    sh("cd .. && bundle exec flutter build ios --release --no-codesign")
+
+    profile_specifier =
+    lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING][ENV['APP_IDENTIFIER']]
+  
     # bump build number to current UTC timestamp YYYYMMDDHHMM
     increment_build_number(
       xcodeproj: "Runner.xcodeproj",
       build_number: Time.now.utc.strftime("%Y%m%d%H%M")
     )
 
-    # Debug information
-    UI.message("Using bundle id: #{ENV['IOS_BUNDLE_ID'] || 'com.turnpiece.temphist'}")
-    UI.message("Using team id: #{ENV['APPLE_TEAM_ID'] || '77X2NFV437'}")
-    UI.message("Provisioning profile specifier: match AppStore #{ENV['IOS_BUNDLE_ID'] || 'com.turnpiece.temphist'}")
-    UI.message("DEVELOPER_DIR: #{ENV['DEVELOPER_DIR']}")
-
-    # Ensure we have the right certificates and profiles
-    match(
-      api_key: api_key,
-      type: "appstore",
-      readonly: true
+    build_app(
+      scheme:        "Runner",
+      configuration: "Release",
+      export_method: "app-store",
+      destination:   "generic/platform=iOS",
+      xcargs: %Q(CODE_SIGN_STYLE=Manual \
+                CODE_SIGN_IDENTITY="Apple Distribution" \
+                PROVISIONING_PROFILE_SPECIFIER="#{profile_specifier}")
     )
-
-    # Verify scheme, print signing, and build (ios dir)
-    Dir.chdir(IOS_DIR) do
-      # quick context
-      sh "pwd && ls -la"
-      sh "xcrun --sdk iphoneos --show-sdk-version || true"
-
-      UI.user_error!("Runner.xcworkspace not found in #{IOS_DIR}") unless File.exist?(File.join(IOS_DIR, "Runner.xcworkspace"))
-
-      # verify the scheme is shared (keep as-is)
-      sh %q[xcodebuild -list -workspace ./Runner.xcworkspace | sed -n '/Schemes:/,$p']
-      out = sh(%q[xcodebuild -list -workspace ./Runner.xcworkspace | grep -E '^\s*Runner$' || true]).to_s.strip
-      UI.user_error!("Xcode scheme 'Runner' is not shared or missing. In Xcode: Product > Scheme > Manage Schemes… check 'Shared' for Runner, then commit the .xcscheme.") if out.empty?
-
-      # helpful: what destinations are available?
-      sh %q[xcodebuild -showdestinations -workspace ./Runner.xcworkspace -scheme Runner || true]
-
-      # assert the installed provisioning profile matches our specifier (keep)
-      spec = "match AppStore #{ENV['IOS_BUNDLE_ID'] || 'com.turnpiece.temphist'}"
-      sh %Q[grep -l "#{spec}" ~/Library/MobileDevice/Provisioning\\ Profiles/*.mobileprovision || true]
-
-      # print signing settings – add a destination so Xcode resolves settings
-      sh %q[xcodebuild -showBuildSettings -workspace ./Runner.xcworkspace -scheme Runner -configuration Release -destination 'generic/platform=iOS' | egrep "CODE_SIGN|PROVISION|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER|CODE_SIGNING_ALLOWED" || true]
-
-      # identities + installed profiles (keep)
-      sh %q[security find-identity -v -p codesigning ~/Library/Keychains/fastlane_tmp_keychain-db || true]
-      sh %q[ls -l ~/Library/MobileDevice/Provisioning\ Profiles || true]
-
-      xver = sh("xcodebuild -version | head -n1").strip
-      UI.user_error!("Refusing to build with pre-release Xcode: #{xver}") if xver =~ /Beta|Release Candidate/i
-
-      # Preflight: fail early if the runner's selected Xcode still lacks the device SDK
-      begin
-        sh("xcrun --sdk iphoneos --show-sdk-version")
-      rescue
-        UI.user_error!("iPhoneOS SDK not available for the selected Xcode. The workflow must run `sudo xcodebuild -downloadPlatform iOS` after selecting Xcode.")
-      end
-
-      # Preflight destination probe (keep, but don’t abort the lane)
-      out = sh("xcodebuild -showdestinations -workspace #{XCWORKSPACE} -scheme #{SCHEME} 2>&1", log: false)
-      if out.include?("is not installed") || !out.include?("platform:iOS")
-        UI.important("Generic iOS destination not listed yet; proceeding. If platform is really missing, gym will fail and logs above will show why.")
-      end
-
-      build_app(
-        workspace: XCWORKSPACE,
-        scheme: SCHEME,
-        configuration: "Release",
-        export_method: "app-store",
-        destination: "generic/platform=iOS",
-        skip_profile_detection: true,
-        xcargs: %q[
-          CODE_SIGN_STYLE=Manual
-          DEVELOPMENT_TEAM=#{ENV["APPLE_TEAM_ID"] || "77X2NFV437"}
-          CODE_SIGN_IDENTITY="Apple Distribution"
-          PROVISIONING_PROFILE_SPECIFIER="match AppStore #{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}"
-        ],
-        export_options: {
-          provisioningProfiles: {
-            "#{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}" => "match AppStore #{ENV["IOS_BUNDLE_ID"] || "com.turnpiece.temphist"}"
-          }
-        },
-        buildlog_path: "~/Library/Logs/gym"
-      )
-    end
 
     upload_to_testflight(api_key: api_key)
   end

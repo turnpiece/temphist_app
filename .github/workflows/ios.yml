@@ -8,57 +8,11 @@ on:
 
 jobs:
   build-ios:
-    runs-on: macos-15
-    env:
-      IOS_BUNDLE_ID: com.turnpiece.temphist
-      APPLE_TEAM_ID: 77X2NFV437
+    runs-on: macos-latest
 
     steps:
       - name: ⬇️ Checkout code
         uses: actions/checkout@v3
-
-      - name: Select Xcode 16.0 (stable)
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: "16.0"
-
-      - name: Finalize Xcode & ensure iPhoneOS platform
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          SELECTED_DIR="$(xcode-select -p)"
-          echo "Selected by setup-xcode: ${SELECTED_DIR}"
-          sudo xcode-select -s "${SELECTED_DIR}"
-
-          # Make DEVELOPER_DIR available to all later steps and to sudo-invoked xcodebuild
-          echo "DEVELOPER_DIR=${SELECTED_DIR}" >> "$GITHUB_ENV"
-          export DEVELOPER_DIR="${SELECTED_DIR}"
-
-          # Guard against wrong SDK root leaking from the image
-          unset MD_APPLE_SDK_ROOT || true
-          echo "MD_APPLE_SDK_ROOT=" >> "$GITHUB_ENV"
-
-          sudo xcodebuild -license accept || true
-          sudo xcodebuild -runFirstLaunch || true
-
-          # If iPhoneOS platform SDKs are missing/empty, install *device* platforms
-          if [ ! -d "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" ] || \
-            [ -z "$(ls -1 "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" 2>/dev/null || true)" ]; then
-            echo "Installing iOS device platform into: ${DEVELOPER_DIR}"
-            # This pulls device platforms, not just the Simulator runtime
-            sudo DEVELOPER_DIR="${DEVELOPER_DIR}" xcodebuild -downloadAllPlatforms || true
-          fi
-
-          echo "Using Xcode:"
-          xcodebuild -version
-          echo "DEVELOPER_DIR=${DEVELOPER_DIR}"
-
-          echo "Installed iPhoneOS SDKs:"
-          ls -l "${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs" || true
-
-          echo "iphoneos SDK version:"
-          xcrun --sdk iphoneos --show-sdk-version || true
 
       - name: Update version for release
         run: |
@@ -114,27 +68,52 @@ jobs:
       - name: Clean DerivedData
         run: rm -rf ~/Library/Developer/Xcode/DerivedData
 
-      - name: Clean keychains
-        run: |
-          security delete-keychain /Users/runner/Library/Keychains/fastlane_tmp_keychain-db || true
-          rm -rf /Users/runner/Library/Keychains/fastlane_tmp_keychain-db
+      - name: Select latest Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
 
-      - name: Create keychain
+      - name: Finalise Xcode & ensure iPhoneOS platform
+        shell: bash
         run: |
-          security create-keychain -p "" /Users/runner/Library/Keychains/fastlane_tmp_keychain-db
-          security set-keychain-settings -t 3600 -l /Users/runner/Library/Keychains/fastlane_tmp_keychain-db
-          security list-keychains -d user -s /Users/runner/Library/Keychains/fastlane_tmp_keychain-db
+          set -euo pipefail
+
+          # Make sure we are using the stock Xcode that actually has iPhoneOS.platform
+          sudo xcode-select -s /Applications/Xcode.app
+
+          # Export DEVELOPER_DIR so all child steps agree on the same Xcode
+          echo "DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+
+          # Guard against stray toolchain overrides that break destination discovery
+          echo "MD_APPLE_SDK_ROOT=" >> "$GITHUB_ENV"
+
+          # Accept license / first-run quietly (idempotent)
+          sudo xcodebuild -license accept || true
+          sudo xcodebuild -runFirstLaunch || true
+
+          # Sanity check: confirm the device SDK is present
+          xcrun --sdk iphoneos --show-sdk-version
+          test -d "$DEVELOPER_DIR/Platforms/iPhoneOS.platform/Developer/SDKs" || {
+            echo "ERROR: iPhoneOS.platform SDKs not found in $DEVELOPER_DIR"; exit 1;
+          }
+
+          # Optional: list destinations (workspace exists after `pod install`)
+          # xcodebuild -showdestinations -workspace ios/Runner.xcworkspace -scheme Runner || true
+
+      - name: Verify Xcode version
+        run: |
+          xcode-select -p
+          xcodebuild -version
+
+      - name: Install iOS 18.2 platform
+        run: |
+          sudo xcodebuild -downloadPlatform iOS
 
       - name: 🛠️ Install Fastlane
         working-directory: ios
         run: bundle install
 
-      - name: 📦 Clean and Install CocoaPods dependencies
+      - name: 📦 Install CocoaPods dependencies
         working-directory: ios
-        run: |
-          rm -rf Pods
-          rm -f Podfile.lock
-          bundle exec pod install
+        run: bundle exec pod install
 
       - name: 🔍 List available iOS simulators
         run: xcrun simctl list devices available
@@ -153,16 +132,6 @@ jobs:
           MATCH_GIT_URL: https://x-access-token:${{ secrets.MATCH_GIT_PAT }}@github.com/turnpiece/apple-certs.git
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
           FASTLANE_DISABLE_COLORS: 1
-
-      - name: Upload Xcode logs and SDK layout
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: xcode-logs-and-sdk
-          path: |
-            ~/Library/Logs/gym
-            ~/Library/Developer/Xcode/DerivedData/**/Logs
-            $DEVELOPER_DIR/Platforms/iPhoneOS.platform/Developer/SDKs
 
       - name: ✅ Archive output
         run: |
