@@ -80,8 +80,7 @@ jobs:
           sudo xcode-select -s /Applications/Xcode.app
 
           # Capture and export DEVELOPER_DIR for THIS step and future steps
-          SELECTED_DIR="$(xcode-select -p)"
-          export DEVELOPER_DIR="$SELECTED_DIR"
+          export DEVELOPER_DIR="$(xcode-select -p)"
           echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
 
           # Guard against stray overrides
