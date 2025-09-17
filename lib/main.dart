@@ -461,6 +461,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   String _currentLoadingMessage = '';
   String _determinedLocation = ''; // Full location for API
   String _displayLocation = ''; // Short location for display
+  String? _lastApiError; // Most recent API error message
+  int _consecutiveApiFailures = 0; // Count of consecutive API failures
+  String? _lastApiErrorPattern; // Pattern of the last API error for comparison
   bool _isLocationDetermined = false;
   DateTime? _locationDeterminedAt; // Timestamp when location was last determined
   DateTime? _currentDataDate; // The date for which data is currently loaded
@@ -658,18 +661,25 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<void> _checkAndRefreshDataIfDateChanged() async {
     // If no data has been loaded yet, don't check
     if (_currentDataDate == null) {
+      debugPrintIfDebugging('No current data date available, skipping date change check');
       return;
     }
     
     final currentDateInfo = _getCurrentDateAndLocation(_determinedLocation);
     final currentDate = DateTime.parse(currentDateInfo['date']!);
     
+    // Normalize dates to avoid timezone issues
+    final storedDate = DateTime(_currentDataDate!.year, _currentDataDate!.month, _currentDataDate!.day);
+    final newDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
+    
+    debugPrintIfDebugging('Date comparison: stored=${_formatDayMonth(storedDate)} vs current=${_formatDayMonth(newDate)}');
+    
     // Check if the date has changed
-    if (!_isSameDate(_currentDataDate!, currentDate)) {
-      debugPrintIfDebugging('Date changed from ${_formatDayMonth(_currentDataDate!)} to ${_formatDayMonth(currentDate)}, refreshing data...');
+    if (!_isSameDate(storedDate, newDate)) {
+      debugPrintIfDebugging('Date changed from ${_formatDayMonth(storedDate)} to ${_formatDayMonth(newDate)}, refreshing data...');
       await _refreshDataForNewDate(currentDateInfo);
     } else {
-      debugPrintIfDebugging('Date unchanged (${_formatDayMonth(currentDate)}), keeping current data');
+      debugPrintIfDebugging('Date unchanged (${_formatDayMonth(newDate)}), keeping current data');
     }
   }
 
@@ -684,10 +694,28 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Use provided date info or get current date info
     final currentDateInfo = dateInfo ?? _getCurrentDateAndLocation(_determinedLocation);
-    _currentDataDate = DateTime.parse(currentDateInfo['date']!);
+    final newDate = DateTime.parse(currentDateInfo['date']!);
+    
+    // Double-check that the date has actually changed before clearing data
+    if (_currentDataDate != null) {
+      final storedDate = DateTime(_currentDataDate!.year, _currentDataDate!.month, _currentDataDate!.day);
+      final normalizedNewDate = DateTime(newDate.year, newDate.month, newDate.day);
+      
+      if (_isSameDate(storedDate, normalizedNewDate)) {
+        debugPrintIfDebugging('Date comparison shows no actual change, preserving existing data');
+        return;
+      }
+    }
+    
+    _currentDataDate = newDate;
     
     // Clear existing data to show clean loading state
     _currentData = null;
+    
+    // Clear any previous error message and reset failure tracking
+    _lastApiError = null;
+    _consecutiveApiFailures = 0;
+    _lastApiErrorPattern = null;
     
     // Reload data with new date using progressive loading
     _isDataLoading = true;
@@ -1893,6 +1921,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         summaryText = summaryRaw?.toString();
       } catch (e) {
         debugPrintIfDebugging('Failed to fetch summary data: $e');
+        _trackApiFailure(e.toString());
         setState(() {
           _summaryDataFailed = true;
           if (e is RateLimitException) {
@@ -2046,6 +2075,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         } catch (e) {
           debugPrintIfDebugging('✗ Failed to fetch temperature for year $year: $e');
           
+          // Track the API failure
+          _trackApiFailure(e.toString());
+          
           // Track this year as failed
           if (!_failedYears.contains(year)) {
             _failedYears.add(year);
@@ -2126,6 +2158,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     } catch (e) {
       debugPrintIfDebugging('_loadChartDataProgressive failed: $e');
       
+      // Track the API failure
+      _trackApiFailure(e.toString());
+      
       // Stop loading message timer on error
       _stopLoadingMessageTimer();
       _stopAverageTrendDisplayTimer(); // Stop the timer on error too
@@ -2147,6 +2182,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           dateToUse: dateToUse,
           city: city,
         );
+      }
+      
+      // Update UI to show the error state
+      if (mounted) {
+        setState(() {});
       }
       
       rethrow;
@@ -2225,6 +2265,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
     } catch (e) {
       debugPrintIfDebugging('Failed to fetch average data: $e');
+      _trackApiFailure(e.toString());
       setState(() {
         _averageDataFailed = true;
         if (e is RateLimitException) {
@@ -2276,6 +2317,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
     } catch (e) {
       debugPrintIfDebugging('Failed to fetch trend data: $e');
+      _trackApiFailure(e.toString());
       setState(() {
         _trendDataFailed = true;
         if (e is RateLimitException) {
@@ -2381,6 +2423,29 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Don't await the future here - let the FutureBuilder handle it
     // This allows the RefreshIndicator to complete its animation
+  }
+
+  /// Retry failed endpoints while preserving existing chart data
+  Future<void> _retryWithPartialData() async {
+    debugPrintIfDebugging('Retrying failed endpoints while preserving existing data');
+    
+    // Don't clear existing data - just retry the failed endpoints
+    if (_currentData != null && _progressiveLoadingCompleted) {
+      // Try to load missing years first
+      await _loadMissingYears();
+      
+      // Then retry failed average/trend/summary data
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final city = dateInfo['city']!;
+      final mmdd = dateInfo['mmdd']!;
+      
+      if (_averageDataFailed || _trendDataFailed || _summaryDataFailed) {
+        await _loadAverageAndTrendData(city, mmdd);
+      }
+    } else {
+      // If no data available, do a full refresh
+      await _handleRefresh();
+    }
   }
 
   /// Force refresh without using cache (for debugging/testing)
@@ -2549,15 +2614,40 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       );
     }
     
-    // Show no chart data state with retry button (only if we have no data at all and not loading)
+    // Check for valid data first
+    final validData = chartData.where((data) => data.hasData).toList();
+    
+    // If we have some chart data but there are errors, show the chart with error messages below
+    if (validData.isNotEmpty && _progressiveLoadingCompleted) {
+      // Show the chart with any error messages displayed below it
+      return _buildChartWithErrorOverlay(
+        chartData: chartData,
+        averageTemperature: data['averageTemperature'] as double?,
+        trendSlope: data['trendSlope'] as double?,
+        summaryText: data['summary'] as String?,
+        displayDate: data['displayDate'] as String?,
+        city: _displayLocation.isNotEmpty ? _displayLocation : (data['city'] as String?),
+        chartHeight: chartHeight,
+      );
+    }
+    
+    // Show no chart data state with retry button (only if we have no valid data at all and not loading)
     // Only show this if progressive loading has completed - this prevents flash during loading transitions
-    if (chartData.isEmpty && !_isDataLoading && _progressiveLoadingCompleted) {
+    if (validData.isEmpty && !_isDataLoading && _progressiveLoadingCompleted) {
       final isRateLimited = _averageDataRateLimited || _trendDataRateLimited || _summaryDataRateLimited || _chartDataRateLimited;
       
+      // Get the most recent error message from failed API calls
+      String errorMessage = 'No temperature data available. Please check your internet connection and try again.';
+      
+      // Check if we have any specific error messages from failed API calls
+      if (_lastApiError != null && _lastApiError!.isNotEmpty) {
+        errorMessage = _lastApiError!;
+      } else if (isRateLimited) {
+        errorMessage = 'API rate limit exceeded. Please wait a few minutes before trying again.';
+      }
+      
       return _buildRetrySection(
-        isRateLimited 
-          ? 'API rate limit exceeded. Please wait a few minutes before trying again.'
-          : 'No temperature data available. Please check your internet connection and try again.',
+        errorMessage,
         isRateLimited ? null : () {
           debugPrintIfDebugging('Retry button pressed after no data');
           _handleRefresh();
@@ -2658,11 +2748,23 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                   const SizedBox(height: 16),
                 ],
                 
+                // Show API service error if applicable
+                if (_isApiServiceError(message)) ...[
+                  _buildErrorIndicator(
+                    icon: Icons.cloud_off,
+                    title: 'Temperature service unavailable',
+                    message: message,
+                    color: Colors.orange,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                
                 // Show general error message if not handled by specific error types above
                 if (!_isStorageSpaceError(message) && 
                     !_isLocationPermissionError(message) && 
                     !_isRateLimitError(message) && 
-                    !_isNetworkError(message)) ...[
+                    !_isNetworkError(message) &&
+                    !_isApiServiceError(message)) ...[
                   _buildErrorIndicator(
                     icon: Icons.error_outline,
                     title: 'No temperature data available',
@@ -2699,84 +2801,29 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Date section - show as soon as we have it
-        _buildLoadingDateSection(),
+        // Show early error if we have 5 consecutive API failures
+        if (_shouldShowEarlyError() && _lastApiError != null) ...[
+          _buildErrorIndicator(
+            icon: Icons.cloud_off,
+            title: 'Temperature service unavailable',
+            message: _lastApiError!,
+            color: Colors.orange,
+          ),
+          const SizedBox(height: 12),
+          _buildRetryButton(() {
+            debugPrintIfDebugging('Retry button pressed after early error detection');
+            _handleRefresh();
+          }),
+          const SizedBox(height: 16),
+        ],
         
-        // Location section - show the determined location
-        if (_isLocationDetermined)
-          _buildDeterminedLocationSection()
-        else
-          _buildLocationDeterminingSection(),
-        
-        // Progressive loading messages - show below location
+        // Progressive loading messages - show below the pill
         if (_isLocationDetermined)
           _buildProgressiveLoadingSection(),
       ],
     );
   }
 
-  Widget _buildLoadingDateSection() {
-    // Calculate the date that will be used (same logic as _loadChartData)
-    final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
-    final dateToUse = DateTime.parse(dateInfo['date']!);
-    final displayDate = _formatDayMonth(dateToUse);
-    
-    return Padding(
-      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Text(
-          displayDate,
-          style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-          textAlign: TextAlign.left,
-        ),
-    );
-  }
-
-  Widget _buildDeterminedLocationSection() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Text(
-          _displayLocation,
-          style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-          textAlign: TextAlign.left,
-        ),
-    );
-  }
-
-  Widget _buildLocationDeterminingSection() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: kGreyLabelColour,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Determining your location...',
-                style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
-                textAlign: TextAlign.left,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Once we know your location, we\'ll fetch temperature data for your area.',
-            style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2),
-            textAlign: TextAlign.left,
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildProgressiveLoadingSection() {
     return Padding(
@@ -2870,10 +2917,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
     final dateToUse = DateTime.parse(dateInfo['date']!);
     final displayCity = _displayLocation.isNotEmpty ? _displayLocation : null;
+    final isLoading = !_isLocationDetermined;
     
     return DateLocationPill(
       date: dateToUse,
       city: displayCity,
+      isLoading: isLoading,
       onLocationChange: _handleLocationChange,
     );
   }
@@ -3029,6 +3078,71 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             (lowerMessage.contains('refused') || lowerMessage.contains('reset'))) ||
            lowerMessage.contains('no internet') ||
            lowerMessage.contains('offline');
+  }
+
+  /// Check if error message indicates API service issue (not network)
+  bool _isApiServiceError(String message) {
+    final lowerMessage = message.toLowerCase();
+    // Check for API-specific error patterns
+    return lowerMessage.contains('no temperature data available') ||
+           lowerMessage.contains('status: 401') ||
+           lowerMessage.contains('status: 404') ||
+           lowerMessage.contains('status: 500') ||
+           lowerMessage.contains('status: 503') ||
+           lowerMessage.contains('api service') ||
+           lowerMessage.contains('service unavailable') ||
+           lowerMessage.contains('internal server error') ||
+           lowerMessage.contains('bad gateway') ||
+           lowerMessage.contains('service temporarily unavailable');
+  }
+
+  /// Track API failure and determine if we should show early error
+  void _trackApiFailure(String errorMessage) {
+    // Extract a pattern from the error message for comparison
+    String errorPattern = _extractErrorPattern(errorMessage);
+    
+    // If this is the same error pattern as the last one, increment counter
+    if (_lastApiErrorPattern == errorPattern) {
+      _consecutiveApiFailures++;
+    } else {
+      // Different error pattern, reset counter
+      _consecutiveApiFailures = 1;
+      _lastApiErrorPattern = errorPattern;
+    }
+    
+    // Store the full error message
+    _lastApiError = errorMessage;
+    
+    debugPrintIfDebugging('API failure #$_consecutiveApiFailures: $errorMessage');
+  }
+
+  /// Extract a pattern from error message for comparison
+  String _extractErrorPattern(String errorMessage) {
+    final lowerMessage = errorMessage.toLowerCase();
+    
+    // Extract key patterns that indicate the same type of error
+    if (lowerMessage.contains('no temperature data available')) {
+      return 'no_data_available';
+    } else if (lowerMessage.contains('status: 401')) {
+      return 'unauthorized';
+    } else if (lowerMessage.contains('status: 404')) {
+      return 'not_found';
+    } else if (lowerMessage.contains('status: 500')) {
+      return 'server_error';
+    } else if (lowerMessage.contains('status: 503')) {
+      return 'service_unavailable';
+    } else if (lowerMessage.contains('rate limit')) {
+      return 'rate_limit';
+    } else if (lowerMessage.contains('network') || lowerMessage.contains('connection')) {
+      return 'network_error';
+    } else {
+      return 'unknown_error';
+    }
+  }
+
+  /// Check if we should show early error based on consecutive failures
+  bool _shouldShowEarlyError() {
+    return _consecutiveApiFailures >= 5;
   }
 
   /// Test actual connectivity by making a simple request
@@ -3524,6 +3638,88 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
 
+  Widget _buildChartWithErrorOverlay({
+    required List<TemperatureChartData> chartData,
+    required double? averageTemperature,
+    required double? trendSlope,
+    required String? summaryText,
+    required String? displayDate,
+    required String? city,
+    required double chartHeight,
+  }) {
+    // Build the normal chart content
+    final chartContent = _buildChartContent(
+      chartData: chartData,
+      averageTemperature: averageTemperature,
+      trendSlope: trendSlope,
+      summaryText: summaryText,
+      displayDate: displayDate,
+      city: city,
+      chartHeight: chartHeight,
+    );
+    
+    // Check if we have any errors to display
+    final hasErrors = _chartDataFailed || 
+                     _averageDataFailed || 
+                     _trendDataFailed || 
+                     _summaryDataFailed ||
+                     _averageDataRateLimited ||
+                     _trendDataRateLimited ||
+                     _summaryDataRateLimited ||
+                     _chartDataRateLimited ||
+                     (_lastApiError != null && _lastApiError!.isNotEmpty);
+    
+    if (!hasErrors) {
+      return chartContent;
+    }
+    
+    // If we have errors, wrap the chart content with error messages below
+    return Column(
+      children: [
+        // The chart content
+        chartContent,
+        
+        // Error messages below the chart - show only the most relevant error
+        Padding(
+          padding: const EdgeInsets.all(kScreenPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 16),
+              
+              // Show the most relevant error message
+              if (_averageDataRateLimited || _trendDataRateLimited || _summaryDataRateLimited || _chartDataRateLimited) ...[
+                _buildErrorIndicator(
+                  icon: Icons.timer,
+                  title: 'Too many requests',
+                  message: 'Please wait a few minutes before trying again.',
+                  color: kGreyLabelColour,
+                ),
+                const SizedBox(height: 12),
+                _buildRetryButton(() {
+                  debugPrintIfDebugging('Retry button pressed after rate limit error');
+                  _retryWithPartialData();
+                }),
+              ] else if (_lastApiError != null && _lastApiError!.isNotEmpty) ...[
+                _buildErrorIndicator(
+                  icon: _isApiServiceError(_lastApiError!) ? Icons.cloud_off : Icons.error_outline,
+                  title: _isApiServiceError(_lastApiError!) ? 'Temperature service unavailable' : 'Some data unavailable',
+                  message: _lastApiError!,
+                  color: _isApiServiceError(_lastApiError!) ? Colors.orange : Colors.red,
+                ),
+                const SizedBox(height: 12),
+                _buildRetryButton(() {
+                  debugPrintIfDebugging('Retry button pressed after API error');
+                  _retryWithPartialData();
+                }),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildChartContent({
     required List<TemperatureChartData> chartData,
     required double? averageTemperature,
@@ -3939,19 +4135,18 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           children: [
             // Show chart data failure message if there was a failure
             if (_chartDataFailed) _buildChartDataFailureMessage(),
-            // Show missing years text or low data warning
-            if (missingYears.isNotEmpty || missingRecentYears.isNotEmpty || hasVeryLittleData) ...[
+            // Only show missing years text if we have a reasonable amount of data and no errors
+            if ((missingYears.isNotEmpty || missingRecentYears.isNotEmpty) && 
+                !_chartDataFailed && 
+                !_averageDataFailed && 
+                !_trendDataFailed && 
+                !_summaryDataFailed &&
+                successfulYears >= 10) ...[
               const SizedBox(height: 8),
               Builder(
                 builder: (context) {
-                  String message;
-                  if (hasVeryLittleData && missingYears.isEmpty && missingRecentYears.isEmpty) {
-                    message = 'Note: Very limited data available for this location. Only $successfulYears years of data were loaded.';
-                    debugPrintIfDebugging('📝 User message: $message');
-                  } else {
-                    message = 'Note: ${_buildMissingYearsText(missingYears, missingRecentYears)}.';
-                    debugPrintIfDebugging('📝 User message: $message');
-                  }
+                  final message = 'Note: ${_buildMissingYearsText(missingYears, missingRecentYears)}.';
+                  debugPrintIfDebugging('📝 User message: $message');
                   
                   return Text(
                     message,
@@ -4107,7 +4302,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               child: Text(
                 _isRetryingChartData 
                   ? 'Retrying chart data...'
-                  : 'Missing data may be temporary. Try refreshing.',
+                  : 'Some chart data failed to load.',
                 style: TextStyle(
                   color: kGreyLabelColour, 
                   fontSize: kFontSizeBody - 2, 
@@ -4157,41 +4352,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       final successfulYears = _currentData != null ? 
         ((_currentData!['chartData'] as List<TemperatureChartData>?) ?? []).where((data) => data.hasData).length : 0;
       
-      if (!_chartDataFailed && successfulYears >= 10) {
-        const message = 'Data appears to be incomplete for this location. Some years may not have data available.';
-        debugPrintIfDebugging('📝 User message: $message');
-        
-        return Column(
-          children: [
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(
-                  Icons.info_outline,
-                  color: kGreyLabelColour,
-                  size: kIconSize,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    message,
-                    style: TextStyle(
-                      color: kGreyLabelColour, 
-                      fontSize: kFontSizeBody - 2, 
-                      fontWeight: FontWeight.w400
-                    ),
-                    textAlign: TextAlign.left,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-      } else {
-        // Don't show the "incomplete" message if we hit a timeout or have very little data
-        debugPrintIfDebugging('📝 Skipping "incomplete" message - chartDataFailed: $_chartDataFailed, successfulYears: $successfulYears');
-        return const SizedBox.shrink();
-      }
+      // Don't show the "incomplete" message - it's misleading when there are actual errors
+      debugPrintIfDebugging('📝 Skipping "incomplete" message - chartDataFailed: $_chartDataFailed, successfulYears: $successfulYears');
+      return const SizedBox.shrink();
     }
   }
 

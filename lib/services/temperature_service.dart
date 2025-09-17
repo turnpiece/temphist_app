@@ -150,7 +150,28 @@ class TemperatureService {
         }
       }
       
-      throw Exception('Failed to fetch $endpoint data: ${response.statusCode}');
+      // Parse API error response to extract meaningful error message
+      String errorMessage = 'Failed to fetch $endpoint data: ${response.statusCode}';
+      try {
+        final errorJson = jsonDecode(response.body);
+        if (errorJson is Map<String, dynamic>) {
+          final apiError = errorJson['error']?.toString();
+          final apiStatus = errorJson['status']?.toString();
+          
+          if (apiError != null && apiError.isNotEmpty) {
+            errorMessage = apiError;
+            // Add status code context if available
+            if (apiStatus != null && apiStatus.isNotEmpty) {
+              errorMessage += ' (Status: $apiStatus)';
+            }
+          }
+        }
+      } catch (e) {
+        // If we can't parse the error response, use the original message
+        debugLog('Could not parse API error response: $e');
+      }
+      
+      throw Exception(errorMessage);
     }
   }
 
