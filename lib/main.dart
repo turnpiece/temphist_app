@@ -1675,12 +1675,14 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       final cachedLocation = await _loadCachedLocation();
       if (cachedLocation != null) {
         debugPrintIfDebugging('Using cached location: ${cachedLocation['location']}');
-        setState(() {
-          _determinedLocation = cachedLocation['location']!;
-          _displayLocation = cachedLocation['displayLocation']!;
-          _isLocationDetermined = true;
-          _locationDeterminedAt = DateTime.now();
-        });
+        if (mounted) {
+          setState(() {
+            _determinedLocation = cachedLocation['location']!;
+            _displayLocation = cachedLocation['displayLocation']!;
+            _isLocationDetermined = true;
+            _locationDeterminedAt = DateTime.now();
+          });
+        }
         return;
       }
       
@@ -1767,12 +1769,14 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       DebugUtils.verboseWithContextLazy('Location', () => 'Determined location: $city (display: ${_extractDisplayLocation(city)})');
       
       // Update the UI with the determined location
-      setState(() {
-        _determinedLocation = city; // Full location for API
-        _displayLocation = _extractDisplayLocation(city); // Short location for display
-        _isLocationDetermined = true;
-        _locationDeterminedAt = DateTime.now(); // Record when location was determined
-      });
+      if (mounted) {
+        setState(() {
+          _determinedLocation = city; // Full location for API
+          _displayLocation = _extractDisplayLocation(city); // Short location for display
+          _isLocationDetermined = true;
+          _locationDeterminedAt = DateTime.now(); // Record when location was determined
+        });
+      }
       
       // Cache the location
       await _cacheLocation(city, _extractDisplayLocation(city));
@@ -1784,12 +1788,14 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     } catch (e) {
       debugPrintIfDebugging('_determineLocation failed: $e');
       // Set default location if everything fails
-      setState(() {
-        _determinedLocation = kDefaultLocation;
-        _displayLocation = _extractDisplayLocation(kDefaultLocation);
-        _isLocationDetermined = true;
-        _locationDeterminedAt = DateTime.now(); // Record when location was determined
-      });
+      if (mounted) {
+        setState(() {
+          _determinedLocation = kDefaultLocation;
+          _displayLocation = _extractDisplayLocation(kDefaultLocation);
+          _isLocationDetermined = true;
+          _locationDeterminedAt = DateTime.now(); // Record when location was determined
+        });
+      }
       
       // Reset loading message timer to start temperature-related messages
       _loadingElapsedSeconds = 0;

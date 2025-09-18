@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" aria-hidden="true">
+  <!-- Transparent background -->
+  <g id="bars">
+    <!-- Current year (green) -->
+    <rect x="30" y="50"  width="440" height="28" rx="4" fill="#51cf66"/>
+    <!-- Previous years (red) -->
+    <rect x="30" y="100" width="420" height="28" rx="4" fill="#ff6b6b"/>
+    <rect x="30" y="150" width="360" height="28" rx="4" fill="#ff6b6b"/>
+    <rect x="30" y="200" width="240" height="28" rx="4" fill="#ff6b6b"/>
+    <rect x="30" y="250" width="320" height="28" rx="4" fill="#ff6b6b"/>
+    <rect x="30" y="300" width="470" height="28" rx="4" fill="#ff6b6b"/>
+    <rect x="30" y="350" width="300" height="28" rx="4" fill="#ff6b6b"/>
+    <rect x="30" y="400" width="380" height="28" rx="4" fill="#ff6b6b"/>
+  </g>
+</svg>

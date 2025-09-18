@@ -167,12 +167,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildWelcomeSlide(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(40.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(40.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Logo and title on the same line
           Row(
             children: [
@@ -236,7 +237,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             textAlign: TextAlign.left,
           ),
-        ],
+          
+          const SizedBox(height: 40),
+          
+          // Bar chart image
+          Center(
+            child: SizedBox(
+              width: 240,
+              height: 180,
+              child: SvgPicture.asset(
+                'assets/images/simplified-bar-chart.svg',
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+          ],
+        ),
       ),
     );
   }

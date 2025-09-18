@@ -83,6 +83,7 @@ flutter:
   assets:
     - assets/logo.svg
     - assets/logo.png
+    - assets/images/simplified-bar-chart.svg
 
   # To add assets to your application, add an assets section, like this:
   # assets:
