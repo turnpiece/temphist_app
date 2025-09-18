@@ -19,9 +19,11 @@ import 'dart:convert'; // Added for jsonEncode/jsonDecode
 import 'dart:io' as io;
 
 import 'services/temperature_service.dart';
+import 'services/onboarding_service.dart';
 import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
 import 'widgets/date_location_pill.dart';
+import 'screens/onboarding_screen.dart';
 
 // App color constants
 // Note: These are no longer constants because they depend on runtime configuration
@@ -135,8 +137,14 @@ Future<bool> _checkStorageSpace() async {
         await testFile.delete();
         return true;
       } catch (e) {
-        debugPrintIfDebugging('Storage test failed: $e');
-        return false;
+        // In Simulator, file operations can be unreliable, so don't treat this as a real error
+        if (kDebugMode) {
+          debugPrintIfDebugging('Storage test failed (likely Simulator): $e');
+          return true; // Assume storage is available in debug mode
+        } else {
+          debugPrintIfDebugging('Storage test failed: $e');
+          return false;
+        }
       }
     } else {
       // For desktop platforms, check available disk space
@@ -145,8 +153,14 @@ Future<bool> _checkStorageSpace() async {
       return true;
     }
   } catch (e) {
-    debugPrintIfDebugging('Storage space check failed: $e');
-    return false;
+    // In Simulator, file operations can be unreliable, so don't treat this as a real error
+    if (kDebugMode) {
+      debugPrintIfDebugging('Storage space check failed (likely Simulator): $e');
+      return true; // Assume storage is available in debug mode
+    } else {
+      debugPrintIfDebugging('Storage space check failed: $e');
+      return false;
+    }
   }
 }
 
@@ -350,6 +364,62 @@ Future<void> _signInWithRetry({int maxRetries = 3}) async {
   }
 }
 
+class OnboardingWrapper extends StatefulWidget {
+  const OnboardingWrapper({super.key});
+
+  @override
+  State<OnboardingWrapper> createState() => _OnboardingWrapperState();
+}
+
+class _OnboardingWrapperState extends State<OnboardingWrapper> {
+  bool _isLoading = true;
+  bool _hasSeenOnboarding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOnboardingStatus();
+  }
+
+  Future<void> _checkOnboardingStatus() async {
+    final hasSeen = await OnboardingService.hasSeenOnboarding();
+    if (mounted) {
+      setState(() {
+        _hasSeenOnboarding = hasSeen;
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _onOnboardingComplete() {
+    setState(() {
+      _hasSeenOnboarding = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: kBackgroundColour,
+        body: Center(
+          child: CircularProgressIndicator(
+            color: kAccentColour,
+          ),
+        ),
+      );
+    }
+
+    if (_hasSeenOnboarding) {
+      return const TemperatureScreen();
+    } else {
+      return OnboardingScreen(
+        onComplete: _onOnboardingComplete,
+      );
+    }
+  }
+}
+
 class TempHist extends StatelessWidget {
   const TempHist({super.key});
 
@@ -361,7 +431,7 @@ class TempHist extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: kAppTitle,
-      home: TemperatureScreen(),
+      home: OnboardingWrapper(),
       // Add a custom loading screen theme
       theme: ThemeData(
         scaffoldBackgroundColor: kBackgroundColour,
@@ -570,6 +640,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _connectivitySubscription?.cancel();
     _memoryCleanupTimer?.cancel();
     _stopAverageTrendDisplayTimer();
+    _stopLoadingMessageTimer();
+    _stopAutoRetryTimer();
     _splashScreenTimer?.cancel();
     super.dispose();
   }
@@ -795,10 +867,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Start a timer that will show average/trend lines after the configured delay
     _averageTrendDisplayTimer = Timer(const Duration(seconds: kAverageTrendDisplayDelaySeconds), () {
       debugPrintIfDebugging('Average/trend display timer triggered - showing lines after timeout');
-      setState(() {
-        // Force show average and trend lines by setting _isDataLoading to false
-        _isDataLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          // Force show average and trend lines by setting _isDataLoading to false
+          _isDataLoading = false;
+        });
+      }
     });
   }
 
@@ -809,28 +883,30 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
 
   void _resetErrorStates() {
-    setState(() {
-      _averageDataFailed = false;
-      _trendDataFailed = false;
-      _summaryDataFailed = false;
-      _chartDataHasGaps = false;
-      _isRetryingAverage = false;
-      _isRetryingTrend = false;
-      _isRetryingSummary = false;
-      _isRetryingChartData = false;
-      _chartDataRetryCount = 0;
-      
-      // Reset rate limit flags
-      _averageDataRateLimited = false;
-      _trendDataRateLimited = false;
-      _summaryDataRateLimited = false;
-      _chartDataRateLimited = false;
-      
-      // Reset chart data failure tracking
-      _chartDataFailed = false;
-      _chartDataFailedDueToRateLimit = false;
-      _failedYears.clear();
-    });
+    if (mounted) {
+      setState(() {
+        _averageDataFailed = false;
+        _trendDataFailed = false;
+        _summaryDataFailed = false;
+        _chartDataHasGaps = false;
+        _isRetryingAverage = false;
+        _isRetryingTrend = false;
+        _isRetryingSummary = false;
+        _isRetryingChartData = false;
+        _chartDataRetryCount = 0;
+        
+        // Reset rate limit flags
+        _averageDataRateLimited = false;
+        _trendDataRateLimited = false;
+        _summaryDataRateLimited = false;
+        _chartDataRateLimited = false;
+        
+        // Reset chart data failure tracking
+        _chartDataFailed = false;
+        _chartDataFailedDueToRateLimit = false;
+        _failedYears.clear();
+      });
+    }
   }
 
   // Cache expiration constants
@@ -1874,14 +1950,67 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       debugPrintIfDebugging('_loadChartDataProgressive: Using determined city: $city');
       final currentYear = dateToUse.year;
 
-      // Skip main /data/ endpoint for progressive loading to ensure year-by-year loading is visible
-      // This forces the fallback method which loads data progressively
-      debugPrintIfDebugging('_loadChartDataProgressive: Skipping main endpoint to force progressive loading');
-
-      // Fallback: use individual endpoints with progressive loading
-      debugPrintIfDebugging('Using fallback endpoints for $city, $formattedDate');
-      
+      // Check if we have fresh cached data first
       final mmdd = formattedDate.substring(5);
+      final cachedData = await _loadCachedApiResponse('data', city, mmdd);
+      
+      if (cachedData != null) {
+        debugPrintIfDebugging('📊 Using cached complete data (${DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(cachedData['timestamp'] as int)).inMinutes} minutes old)');
+        
+        // Use cached data directly
+        final chartData = <TemperatureChartData>[];
+        final currentYear = dateToUse.year;
+        final startYear = currentYear - 50;
+        final finalStartYear = startYear < 1975 ? 1975 : startYear;
+        
+        // Process cached data
+        for (int year = finalStartYear; year <= currentYear; year++) {
+          final yearData = cachedData['years']?[year.toString()];
+          if (yearData != null && yearData['temperature'] != null) {
+            final temperature = (yearData['temperature'] as num).toDouble();
+            chartData.add(TemperatureChartData(
+              year: year.toString(),
+              temperature: temperature,
+              isCurrentYear: year == currentYear,
+              hasData: true,
+            ));
+          } else {
+            chartData.add(TemperatureChartData(
+              year: year.toString(),
+              temperature: 0.0, // Use 0.0 as default since temperature is required
+              isCurrentYear: year == currentYear,
+              hasData: false,
+            ));
+          }
+        }
+        
+        // Create result with cached data
+        _currentData = _createResultMap(
+          chartData: chartData,
+          averageTemperature: cachedData['average']?['temperature'] != null ? (cachedData['average']['temperature'] as num).toDouble() : null,
+          trendSlope: cachedData['trend']?['slope'] != null ? (cachedData['trend']['slope'] as num).toDouble() : null,
+          summaryText: cachedData['summary']?.toString(),
+          dateToUse: dateToUse,
+          city: city,
+        );
+        
+        // Load average and trend data after chart data is complete
+        await _loadAverageAndTrendData(city, mmdd);
+        
+        // Mark loading as complete
+        _isDataLoading = false;
+        _progressiveLoadingCompleted = true;
+        
+        if (mounted) {
+          setState(() {});
+        }
+        
+        return;
+      }
+      
+      // No fresh cached data, use progressive loading
+      debugPrintIfDebugging('📊 No fresh cached data, using progressive loading');
+      
       double? averageTemperature;
       double? trendSlope;
       String? summaryText;
@@ -1904,8 +2033,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           
           if (cachedSummary != null) {
             debugPrintIfDebugging('📊 Using cached summary data');
-            // Add a small delay to make progressive loading visible even with cached data
-            await Future.delayed(const Duration(milliseconds: 100));
             summaryData = cachedSummary;
           } else {
             debugPrintIfDebugging('📊 Fetching fresh summary data');
@@ -1993,8 +2120,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         final cachedData = await _loadCachedTemperatureData(year, city, dateForYear);
         if (cachedData != null) {
           debugPrintIfDebugging('📦 Using cached data for year $year');
-          // Add a small delay to make progressive loading visible even with cached data
-          await Future.delayed(const Duration(milliseconds: 50));
           // Process cached data the same way as fresh data
           final temperature = cachedData['temperature'] ?? cachedData['average']?['temperature'];
           if (temperature != null) {
@@ -2101,23 +2226,24 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           // Check if it's a rate limit error
           if (e is RateLimitException) {
             debugPrintIfDebugging('⚠️ Rate limit exceeded for chart data, stopping further requests at year $year');
-            setState(() {
-              _chartDataRateLimited = true;
-              _chartDataFailed = true;
-              _chartDataFailedDueToRateLimit = true;
-            });
+            if (mounted) {
+              setState(() {
+                _chartDataRateLimited = true;
+                _chartDataFailed = true;
+                _chartDataFailedDueToRateLimit = true;
+              });
+            }
             break; // Stop making more requests
           } else {
             // Other error - mark as failed but continue trying other years
             debugPrintIfDebugging('⚠️ Other error for year $year, continuing with next year');
-            setState(() {
-              _chartDataFailed = true;
-            });
+            if (mounted) {
+              setState(() {
+                _chartDataFailed = true;
+              });
+            }
           }
         }
-        
-        // Add a delay to make progressive loading more visible
-        await Future.delayed(const Duration(milliseconds: 100));
         
         // Log progress every 5 years to help track where it might be stalling
         if (totalAttempts % 5 == 0) {
@@ -3080,11 +3206,20 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
            lowerMessage.contains('offline');
   }
 
+  /// Check if error message indicates timeout issue
+  bool _isTimeoutError(String message) {
+    final lowerMessage = message.toLowerCase();
+    return lowerMessage.contains('timeout') || 
+           lowerMessage.contains('timed out') ||
+           lowerMessage.contains('future not completed');
+  }
+
   /// Check if error message indicates API service issue (not network)
   bool _isApiServiceError(String message) {
     final lowerMessage = message.toLowerCase();
     // Check for API-specific error patterns
-    return lowerMessage.contains('no temperature data available') ||
+    // Don't treat timeouts as API service errors - they're often temporary
+    return (lowerMessage.contains('no temperature data available') ||
            lowerMessage.contains('status: 401') ||
            lowerMessage.contains('status: 404') ||
            lowerMessage.contains('status: 500') ||
@@ -3093,7 +3228,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
            lowerMessage.contains('service unavailable') ||
            lowerMessage.contains('internal server error') ||
            lowerMessage.contains('bad gateway') ||
-           lowerMessage.contains('service temporarily unavailable');
+           lowerMessage.contains('service temporarily unavailable')) &&
+           !lowerMessage.contains('timeout') &&
+           !lowerMessage.contains('timed out');
   }
 
   /// Track API failure and determine if we should show early error
@@ -3701,17 +3838,20 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                   _retryWithPartialData();
                 }),
               ] else if (_lastApiError != null && _lastApiError!.isNotEmpty) ...[
-                _buildErrorIndicator(
-                  icon: _isApiServiceError(_lastApiError!) ? Icons.cloud_off : Icons.error_outline,
-                  title: _isApiServiceError(_lastApiError!) ? 'Temperature service unavailable' : 'Some data unavailable',
-                  message: _lastApiError!,
-                  color: _isApiServiceError(_lastApiError!) ? Colors.orange : Colors.red,
-                ),
-                const SizedBox(height: 12),
-                _buildRetryButton(() {
-                  debugPrintIfDebugging('Retry button pressed after API error');
-                  _retryWithPartialData();
-                }),
+                // Don't show error for timeout issues - they're often temporary
+                if (!_isTimeoutError(_lastApiError!)) ...[
+                  _buildErrorIndicator(
+                    icon: _isApiServiceError(_lastApiError!) ? Icons.cloud_off : Icons.error_outline,
+                    title: _isApiServiceError(_lastApiError!) ? 'Temperature service unavailable' : 'Some data unavailable',
+                    message: _lastApiError!,
+                    color: _isApiServiceError(_lastApiError!) ? Colors.orange : Colors.red,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildRetryButton(() {
+                    debugPrintIfDebugging('Retry button pressed after API error');
+                    _retryWithPartialData();
+                  }),
+                ],
               ],
             ],
           ),
@@ -4685,6 +4825,24 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           ),
         ],
       ),
+      // Debug floating action button (only in debug mode)
+      floatingActionButton: kDebugMode ? FloatingActionButton(
+        onPressed: () async {
+          final navigator = Navigator.of(context);
+          await OnboardingService.resetOnboarding();
+          if (mounted) {
+            // Restart the app to show onboarding
+            navigator.pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => const OnboardingWrapper(),
+              ),
+            );
+          }
+        },
+        backgroundColor: kAccentColour,
+        tooltip: 'Reset Onboarding',
+        child: const Icon(Icons.refresh, color: Colors.white),
+      ) : null,
     );
 
     // Wrap with AnnotatedRegion for mobile platforms

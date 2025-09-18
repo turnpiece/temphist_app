@@ -91,7 +91,7 @@ class _DateLocationPillState extends State<DateLocationPill>
             final ellipsisCount = _animation.value;
             final ellipsis = '.' * ellipsisCount;
             final displayCity = widget.isLoading 
-                ? 'Determining location$ellipsis'
+                ? '$ellipsis'
                 : (widget.city ?? 'Current location');
             
             return Text(
