@@ -61,10 +61,14 @@ class _DateLocationPillState extends State<DateLocationPill>
   @override
   Widget build(BuildContext context) {
     final day = widget.date.day;
-    final month = DateFormat('MMMM').format(widget.date);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth >= 768;
+    final month = isTablet 
+        ? DateFormat('MMMM').format(widget.date)  // Full month name on tablets
+        : DateFormat('MMM').format(widget.date);  // Abbreviated month on mobile
     final formattedDate = '$day${_getOrdinalSuffix(day)} $month';
     
-    // Create accessible semantics label
+    // Create accessible semantics label (always use full month name for accessibility)
     final fullWeekday = DateFormat('EEEE').format(widget.date);
     final fullMonth = DateFormat('MMMM').format(widget.date);
     final semanticsLabel = widget.isLoading 
@@ -94,14 +98,35 @@ class _DateLocationPillState extends State<DateLocationPill>
                 ? '$ellipsis'
                 : (widget.city ?? 'Current location');
             
-            return Text(
-              '$formattedDate • $displayCity',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-              textScaler: MediaQuery.textScalerOf(context),
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$formattedDate • ',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textScaler: MediaQuery.textScalerOf(context),
+                ),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: widget.isLoading ? 60 : 200, // Limit max width for long names
+                  ),
+                  child: Text(
+                    displayCity,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textScaler: MediaQuery.textScalerOf(context),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              ],
             );
           },
         ),

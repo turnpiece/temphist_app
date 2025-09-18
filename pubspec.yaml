@@ -61,6 +61,12 @@ dependencies:
   # For network connectivity detection
   connectivity_plus: ^6.0.5
 
+  # For opening URLs
+  url_launcher: ^6.2.5
+
+  # For getting app version info
+  package_info_plus: ^8.0.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

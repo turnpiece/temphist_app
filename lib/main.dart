@@ -24,6 +24,7 @@ import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
 import 'widgets/date_location_pill.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/about_privacy_screen.dart';
 
 // App color constants
 // Note: These are no longer constants because they depend on runtime configuration
@@ -3046,6 +3047,21 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: _buildDateLocationPill(),
+              ),
+            ),
+            // Info icon
+            GestureDetector(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const AboutPrivacyScreen(),
+                  ),
+                );
+              },
+              child: const Icon(
+                Icons.info_outline,
+                color: Color(0xFF51CF66), // kSummaryColour
+                size: 20,
               ),
             ),
           ],
