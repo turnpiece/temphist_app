@@ -884,6 +884,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   void _resetErrorStates() {
     if (mounted) {
+      debugPrintIfDebugging('🔄 Resetting error states');
       setState(() {
         _averageDataFailed = false;
         _trendDataFailed = false;
@@ -2930,6 +2931,14 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
 
   Widget _buildLoadingSection() {
+    // Log early error display
+    if (_shouldShowEarlyError() && _lastApiError != null) {
+      _logErrorDisplay('Early error detection triggered', _lastApiError!, additionalInfo: {
+        'consecutiveFailures': _consecutiveApiFailures,
+        'errorPattern': _lastApiErrorPattern,
+      });
+    }
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3286,6 +3295,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   /// Check if we should show early error based on consecutive failures
   bool _shouldShowEarlyError() {
     return _consecutiveApiFailures >= 5;
+  }
+
+  /// Log error display for debugging
+  void _logErrorDisplay(String errorType, String message, {Map<String, dynamic>? additionalInfo}) {
+    debugPrintIfDebugging('🚨 DISPLAYING ERROR: $errorType');
+    debugPrintIfDebugging('🚨 Error message: $message');
+    if (additionalInfo != null) {
+      additionalInfo.forEach((key, value) {
+        debugPrintIfDebugging('🚨 $key: $value');
+      });
+    }
   }
 
   /// Test actual connectivity by making a simple request
@@ -3790,6 +3810,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     required String? city,
     required double chartHeight,
   }) {
+    // Log chart overlay error display
+    if (_lastApiError != null && _lastApiError!.isNotEmpty && !_isTimeoutError(_lastApiError!)) {
+      _logErrorDisplay('Chart overlay error', _lastApiError!, additionalInfo: {
+        'isApiServiceError': _isApiServiceError(_lastApiError!),
+        'isTimeoutError': _isTimeoutError(_lastApiError!),
+        'chartDataFailed': _chartDataFailed,
+        'averageDataFailed': _averageDataFailed,
+        'trendDataFailed': _trendDataFailed,
+        'summaryDataFailed': _summaryDataFailed,
+      });
+    }
     // Build the normal chart content
     final chartContent = _buildChartContent(
       chartData: chartData,
@@ -4688,11 +4719,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       }
       
       // Force garbage collection if available (this is a hint, not guaranteed)
-      if (kDebugMode) {
-        // In debug mode, we can be more aggressive with cleanup
-        _currentData?.clear();
-        debugPrintIfDebugging('🧹 Cleared current data for memory optimization');
-      }
+      // NOTE: Do NOT clear _currentData as it causes the chart to disappear
+      // The chart data should persist until new data is loaded
       
       debugPrintIfDebugging('✅ Memory cleanup completed');
     } catch (e) {
