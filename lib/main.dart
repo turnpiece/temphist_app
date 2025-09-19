@@ -29,8 +29,8 @@ import 'screens/about_privacy_screen.dart';
 // App color constants
 // Note: These are no longer constants because they depend on runtime configuration
 // but they maintain the same interface for backward compatibility
-const kBackgroundColour = Color(0xFF242456);
-const kBackgroundColourDark = Color(0xFF343499);
+const kBackgroundColourDark = Color(0xFF242456);
+const kBackgroundColourLight = Color(0xFF343499);
 const kAccentColour = Color(0xFFFF6B6B);
 const kTextPrimaryColour = Color(0xFFECECEC);
 const kSummaryColour = Color(0xFF51CF66);
@@ -402,7 +402,7 @@ class _OnboardingWrapperState extends State<OnboardingWrapper> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: kBackgroundColour,
+        backgroundColor: kBackgroundColourDark,
         body: Center(
           child: CircularProgressIndicator(
             color: kAccentColour,
@@ -435,7 +435,7 @@ class TempHist extends StatelessWidget {
       home: OnboardingWrapper(),
       // Add a custom loading screen theme
       theme: ThemeData(
-        scaffoldBackgroundColor: kBackgroundColour,
+        scaffoldBackgroundColor: kBackgroundColourDark,
         // This helps prevent the white flash during initialization
         colorScheme: ColorScheme.fromSeed(
           seedColor: kAccentColour,
@@ -468,8 +468,8 @@ class SplashScreen extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              kBackgroundColour, // Top color
-              kBackgroundColourDark, // Bottom color
+              kBackgroundColourDark, // Top color
+              kBackgroundColourLight, // Bottom color
             ],
           ),
         ),
@@ -536,6 +536,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   int _consecutiveApiFailures = 0; // Count of consecutive API failures
   String? _lastApiErrorPattern; // Pattern of the last API error for comparison
   bool _isLocationDetermined = false;
+  
+  // Bottom navigation state
+  int _currentIndex = 0;
   DateTime? _locationDeterminedAt; // Timestamp when location was last determined
   DateTime? _currentDataDate; // The date for which data is currently loaded
   bool _isDataLoading = false;
@@ -2689,7 +2692,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     return RefreshIndicator(
       onRefresh: _handleRefresh,
       color: kAccentColour,
-      backgroundColor: kBackgroundColour,
+          backgroundColor: kBackgroundColourDark,
       child: child,
     );
   }
@@ -3004,8 +3007,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              kBackgroundColour, // Top color
-              kBackgroundColourDark, // Bottom color
+              kBackgroundColourDark, // Top color
+              kBackgroundColourLight, // Bottom color
             ],
           ),
         ),
@@ -4866,33 +4869,81 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         children: [
           // Gradient background fills the whole screen including system areas
           _buildGradientBackground(),
-          // Foreground content scrolls above the background
-          _buildRefreshIndicator(
-            SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: _buildConstrainedContent(context, chartHeight),
+          // Tab content with IndexedStack to preserve state
+          IndexedStack(
+            index: _currentIndex,
+            children: [
+              _buildTodayTab(context, chartHeight),
+              _buildExploreTab(),
+              _buildHistoryTab(),
+            ],
+          ),
+          // Bottom Navigation Bar with semi-transparent background as overlay
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              // Semi-transparent dark background that should show through to content
+              decoration: BoxDecoration(
+                color: kBackgroundColourDark.withOpacity(0.8), // 20% transparency - more subtle
+              ),
+              child: Container(
+                height: 55, // Just enough to accommodate content without overflow
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      // Today Tab
+                      _buildNavItem(
+                        icon: Icons.today,
+                        label: 'Today',
+                        index: 0,
+                      ),
+                      // Explore Tab
+                      _buildNavItem(
+                        icon: Icons.explore,
+                        label: 'Explore',
+                        index: 1,
+                      ),
+                      // History Tab
+                      _buildNavItem(
+                        icon: Icons.history,
+                        label: 'History',
+                        index: 2,
+                      ),
+                    ],
+                  ),
+                ),
             ),
           ),
+          // Debug floating action button (only in debug mode) - positioned above navigation bar
+          if (kDebugMode)
+            Positioned(
+              right: 16,
+              bottom: 53, // Position above the navigation bar (33px height + 20px margin)
+              child: FloatingActionButton(
+                onPressed: () async {
+                  final navigator = Navigator.of(context);
+                  await OnboardingService.resetOnboarding();
+                  if (mounted) {
+                    // Restart the app to show onboarding
+                    navigator.pushReplacement(
+                      MaterialPageRoute(
+                        builder: (context) => const OnboardingWrapper(),
+                      ),
+                    );
+                  }
+                },
+                backgroundColor: kAccentColour,
+                tooltip: 'Reset Onboarding',
+                child: const Icon(Icons.refresh, color: Colors.white),
+              ),
+            ),
         ],
       ),
-      // Debug floating action button (only in debug mode)
-      floatingActionButton: kDebugMode ? FloatingActionButton(
-        onPressed: () async {
-          final navigator = Navigator.of(context);
-          await OnboardingService.resetOnboarding();
-          if (mounted) {
-            // Restart the app to show onboarding
-            navigator.pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => const OnboardingWrapper(),
-              ),
-            );
-          }
-        },
-        backgroundColor: kAccentColour,
-        tooltip: 'Reset Onboarding',
-        child: const Icon(Icons.refresh, color: Colors.white),
-      ) : null,
+      // Bottom Navigation Bar with semi-transparent background
+      bottomNavigationBar: null, // Remove bottomNavigationBar
     );
 
     // Wrap with AnnotatedRegion for mobile platforms
@@ -4906,6 +4957,145 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         statusBarIconBrightness: Platform.isIOS ? null : Brightness.light,
       ),
       child: appContent,
+    );
+  }
+
+  /// Build the Explore tab placeholder
+  Widget _buildExploreTab() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            kBackgroundColourDark,
+            kBackgroundColourLight,
+          ],
+        ),
+      ),
+      child: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.explore,
+              size: 64,
+              color: kAccentColour,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Explore',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Coming Soon',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white70,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build the History tab placeholder
+  Widget _buildHistoryTab() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            kBackgroundColourDark,
+            kBackgroundColourLight,
+          ],
+        ),
+      ),
+      child: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.history,
+              size: 64,
+              color: kAccentColour,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'History',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Coming Soon',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white70,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build the Today tab (existing content)
+  Widget _buildTodayTab(BuildContext context, double chartHeight) {
+    return _buildRefreshIndicator(
+      SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: _buildConstrainedContent(context, chartHeight),
+      ),
+    );
+  }
+
+  /// Build individual navigation item for custom bottom nav
+  Widget _buildNavItem({
+    required IconData icon,
+    required String label,
+    required int index,
+  }) {
+    final isSelected = _currentIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _currentIndex = index;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 20, // Slightly smaller icon
+              color: isSelected ? kAccentColour : Colors.white70,
+            ),
+            const SizedBox(height: 0), // No spacing between icon and text
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 9, // Slightly smaller font
+                color: isSelected ? kAccentColour : Colors.white70,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

@@ -67,8 +67,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              kBackgroundColour, // Top color
-              kBackgroundColourDark, // Bottom color
+              kBackgroundColourDark, // Top color
+              kBackgroundColourLight, // Bottom color
             ],
           ),
         ),
