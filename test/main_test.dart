@@ -7,6 +7,9 @@ import 'package:temphist_app/screens/onboarding_screen.dart';
 import 'package:temphist_app/services/onboarding_service.dart';
 import 'dart:async';
 
+// Import explore tests
+import 'explore_test.dart' as explore_tests;
+
 void main() {
   group('TemperatureScreen Tests', () {
     testWidgets('App loads without crashing', (WidgetTester tester) async {
@@ -374,4 +377,7 @@ void main() {
       expect(find.text('See how today compares to past decades.'), findsOneWidget);
     });
   });
+
+  // Run explore tests
+  explore_tests.main();
 } 

@@ -25,6 +25,7 @@ import 'utils/debug_utils.dart';
 import 'widgets/date_location_pill.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/about_privacy_screen.dart';
+import 'screens/explore_screen.dart';
 
 // App color constants
 // Note: These are no longer constants because they depend on runtime configuration
@@ -944,6 +945,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           await prefs.remove(key);
         }
       }
+      
+      // Clear visited locations cache
+      await prefs.remove('visited_locations');
       
       // Clear location cache
       await prefs.remove('cachedLocation');
@@ -4960,48 +4964,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  /// Build the Explore tab placeholder
+  /// Build the Explore tab
   Widget _buildExploreTab() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            kBackgroundColourDark,
-            kBackgroundColourLight,
-          ],
-        ),
-      ),
-      child: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.explore,
-              size: 64,
-              color: kAccentColour,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'Explore',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Coming Soon',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white70,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return ExploreScreen(
+      currentLocation: _determinedLocation,
+      displayLocation: _displayLocation,
+      currentLatitude: _lastPosition?.latitude,
+      currentLongitude: _lastPosition?.longitude,
     );
   }
 
