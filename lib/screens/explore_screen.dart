@@ -770,31 +770,31 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       children: [
                         ElevatedButton(
                           onPressed: _clearAndReinitialize,
-                          child: Text('Clear Cache'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red.withValues(alpha: 0.2),
                             foregroundColor: Colors.red,
                           ),
+                          child: Text('Clear Cache'),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: _cleanupAndRefresh,
-                          child: Text('Cleanup Duplicates'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.orange.withValues(alpha: 0.2),
                             foregroundColor: Colors.orange,
                           ),
+                          child: Text('Cleanup Duplicates'),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     ElevatedButton(
                       onPressed: _forceCleanupInvalid,
-                      child: Text('Remove Invalid Locations'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.purple.withValues(alpha: 0.2),
                         foregroundColor: Colors.purple,
                       ),
+                      child: Text('Remove Invalid Locations'),
                     ),
                   ],
                 ),
@@ -829,31 +829,31 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       children: [
                         ElevatedButton(
                           onPressed: _clearAndReinitialize,
-                          child: Text('Clear Cache'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red.withValues(alpha: 0.2),
                             foregroundColor: Colors.red,
                           ),
+                          child: Text('Clear Cache'),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: _cleanupAndRefresh,
-                          child: Text('Cleanup Duplicates'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.orange.withValues(alpha: 0.2),
                             foregroundColor: Colors.orange,
                           ),
+                          child: Text('Cleanup Duplicates'),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     ElevatedButton(
                       onPressed: _forceCleanupInvalid,
-                      child: Text('Remove Invalid Locations'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.purple.withValues(alpha: 0.2),
                         foregroundColor: Colors.purple,
                       ),
+                      child: Text('Remove Invalid Locations'),
                     ),
                   ],
                 ),
@@ -911,20 +911,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
               children: [
                 ElevatedButton(
                   onPressed: _clearAndReinitialize,
-                  child: Text('Clear Cache'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red.withValues(alpha: 0.2),
                     foregroundColor: Colors.red,
                   ),
+                  child: Text('Clear Cache'),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: _cleanupAndRefresh,
-                  child: Text('Cleanup Duplicates'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange.withValues(alpha: 0.2),
                     foregroundColor: Colors.orange,
                   ),
+                  child: Text('Cleanup Duplicates'),
                 ),
               ],
             ),

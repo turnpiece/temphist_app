@@ -4124,7 +4124,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                     axisLine: AxisLine(width: 1, color: kAxisLabelColour),
                     // Convert Kelvin to Celsius for the label
                     axisLabelFormatter: (AxisLabelRenderDetails args) {
-                      final double kelvin = (args.value as num).toDouble();
+                      final double kelvin = (args.value).toDouble();
                       final double rawC = kelvin - kKelvinOffset;
 
                       // Kill IEEE-754 negative zero (and tiny fuzz around zero)
@@ -4954,7 +4954,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             child: Container(
               // Semi-transparent dark background that should show through to content
               decoration: BoxDecoration(
-                color: kBackgroundColourDark.withOpacity(0.8), // 20% transparency - more subtle
+                color: kBackgroundColourDark.withValues(alpha: 0.8), // 20% transparency - more subtle
               ),
               child: Container(
                 height: 55, // Just enough to accommodate content without overflow
