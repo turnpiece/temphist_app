@@ -72,3 +72,6 @@ ios/Runner/GoogleService-Info.plist
 GoogleService-Info.plist
 google_service_info.b64
 android/app/google-services.json
+
+# GitHub issues
+issues.json
