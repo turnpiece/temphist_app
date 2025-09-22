@@ -40,6 +40,11 @@ const kTrendColour = Color(0xFFAAAA00);
 const kTrendLineColour = kTrendColour;
 const kBarOtherYearColour = kAccentColour;
 const kBarCurrentYearColour = kSummaryColour;
+
+// Temperature conversion constants
+const kKelvinOffset = 273.15; // Celsius to Kelvin conversion
+
+
 const kAxisLabelColour = Color(0xFFECECEC);
 const kAxisGridColour = kAxisLabelColour;
 const kGreyLabelColour = Color(0xFFB0B0B0);
@@ -544,6 +549,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   DateTime? _currentDataDate; // The date for which data is currently loaded
   bool _isDataLoading = false;
   Timer? _averageTrendDisplayTimer;
+
+  // last temperature label
+  double? _yLastTickKelvin;
+  
+  // Track which years have finished loading for progressive chart display
+  Set<int> _loadedYears = <int>{};
   
   // Track app initialization state
   bool _isAppInitialized = false;
@@ -700,6 +711,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Then start loading temperature data progressively
     _isDataLoading = true;
+    _loadedYears.clear();
     _progressiveLoadingCompleted = false;
     
     // Start the loading message timer after location is determined
@@ -796,6 +808,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Reload data with new date using progressive loading
     _isDataLoading = true;
+    _loadedYears.clear();
     _progressiveLoadingCompleted = false;
     
     // Immediately update UI to show loading state
@@ -829,6 +842,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Reload data with new location using progressive loading
     _isDataLoading = true;
+    _loadedYears.clear();
     _progressiveLoadingCompleted = false;
     
     // Start the average/trend display timer
@@ -1601,6 +1615,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 isCurrentYear: year == DateTime.now().year,
                 hasData: true,
               );
+              _loadedYears.add(year);
               
               successCount++;
               debugPrintIfDebugging('✅ Successfully retried year $year: ${temperature.toStringAsFixed(1)}°C');
@@ -2146,6 +2161,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 isCurrentYear: year == currentYear,
                 hasData: true,
               );
+              _loadedYears.add(year);
               
               _currentData!['chartData'] = chartData;
               if (mounted) {
@@ -2182,6 +2198,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 isCurrentYear: year == currentYear,
                 hasData: true,
               );
+              _loadedYears.add(year);
               
               // Update the current data and trigger a rebuild
               _currentData!['chartData'] = chartData;
@@ -4035,7 +4052,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                     BarSeries<TemperatureChartData, int>(
                       dataSource: chartData,
                       xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                      yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                      yValueMapper: (TemperatureChartData data, int index) {
+                        final int year = int.parse(data.year);
+                        if (!_loadedYears.contains(year)) return null;
+                        return data.temperature + kKelvinOffset; // Convert to Kelvin
+                      },
+                      emptyPointSettings: const EmptyPointSettings(mode: EmptyPointMode.gap),
                       pointColorMapper: (TemperatureChartData data, int index) =>
                           data.isCurrentYear ? kBarCurrentYearColour : kBarOtherYearColour,
                       width: 0.8, // Restored to proper thickness
@@ -4050,7 +4072,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                       LineSeries<TemperatureChartData, int>(
                         dataSource: _generateAverageData(chartData, averageTemperature),
                         xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                        yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                        yValueMapper: (TemperatureChartData data, int index) => data.temperature + kKelvinOffset, // Convert to Kelvin
                         color: kAverageColour,
                         width: 2,
                         name: 'Average Temperature',
@@ -4061,7 +4083,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                       LineSeries<TemperatureChartData, int>(
                         dataSource: _generateTrendData(chartData, trendSlope),
                         xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                        yValueMapper: (TemperatureChartData data, int index) => data.temperature,
+                        yValueMapper: (TemperatureChartData data, int index) => data.temperature + kKelvinOffset, // Convert to Kelvin
                         color: kTrendColour,
                         width: 2,
                         name: 'Trend',
@@ -4085,10 +4107,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                     axisLine: AxisLine(width: 1, color: kAxisLabelColour),
                   ),
                   primaryYAxis: NumericAxis(
+                    name: 'tempAxis',
                     labelFormat: '{value}°C',
                     numberFormat: NumberFormat('0'),
-                    minimum: yAxisMin,
-                    maximum: yAxisMax,
+                    minimum: yAxisMin + kKelvinOffset, // Convert to Kelvin
+                    maximum: yAxisMax + kKelvinOffset, // Convert to Kelvin
                     majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
                     labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
                     // Ensure bars start at the axis regardless of temperature values
@@ -4099,10 +4122,49 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                     labelPosition: ChartDataLabelPosition.outside,
                     // Show the axis line
                     axisLine: AxisLine(width: 1, color: kAxisLabelColour),
+                    // Convert Kelvin to Celsius for the label
+                    axisLabelFormatter: (AxisLabelRenderDetails args) {
+                      final double kelvin = (args.value as num).toDouble();
+                      final double rawC = kelvin - kKelvinOffset;
+
+                      // Kill IEEE-754 negative zero (and tiny fuzz around zero)
+                      final double celsius = rawC.abs() < 1e-9 ? 0.0 : rawC;
+
+                      // Round to an integer label (matches your NumberFormat('0'))
+                      final int rounded = celsius.round();
+
+                      final bool isLast = _yLastTickKelvin != null &&
+                          (kelvin - _yLastTickKelvin!).abs() < 1e-6;
+
+                      final String base = rounded == 0 ? '0' : rounded.toString();
+                      final String label = isLast ? '$base °C' : base;
+
+                      return ChartAxisLabel(label, args.textStyle);
+                    },
                   ),
                   plotAreaBorderWidth: 0,
                   enableAxisAnimation: false, // Disable animation to prevent layout shifting
                   // Ensure proper spacing for bars
+                  onActualRangeChanged: (ActualRangeChangedArgs args) {
+                    // Only compute for our Y axis
+                    final axis = args.axis; // can be null
+                    if (axis != null && axis.name == 'tempAxis') {
+                      final num? vMin = args.visibleMin is num ? args.visibleMin as num : null;
+                      final num? vMax = args.visibleMax is num ? args.visibleMax as num : null;
+                      final num? vInt = args.visibleInterval is num ? args.visibleInterval as num : null;
+
+                      if (vMin != null && vMax != null && vInt != null && vInt > 0) {
+                        final double min = vMin.toDouble();
+                        final double max = vMax.toDouble();
+                        final double interval = vInt.toDouble();
+
+                        final int steps = ((max - min) / interval).floor();
+                        _yLastTickKelvin = min + steps * interval; // store last tick (Kelvin)
+                      } else {
+                        _yLastTickKelvin = null;
+                      }
+                    }
+                  },
                 );
                 
                 return isTablet 
@@ -4653,6 +4715,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Set loading state
     setState(() {
       _isDataLoading = true;
+    _loadedYears.clear();
     });
     
     try {
@@ -4682,6 +4745,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 isCurrentYear: year == currentYear,
                 hasData: true,
               );
+              _loadedYears.add(year);
               
               // Update the current data
               _currentData!['chartData'] = chartData;
