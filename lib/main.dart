@@ -3741,15 +3741,20 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                     axisLine: AxisLine(width: 1, color: kAxisLabelColour),
                     // Convert Kelvin to Celsius for the label
                     axisLabelFormatter: (AxisLabelRenderDetails args) {
-                      final double kelvin = (args.value).toDouble(); // cast num → double
-                      final double celsius = kelvin - kKelvinOffset;
+                      final double kelvin = (args.value as num).toDouble();
+                      final double rawC = kelvin - kKelvinOffset;
 
-                      final bool isLast =
-                        _yLastTickKelvin != null && (kelvin - _yLastTickKelvin!).abs() < 1e-6;
+                      // Kill IEEE-754 negative zero (and tiny fuzz around zero)
+                      final double celsius = rawC.abs() < 1e-9 ? 0.0 : rawC;
 
-                      final String label = isLast
-                          ? '${celsius.toStringAsFixed(0)} °C'
-                          : celsius.toStringAsFixed(0);
+                      // Round to an integer label (matches your NumberFormat('0'))
+                      final int rounded = celsius.round();
+
+                      final bool isLast = _yLastTickKelvin != null &&
+                          (kelvin - _yLastTickKelvin!).abs() < 1e-6;
+
+                      final String base = rounded == 0 ? '0' : rounded.toString();
+                      final String label = isLast ? '$base °C' : base;
 
                       return ChartAxisLabel(label, args.textStyle);
                     },
