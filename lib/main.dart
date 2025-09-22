@@ -474,6 +474,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   // last temperature label
   double? _yLastTickKelvin;
   
+  // Track which years have finished loading for progressive chart display
+  Set<int> _loadedYears = <int>{};
+  
   // Track app initialization state
   bool _isAppInitialized = false;
   bool _splashScreenMinTimeElapsed = false;
@@ -627,6 +630,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Then start loading temperature data progressively
     _isDataLoading = true;
+    _loadedYears.clear();
     _progressiveLoadingCompleted = false;
     
     // Start the loading message timer after location is determined
@@ -698,6 +702,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Reload data with new date using progressive loading
     _isDataLoading = true;
+    _loadedYears.clear();
     _progressiveLoadingCompleted = false;
     
     // Immediately update UI to show loading state
@@ -731,6 +736,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Reload data with new location using progressive loading
     _isDataLoading = true;
+    _loadedYears.clear();
     _progressiveLoadingCompleted = false;
     
     // Start the average/trend display timer
@@ -1495,6 +1501,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 isCurrentYear: year == DateTime.now().year,
                 hasData: true,
               );
+              _loadedYears.add(year);
               
               successCount++;
               debugPrintIfDebugging('✅ Successfully retried year $year: ${temperature.toStringAsFixed(1)}°C');
@@ -1984,6 +1991,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 isCurrentYear: year == currentYear,
                 hasData: true,
               );
+              _loadedYears.add(year);
               
               _currentData!['chartData'] = chartData;
               if (mounted) {
@@ -2020,6 +2028,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 isCurrentYear: year == currentYear,
                 hasData: true,
               );
+              _loadedYears.add(year);
               
               // Update the current data and trigger a rebuild
               _currentData!['chartData'] = chartData;
@@ -3660,7 +3669,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                     BarSeries<TemperatureChartData, int>(
                       dataSource: chartData,
                       xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                      yValueMapper: (TemperatureChartData data, int index) => data.temperature + kKelvinOffset, // Convert to Kelvin
+                      yValueMapper: (TemperatureChartData data, int index) {
+                        final int year = int.parse(data.year);
+                        if (!_loadedYears.contains(year)) return null;
+                        return data.temperature + kKelvinOffset; // Convert to Kelvin
+                      },
+                      emptyPointSettings: const EmptyPointSettings(mode: EmptyPointMode.gap),
                       pointColorMapper: (TemperatureChartData data, int index) =>
                           data.isCurrentYear ? kBarCurrentYearColour : kBarOtherYearColour,
                       width: 0.8, // Restored to proper thickness
@@ -4346,6 +4360,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Set loading state
     setState(() {
       _isDataLoading = true;
+    _loadedYears.clear();
     });
     
     try {
@@ -4375,6 +4390,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 isCurrentYear: year == currentYear,
                 hasData: true,
               );
+              _loadedYears.add(year);
               
               // Update the current data
               _currentData!['chartData'] = chartData;
