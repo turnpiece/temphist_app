@@ -3649,7 +3649,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                     },
                   ),
                   series: [
-                    BarSeries<TemperatureChartData, int>(
+                    ColumnSeries<TemperatureChartData, int>(
                       dataSource: chartData,
                       xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
                       yValueMapper: (TemperatureChartData data, int index) => data.temperature,
@@ -3661,6 +3661,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                       // Ensure consistent spacing and prevent edge cropping
                       spacing: 0.1, // Reduced spacing to maintain bar thickness
                       borderRadius: BorderRadius.circular(2),
+                      // Ensure bars start from the axis minimum, not from 0
+                      isTrackVisible: false,
                     ),
                     // Only show average and trend lines after all data has loaded
                     if (averageTemperature != null && !_isDataLoading)
