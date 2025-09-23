@@ -24,6 +24,7 @@ import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
 import 'widgets/date_location_bar.dart';
 import 'widgets/time_swipe_pager.dart';
+import 'widgets/time_dots.dart';
 import 'state/app_state.dart';
 import 'models/explore_state.dart';
 import 'screens/onboarding_screen.dart';
@@ -5091,19 +5092,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             pageBuilder: (context, index) => _buildTimeContextPage(context, chartHeight, index),
           ),
         ),
-        // TimeDots will go here (to be implemented)
-        Container(
-          height: 60,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Center(
-            child: Text(
-              'TimeDots will be implemented here',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.7),
-                fontSize: 14,
-              ),
-            ),
-          ),
+        // TimeDots for current pager index
+        TimeDots(
+          totalCount: _appState.maxTimeContextIndex + 1,
+          activeIndex: _appState.timeContextIndex,
+          appState: _appState,
         ),
       ],
     );
