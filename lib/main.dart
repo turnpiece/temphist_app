@@ -22,7 +22,9 @@ import 'services/temperature_service.dart';
 import 'services/onboarding_service.dart';
 import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
-import 'widgets/date_location_pill.dart';
+import 'widgets/date_location_bar.dart';
+import 'state/app_state.dart';
+import 'models/explore_state.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/about_privacy_screen.dart';
 import 'screens/explore_screen.dart';
@@ -596,6 +598,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   // Track chart data retry attempts
   bool _isRetryingChartData = false;
   int _chartDataRetryCount = 0;
+  
+  // App state for Weather-style navigation
+  late AppState _appState;
   static const int _maxChartDataRetries = 3;
   
   // Track if progressive loading has completed to prevent flash of "no data" message
@@ -638,6 +643,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Start minimum splash screen timer
     _startSplashScreenTimer();
+    
+    // Initialize app state for Weather-style navigation
+    _appState = AppState();
+    _appState.initialize();
     
     // If we have a test future, skip all the async initialization
     if (widget.testFuture != null) {
@@ -1800,6 +1809,14 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           _isLocationDetermined = true;
           _locationDeterminedAt = DateTime.now(); // Record when location was determined
         });
+        
+        // Update AppState with the new location
+        final locationInfo = LocationInfo(
+          displayName: city,
+          latitude: 0.0, // Will be updated when we get actual coordinates
+          longitude: 0.0,
+        );
+        _appState.setCurrentLocation(locationInfo);
       }
       
       // Cache the location
@@ -1819,6 +1836,15 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           _isLocationDetermined = true;
           _locationDeterminedAt = DateTime.now(); // Record when location was determined
         });
+        
+        // Update AppState with the default location
+        final locationInfo = LocationInfo(
+          displayName: kDefaultLocation,
+          latitude: 51.5074, // London coordinates
+          longitude: -0.1278,
+          countryCode: 'GB',
+        );
+        _appState.setCurrentLocation(locationInfo);
       }
       
       // Reset loading message timer to start temperature-related messages
@@ -3040,75 +3066,25 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Widget _buildTitleLogoSection() {
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Row(
-          children: [
-            Builder(
-              builder: (context) {
-                final screenWidth = MediaQuery.of(context).size.width;
-                final isTablet = screenWidth >= 768;
-                
-                // Only apply transform on phones to align logo with content
-                // On tablets, logo doesn't need to align with anything
-                final logoWidget = Padding(
-                  padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
-                  child: SvgPicture.asset(
-                    'assets/logo.svg',
-                    width: 40,
-                    height: 40,
-                  ),
-                );
-                
-                return isTablet 
-                  ? logoWidget 
-                  : Transform.translate(
-                      offset: const Offset(-8.0, 0.0), // Shift logo 8px left to compensate for SVG's internal left margin
-                      child: logoWidget,
-                    );
-              },
-            ),
-            // Date/Location Pill
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: _buildDateLocationPill(),
-              ),
-            ),
-            // Info icon
-            GestureDetector(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const AboutPrivacyScreen(),
-                  ),
-                );
-              },
-              child: const Icon(
-                Icons.info_outline,
-                color: Color(0xFF51CF66), // kSummaryColour
-                size: 20,
-              ),
-            ),
-          ],
-        ),
+      child: DateLocationBar(
+        appState: _appState,
+        onTapLocation: _handleLocationChange,
+      ),
     );
   }
 
-  Widget _buildDateLocationPill() {
-    // Get current date info
-    final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
-    final dateToUse = DateTime.parse(dateInfo['date']!);
-    final displayCity = _displayLocation.isNotEmpty ? _displayLocation : null;
-    final isLoading = !_isLocationDetermined;
-    
-    return DateLocationPill(
-      date: dateToUse,
-      city: displayCity,
-      isLoading: isLoading,
-      onLocationChange: _handleLocationChange,
-    );
-  }
 
   void _handleLocationChange() {
+    // Update AppState with current location
+    if (_isLocationDetermined && _determinedLocation.isNotEmpty) {
+      final locationInfo = LocationInfo(
+        displayName: _determinedLocation,
+        latitude: 0.0, // Will be updated when we get actual coordinates
+        longitude: 0.0,
+      );
+      _appState.setCurrentLocation(locationInfo);
+    }
+    
     // Trigger location refresh
     _refreshLocationAndData();
   }
