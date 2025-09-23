@@ -23,11 +23,10 @@ import 'services/onboarding_service.dart';
 import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
 import 'widgets/date_location_bar.dart';
+import 'widgets/time_swipe_pager.dart';
 import 'state/app_state.dart';
 import 'models/explore_state.dart';
 import 'screens/onboarding_screen.dart';
-import 'screens/about_privacy_screen.dart';
-import 'screens/explore_screen.dart';
 
 // App color constants
 // Note: These are no longer constants because they depend on runtime configuration
@@ -93,12 +92,21 @@ const String kDefaultLocation = 'London, UK';
 
 /// Helper function to get current date and location for API calls
 /// Returns a map with 'date', 'mmdd', and 'city' keys
-Map<String, String> _getCurrentDateAndLocation(String determinedLocation) {
-  final now = DateTime.now();
-  final useYesterday = now.hour < kUseYesterdayHourThreshold;
-  final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
+Map<String, String> _getCurrentDateAndLocation(String determinedLocation, DateTime currentDate, AppState appState) {
+  // Use the provided current date instead of always using today
+  final dateToUse = currentDate;
   final mmdd = DateFormat('MM-dd').format(dateToUse);
-  final city = determinedLocation.isNotEmpty ? determinedLocation : kDefaultLocation;
+  
+  // Use AppState location if available, otherwise fall back to determinedLocation
+  // Add null safety check for appState
+  String city;
+  if (appState.currentLocation?.displayName != null) {
+    city = appState.currentLocation!.displayName;
+  } else if (determinedLocation.isNotEmpty) {
+    city = determinedLocation;
+  } else {
+    city = kDefaultLocation;
+  }
   
   return {
     'date': DateFormat('yyyy-MM-dd').format(dateToUse),
@@ -545,8 +553,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   String? _lastApiErrorPattern; // Pattern of the last API error for comparison
   bool _isLocationDetermined = false;
   
-  // Bottom navigation state
-  int _currentIndex = 0;
   DateTime? _locationDeterminedAt; // Timestamp when location was last determined
   DateTime? _currentDataDate; // The date for which data is currently loaded
   bool _isDataLoading = false;
@@ -556,7 +562,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   double? _yLastTickKelvin;
   
   // Track which years have finished loading for progressive chart display
-  Set<int> _loadedYears = <int>{};
+  final Set<int> _loadedYears = <int>{};
   
   // Track app initialization state
   bool _isAppInitialized = false;
@@ -646,7 +652,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Initialize app state for Weather-style navigation
     _appState = AppState();
-    _appState.initialize();
+    _appState.initialize().then((_) {
+      _ensureAppStateReady();
+    });
+    
+    // Listen for time context changes to reload chart data
+    // Add listener after a short delay to ensure AppState is ready
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        _appState.addListener(_onAppStateChanged);
+      }
+    });
     
     // If we have a test future, skip all the async initialization
     if (widget.testFuture != null) {
@@ -665,10 +681,40 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _connectivitySubscription?.cancel();
     _memoryCleanupTimer?.cancel();
     _stopAverageTrendDisplayTimer();
+    _appState.removeListener(_onAppStateChanged);
     _stopLoadingMessageTimer();
     _stopAutoRetryTimer();
     _splashScreenTimer?.cancel();
     super.dispose();
+  }
+
+  /// Handle AppState changes (time context changes)
+  void _onAppStateChanged() {
+    if (mounted) {
+      setState(() {
+        // Clear existing data to prevent showing stale data
+        _currentData = null;
+        futureChartData = null;
+        _progressiveLoadingCompleted = false;
+        _loadedYears.clear();
+      });
+      
+      // Only trigger chart data reload if AppState is ready
+      if (!_appState.isLoading && _appState.currentLocation != null) {
+        _loadChartDataProgressive();
+      }
+    }
+  }
+
+  /// Check if AppState is ready and rebuild UI if needed
+  Future<void> _ensureAppStateReady() async {
+    if (!_appState.isLoading && _appState.currentLocation != null) {
+      if (mounted) {
+        setState(() {
+          // AppState is ready, trigger a rebuild
+        });
+      }
+    }
   }
 
   @override
@@ -763,7 +809,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       return;
     }
     
-    final currentDateInfo = _getCurrentDateAndLocation(_determinedLocation);
+    final currentDateInfo = _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
     final currentDate = DateTime.parse(currentDateInfo['date']!);
     
     // Normalize dates to avoid timezone issues
@@ -791,7 +837,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     debugPrintIfDebugging('Refreshing data for new date...');
     
     // Use provided date info or get current date info
-    final currentDateInfo = dateInfo ?? _getCurrentDateAndLocation(_determinedLocation);
+    final currentDateInfo = dateInfo ?? _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
     final newDate = DateTime.parse(currentDateInfo['date']!);
     
     // Double-check that the date has actually changed before clearing data
@@ -1194,10 +1240,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       return; // Nothing to retry
     }
     
+    // Check if AppState is ready before proceeding
+    if (_appState.isLoading || _appState.currentLocation == null) {
+      debugPrintIfDebugging('_retryFailedData: AppState not ready, skipping retry');
+      return;
+    }
+    
     debugPrintIfDebugging('Retrying failed data fetches...');
     
     try {
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
       final mmdd = dateInfo['mmdd']!;
       final city = dateInfo['city']!;
       
@@ -1369,10 +1421,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<void> _retryAverageData() async {
     if (!_averageDataFailed) return;
     
+    // Check if AppState is ready before proceeding
+    if (_appState.isLoading || _appState.currentLocation == null) {
+      debugPrintIfDebugging('_retryAverageData: AppState not ready, skipping retry');
+      return;
+    }
+    
     debugPrintIfDebugging('Retrying average data...');
     
     try {
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
       final mmdd = dateInfo['mmdd']!;
       final city = dateInfo['city']!;
       
@@ -1434,10 +1492,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<void> _retryTrendData() async {
     if (!_trendDataFailed) return;
     
+    // Check if AppState is ready before proceeding
+    if (_appState.isLoading || _appState.currentLocation == null) {
+      debugPrintIfDebugging('_retryTrendData: AppState not ready, skipping retry');
+      return;
+    }
+    
     debugPrintIfDebugging('Retrying trend data...');
     
     try {
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
       final mmdd = dateInfo['mmdd']!;
       final city = dateInfo['city']!;
       
@@ -1484,10 +1548,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<void> _retrySummaryData() async {
     if (!_summaryDataFailed) return;
     
+    // Check if AppState is ready before proceeding
+    if (_appState.isLoading || _appState.currentLocation == null) {
+      debugPrintIfDebugging('_retrySummaryData: AppState not ready, skipping retry');
+      return;
+    }
+    
     debugPrintIfDebugging('Retrying summary data...');
     
     try {
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
       final mmdd = dateInfo['mmdd']!;
       final city = dateInfo['city']!;
       
@@ -1588,7 +1658,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     debugPrintIfDebugging('🔄 Retrying failed years: $_failedYears');
     
     try {
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
       final mmdd = dateInfo['mmdd']!;
       final city = dateInfo['city']!;
       
@@ -1662,7 +1732,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       }
       
       // Update the current data with retried results
-      _currentData!['chartData'] = chartData;
+      if (_currentData != null) {
+        _currentData!['chartData'] = chartData;
+      }
       
       debugPrintIfDebugging('📊 Retry completed: $successCount/${_failedYears.length} years successfully retried');
       
@@ -1715,6 +1787,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             _isLocationDetermined = true;
             _locationDeterminedAt = DateTime.now();
           });
+          
+          // Update AppState with the cached location
+          final locationInfo = LocationInfo(
+            displayName: cachedLocation['location']!,
+            latitude: 0.0, // Will be updated when we get actual coordinates
+            longitude: 0.0,
+          );
+          _appState.setCurrentLocation(locationInfo);
+          
+          // Add to visited locations so it shows up in the location switcher
+          _appState.addVisitedLocation(locationInfo);
         }
         return;
       }
@@ -1817,6 +1900,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           longitude: 0.0,
         );
         _appState.setCurrentLocation(locationInfo);
+        
+        // Add to visited locations so it shows up in the location switcher
+        _appState.addVisitedLocation(locationInfo);
       }
       
       // Cache the location
@@ -1845,6 +1931,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           countryCode: 'GB',
         );
         _appState.setCurrentLocation(locationInfo);
+        
+        // Add to visited locations so it shows up in the location switcher
+        _appState.addVisitedLocation(locationInfo);
       }
       
       // Reset loading message timer to start temperature-related messages
@@ -1945,7 +2034,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         newMessage = 'Loading temperature data...';
       } else if (_loadingElapsedSeconds < 25) {
         // Calculate the date that will be used (same logic as _loadChartData)
-        final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+        final dateInfo = _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
         final dateToUse = DateTime.parse(dateInfo['date']!);
         final friendlyDate = _formatDayMonth(dateToUse);
         newMessage = 'Getting temperatures on $friendlyDate over the past 50 years.';
@@ -1976,6 +2065,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       return;
     }
     
+    // Check if AppState is ready before proceeding
+    if (_appState.isLoading || _appState.currentLocation == null) {
+      debugPrintIfDebugging('_loadChartDataProgressive: AppState not ready, skipping data load');
+      return;
+    }
+    
     // Check network connectivity before attempting to load data
     if (!_isOnline) {
       debugPrintIfDebugging('📡 No network connection, skipping data load');
@@ -1990,7 +2085,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     debugPrintIfDebugging('_loadChartDataProgressive: Starting progressive chart data load');
     
     try {
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
       final formattedDate = dateInfo['date']!;
       final dateToUse = DateTime.parse(formattedDate);
       final now = DateTime.now();
@@ -2008,10 +2103,25 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
       // Check if we have fresh cached data first
       final mmdd = formattedDate.substring(5);
-      final cachedData = await _loadCachedApiResponse('data', city, mmdd);
+      var cachedData = await _loadCachedApiResponse('data', city, mmdd);
+      
+      // Validate that cached data matches current context
+      if (cachedData != null) {
+        final cachedDate = DateTime.fromMillisecondsSinceEpoch(cachedData['timestamp'] as int);
+        final cachedLocation = cachedData['location'] as String?;
+        final cachedMmdd = cachedData['mmdd'] as String?;
+        
+        // Only use cached data if it matches current date and location
+        if (cachedLocation == city && cachedMmdd == mmdd) {
+          debugPrintIfDebugging('📊 Using cached complete data (${DateTime.now().difference(cachedDate).inMinutes} minutes old)');
+        } else {
+          debugPrintIfDebugging('📊 Cached data mismatch - location: $cachedLocation vs $city, date: $cachedMmdd vs $mmdd');
+          // Clear cached data and continue with fresh load
+          cachedData = null;
+        }
+      }
       
       if (cachedData != null) {
-        debugPrintIfDebugging('📊 Using cached complete data (${DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(cachedData['timestamp'] as int)).inMinutes} minutes old)');
         
         // Use cached data directly
         final chartData = <TemperatureChartData>[];
@@ -2189,9 +2299,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               );
               _loadedYears.add(year);
               
-              _currentData!['chartData'] = chartData;
-              if (mounted) {
-                setState(() {});
+              if (_currentData != null) {
+                _currentData!['chartData'] = chartData;
+                if (mounted) {
+                  setState(() {});
+                }
               }
               
               successfulAttempts++;
@@ -2227,7 +2339,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               _loadedYears.add(year);
               
               // Update the current data and trigger a rebuild
-              _currentData!['chartData'] = chartData;
+              if (_currentData != null) {
+                _currentData!['chartData'] = chartData;
+              }
               
               // Trigger a UI update to show the new bar
               if (mounted) {
@@ -2354,7 +2468,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Ensure we still have some data structure even on error
       if (_currentData == null) {
         // Create minimal data structure to show error state
-        final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+        final dateInfo = _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
         final dateToUse = DateTime.parse(dateInfo['date']!);
         final city = dateInfo['city']!;
         
@@ -2535,7 +2649,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Try to detect if we're actually online by making a quick test request
       try {
         final service = TemperatureService();
-        final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+        final dateInfo = _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
         final city = dateInfo['city']!;
         final mmdd = dateInfo['mmdd']!;
         
@@ -2619,7 +2733,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       await _loadMissingYears();
       
       // Then retry failed average/trend/summary data
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
       final city = dateInfo['city']!;
       final mmdd = dateInfo['mmdd']!;
       
@@ -3083,6 +3197,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         longitude: 0.0,
       );
       _appState.setCurrentLocation(locationInfo);
+      
+      // Add to visited locations so it shows up in the location switcher
+      _appState.addVisitedLocation(locationInfo);
     }
     
     // Trigger location refresh
@@ -3636,7 +3753,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  Widget _buildConstrainedContent(BuildContext context, double chartHeight) {
+  Widget _buildConstrainedContent(BuildContext context, double chartHeight, {bool isDevelopmentMode = false, String? developmentContext}) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = MediaQuery.of(context).size.width;
@@ -3657,7 +3774,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- Title/logo row: uses normal padding, not iPad indentation ---
+                  // --- DateLocationBar: scrolls with content ---
                   _buildTitlePadding(context, _buildTitleLogoSection()),
                   // Debug features (only show when debugging)
                   if (AppConfig.shouldShowDebugFeatures) ...[
@@ -3665,7 +3782,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                     _buildDebugPadding(context, _buildVersionSection()),
                   ],
                   // --- The rest of the UI, including the FutureBuilder ---
-                  _buildContentPadding(context, _buildFutureBuilder(chartHeight: chartHeight)),
+                  if (isDevelopmentMode) ...[
+                    _buildContentPadding(context, _buildDevelopmentContent(developmentContext!)),
+                  ] else ...[
+                    _buildContentPadding(context, _buildFutureBuilder(chartHeight: chartHeight)),
+                  ],
                   // Add extra space to ensure content is always scrollable
                   _buildContentPadding(context, const SizedBox(height: 100)),
                 ],
@@ -4695,7 +4816,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     });
     
     try {
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation, _appState.currentDate, _appState);
       final mmdd = dateInfo['mmdd']!;
       final city = dateInfo['city']!;
       final service = TemperatureService();
@@ -4724,7 +4845,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               _loadedYears.add(year);
               
               // Update the current data
-              _currentData!['chartData'] = chartData;
+              if (_currentData != null) {
+                _currentData!['chartData'] = chartData;
+              }
               
               successCount++;
               debugPrintIfDebugging('✅ Successfully loaded missing year $year: ${temperature.toStringAsFixed(1)}°C');
@@ -4913,59 +5036,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         children: [
           // Gradient background fills the whole screen including system areas
           _buildGradientBackground(),
-          // Tab content with IndexedStack to preserve state
-          IndexedStack(
-            index: _currentIndex,
-            children: [
-              _buildTodayTab(context, chartHeight),
-              _buildExploreTab(),
-              _buildHistoryTab(),
-            ],
-          ),
-          // Bottom Navigation Bar with semi-transparent background as overlay
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              // Semi-transparent dark background that should show through to content
-              decoration: BoxDecoration(
-                color: kBackgroundColourDark.withValues(alpha: 0.8), // 20% transparency - more subtle
-              ),
-              child: Container(
-                height: 55, // Just enough to accommodate content without overflow
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      // Today Tab
-                      _buildNavItem(
-                        icon: Icons.today,
-                        label: 'Today',
-                        index: 0,
-                      ),
-                      // Explore Tab
-                      _buildNavItem(
-                        icon: Icons.explore,
-                        label: 'Explore',
-                        index: 1,
-                      ),
-                      // History Tab
-                      _buildNavItem(
-                        icon: Icons.history,
-                        label: 'History',
-                        index: 2,
-                      ),
-                    ],
-                  ),
-                ),
-            ),
-          ),
-          // Debug floating action button (only in debug mode) - positioned above navigation bar
-          if (kDebugMode)
+          // Weather-style navigation with TimeSwipePager
+          _buildWeatherStyleNavigation(context, chartHeight),
+          // Debug floating action button (only in debug mode) - positioned in top right
+          if (AppConfig.shouldShowDebugFeatures)
             Positioned(
               right: 16,
-              bottom: 53, // Position above the navigation bar (33px height + 20px margin)
+              top: MediaQuery.of(context).padding.top + 16,
               child: FloatingActionButton(
                 onPressed: () async {
                   final navigator = Navigator.of(context);
@@ -4986,8 +5063,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             ),
         ],
       ),
-      // Bottom Navigation Bar with semi-transparent background
-      bottomNavigationBar: null, // Remove bottomNavigationBar
     );
 
     // Wrap with AnnotatedRegion for mobile platforms
@@ -5004,63 +5079,44 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  /// Build the Explore tab
-  Widget _buildExploreTab() {
-    return ExploreScreen(
-      currentLocation: _determinedLocation,
-      displayLocation: _displayLocation,
-      currentLatitude: _lastPosition?.latitude,
-      currentLongitude: _lastPosition?.longitude,
-    );
-  }
-
-  /// Build the History tab placeholder
-  Widget _buildHistoryTab() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            kBackgroundColourDark,
-            kBackgroundColourLight,
-          ],
-        ),
-      ),
-      child: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.history,
-              size: 64,
-              color: kAccentColour,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'History',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Coming Soon',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white70,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   /// Build the Today tab (existing content)
-  Widget _buildTodayTab(BuildContext context, double chartHeight) {
+  Widget _buildWeatherStyleNavigation(BuildContext context, double chartHeight) {
+    return Column(
+      children: [
+        // TimeSwipePager for horizontal navigation
+        Expanded(
+          child: TimeSwipePager(
+            appState: _appState,
+            pageBuilder: (context, index) => _buildTimeContextPage(context, chartHeight, index),
+          ),
+        ),
+        // TimeDots will go here (to be implemented)
+        Container(
+          height: 60,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Center(
+            child: Text(
+              'TimeDots will be implemented here',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimeContextPage(BuildContext context, double chartHeight, int index) {
+    // Check if this is a development context (Week or Month)
+    final isDevelopmentContext = index >= 7; // PastWeek (7) or PastMonth (8)
+    
+    if (isDevelopmentContext) {
+      return _buildDevelopmentMessage(context, index);
+    }
+    
     return _buildRefreshIndicator(
       SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -5069,41 +5125,90 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  /// Build individual navigation item for custom bottom nav
-  Widget _buildNavItem({
-    required IconData icon,
-    required String label,
-    required int index,
-  }) {
-    final isSelected = _currentIndex == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 20, // Slightly smaller icon
-              color: isSelected ? kAccentColour : Colors.white70,
+  /// Build a development message for contexts that don't have API endpoints yet
+  Widget _buildDevelopmentMessage(BuildContext context, int index) {
+    final isWeek = index == 7; // PastWeek
+    
+    return _buildRefreshIndicator(
+      SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: _buildConstrainedContent(
+          context, 
+          MediaQuery.of(context).size.height * 0.4, // Use same chart height as other screens
+          isDevelopmentMode: true,
+          developmentContext: isWeek ? 'Week' : 'Month',
+        ),
+      ),
+    );
+  }
+
+  /// Build development content that matches the app's styling
+  Widget _buildDevelopmentContent(String contextType) {
+    final isWeek = contextType == 'Week';
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            isWeek ? Icons.calendar_view_week : Icons.calendar_view_month,
+            size: 64,
+            color: Colors.white.withValues(alpha: 0.8),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            '$contextType View',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 0), // No spacing between icon and text
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 9, // Slightly smaller font
-                color: isSelected ? kAccentColour : Colors.white70,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'In Development',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.8),
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            isWeek 
+              ? 'Weekly temperature data will be available soon'
+              : 'Monthly temperature data will be available soon',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 16,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.2),
+                width: 1,
               ),
             ),
-          ],
-        ),
+            child: Text(
+              'Swipe right to return to daily views',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.8),
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
       ),
     );
   }

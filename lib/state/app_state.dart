@@ -9,6 +9,9 @@ class AppState extends ChangeNotifier {
   ExplorePeriod _currentPeriod = ExplorePeriod.day;
   List<LocationInfo> _visitedLocations = [];
   bool _isLoading = false;
+  
+  // Time context management
+  int _timeContextIndex = 0; // 0 = Today, 1 = D-1, ..., 7 = PastWeek, 8 = PastMonth
 
   // Getters
   LocationInfo? get currentLocation => _currentLocation;
@@ -17,6 +20,12 @@ class AppState extends ChangeNotifier {
   List<LocationInfo> get visitedLocations => List.unmodifiable(_visitedLocations);
   bool get isLoading => _isLoading;
   bool get hasMultipleLocations => _visitedLocations.length >= 2;
+  
+  // Time context getters
+  int get timeContextIndex => _timeContextIndex;
+  int get maxTimeContextIndex => 8; // PastMonth is the last index
+  bool get canSwipeRight => _timeContextIndex < maxTimeContextIndex;
+  bool get canSwipeLeft => _timeContextIndex > 0;
 
   /// Initialize the app state with current location and visited locations
   Future<void> initialize() async {
@@ -125,8 +134,95 @@ class AppState extends ChangeNotifier {
   void resetToToday() {
     _currentDate = DateTime.now();
     _currentPeriod = ExplorePeriod.day;
+    _timeContextIndex = 0;
     notifyListeners();
   }
+
+  /// Set the time context index
+  void setTimeContextIndex(int index) {
+    if (index >= 0 && index <= maxTimeContextIndex && index != _timeContextIndex) {
+      _timeContextIndex = index;
+      _updateDateAndPeriodFromIndex();
+      notifyListeners();
+    }
+  }
+
+  /// Move to the next time context (swipe right - forward in time)
+  void moveToNextContext() {
+    if (canSwipeRight) {
+      setTimeContextIndex(_timeContextIndex + 1);
+    }
+  }
+
+  /// Move to the previous time context (swipe left - backward in time)
+  void moveToPreviousContext() {
+    if (canSwipeLeft) {
+      setTimeContextIndex(_timeContextIndex - 1);
+    }
+  }
+
+  /// Update date and period based on current time context index
+  void _updateDateAndPeriodFromIndex() {
+    final now = DateTime.now();
+    
+    switch (_timeContextIndex) {
+      case 0: // Today
+        _currentDate = now;
+        _currentPeriod = ExplorePeriod.day;
+        break;
+      case 1: // D-1
+        _currentDate = now.subtract(const Duration(days: 1));
+        _currentPeriod = ExplorePeriod.day;
+        break;
+      case 2: // D-2
+        _currentDate = now.subtract(const Duration(days: 2));
+        _currentPeriod = ExplorePeriod.day;
+        break;
+      case 3: // D-3
+        _currentDate = now.subtract(const Duration(days: 3));
+        _currentPeriod = ExplorePeriod.day;
+        break;
+      case 4: // D-4
+        _currentDate = now.subtract(const Duration(days: 4));
+        _currentPeriod = ExplorePeriod.day;
+        break;
+      case 5: // D-5
+        _currentDate = now.subtract(const Duration(days: 5));
+        _currentPeriod = ExplorePeriod.day;
+        break;
+      case 6: // D-6
+        _currentDate = now.subtract(const Duration(days: 6));
+        _currentPeriod = ExplorePeriod.day;
+        break;
+      case 7: // PastWeek
+        _currentDate = now; // Show "Week to [today's date]"
+        _currentPeriod = ExplorePeriod.week;
+        break;
+      case 8: // PastMonth
+        _currentDate = now; // Show "Month to [today's date]"
+        _currentPeriod = ExplorePeriod.month;
+        break;
+    }
+  }
+
+  /// Get the display name for the current time context
+  String get currentTimeContextName {
+    switch (_timeContextIndex) {
+      case 0: return 'Today';
+      case 1: return 'D-1';
+      case 2: return 'D-2';
+      case 3: return 'D-3';
+      case 4: return 'D-4';
+      case 5: return 'D-5';
+      case 6: return 'D-6';
+      case 7: return 'PastWeek';
+      case 8: return 'PastMonth';
+      default: return 'Unknown';
+    }
+  }
+
+  /// Check if the current context is an aggregate page (PastWeek/PastMonth)
+  bool get isAggregateContext => _timeContextIndex >= 7;
 
   /// Get the display name for the current location
   String get currentLocationDisplayName {
