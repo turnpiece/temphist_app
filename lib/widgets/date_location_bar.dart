@@ -35,11 +35,11 @@ class DateLocationBar extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               // LocationPill
-              LocationPill(
-                city: appState.currentCityName,
-                hasMultipleLocations: appState.hasMultipleLocations,
-                onTap: appState.hasMultipleLocations ? onTapLocation : null,
-              ),
+                  LocationPill(
+                    city: appState.currentCityName,
+                    hasMultipleLocations: true, // Always show down arrow
+                    onTap: onTapLocation, // Always enable tap
+                  ),
             ],
           ),
         );

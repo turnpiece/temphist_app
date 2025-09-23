@@ -57,8 +57,13 @@ class LocationSwitcherScreen extends StatelessWidget {
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: visitedLocations.length,
+            itemCount: visitedLocations.length + (visitedLocations.length == 1 ? 1 : 0), // Add 1 for message if only one location
             itemBuilder: (context, index) {
+              // If we have only one location, show the message after the location
+              if (visitedLocations.length == 1 && index == 1) {
+                return _buildSingleLocationMessage(context);
+              }
+              
               final location = visitedLocations[index];
               final isCurrentLocation = currentLocation?.displayName == location.displayName;
 
@@ -69,6 +74,7 @@ class LocationSwitcherScreen extends StatelessWidget {
                 onTap: () {
                   HapticFeedback.lightImpact();
                   appState.setCurrentLocation(location);
+                  appState.resetToToday(); // Reset pager to Today when location changes
                   onLocationSelected?.call();
                   Navigator.of(context).pop();
                 },
@@ -112,6 +118,41 @@ class LocationSwitcherScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSingleLocationMessage(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 16, bottom: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kCardColour.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: kTextColour.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: kTextColour.withOpacity(0.6),
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              "When you visit other locations they'll appear here.",
+              style: TextStyle(
+                color: kTextColour.withOpacity(0.7),
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
