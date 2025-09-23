@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../main.dart'; // Import for color constants
+import '../constants.dart'; // Import for color constants
 
 class OnboardingScreen extends StatefulWidget {
   final VoidCallback onComplete;

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:math';
@@ -45,30 +46,52 @@ class VisitedLocationsService {
   /// Add a new location to visited locations
   Future<void> addVisitedLocation(LocationInfo location) async {
     try {
+      debugPrint('VisitedLocationsService: Adding location: ${location.displayName}');
       final locations = await getVisitedLocations();
+      debugPrint('VisitedLocationsService: Current locations count: ${locations.length}');
       
       // Check if location already exists (within 1km tolerance)
-      final exists = locations.any((existing) => 
-          _distanceBetween(existing, location) < 1000);
+      LocationInfo? existingLocation;
+      final exists = locations.any((existing) {
+        final distance = _distanceBetween(existing, location);
+        if (distance < 1000) {
+          existingLocation = existing;
+          return true;
+        }
+        return false;
+      });
       
       if (exists) {
-        // Location already exists, don't add it
+        debugPrint('VisitedLocationsService: Location already exists (within 1km), not adding');
+        debugPrint('VisitedLocationsService: Existing location: ${existingLocation!.displayName}');
+        debugPrint('VisitedLocationsService: New location: ${location.displayName}');
+        debugPrint('VisitedLocationsService: Distance: ${_distanceBetween(existingLocation!, location)}m');
         return;
       }
 
-      // Also check for very similar display names (case-insensitive)
-      final similarName = locations.any((existing) => 
-          existing.displayName.toLowerCase().trim() == location.displayName.toLowerCase().trim());
+      // Check for very similar display names (case-insensitive) - but be more lenient
+      LocationInfo? similarLocation;
+      final similarName = locations.any((existing) {
+        final isSimilar = existing.displayName.toLowerCase().trim() == location.displayName.toLowerCase().trim();
+        if (isSimilar) {
+          similarLocation = existing;
+        }
+        return isSimilar;
+      });
       
       if (similarName) {
-        // Very similar name already exists, don't add it
+        debugPrint('VisitedLocationsService: Similar name already exists, not adding');
+        debugPrint('VisitedLocationsService: Existing name: ${similarLocation!.displayName}');
+        debugPrint('VisitedLocationsService: New name: ${location.displayName}');
         return;
       }
 
+      debugPrint('VisitedLocationsService: Adding new location to list');
       locations.add(location);
       await _saveVisitedLocations(locations);
+      debugPrint('VisitedLocationsService: Successfully saved ${locations.length} locations');
     } catch (e) {
-      // Error adding visited location
+      debugPrint('VisitedLocationsService: Error adding visited location: $e');
     }
   }
 

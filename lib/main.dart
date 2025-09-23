@@ -27,29 +27,12 @@ import 'widgets/time_swipe_pager.dart';
 import 'widgets/time_dots.dart';
 import 'state/app_state.dart';
 import 'models/explore_state.dart';
+import 'screens/location_switcher_screen.dart';
+import 'screens/settings_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'constants.dart';
 
-// App color constants
-// Note: These are no longer constants because they depend on runtime configuration
-// but they maintain the same interface for backward compatibility
-const kBackgroundColourDark = Color(0xFF242456);
-const kBackgroundColourLight = Color(0xFF343499);
-const kAccentColour = Color(0xFFFF6B6B);
-const kTextPrimaryColour = Color(0xFFECECEC);
-const kSummaryColour = Color(0xFF51CF66);
-const kAverageColour = Color(0xFF4DABF7);
-const kTrendColour = Color(0xFFAAAA00);
-const kTrendLineColour = kTrendColour;
-const kBarOtherYearColour = kAccentColour;
-const kBarCurrentYearColour = kSummaryColour;
-
-// Temperature conversion constants
-const kKelvinOffset = 273.15; // Celsius to Kelvin conversion
-
-
-const kAxisLabelColour = Color(0xFFECECEC);
-const kAxisGridColour = kAxisLabelColour;
-const kGreyLabelColour = Color(0xFFB0B0B0);
+// App color constants are now defined in constants.dart
 
 // Layout constants for easy adjustment
 // These constants control the spacing and padding throughout the app's UI
@@ -911,6 +894,35 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _startLoadingMessageTimer();
   }
 
+  /// Force refresh location from system (for Simulator testing)
+  Future<void> _forceLocationRefresh() async {
+    debugPrintIfDebugging('🔄 Force refreshing location from system...');
+    
+    // Reset location determination state
+    setState(() {
+      _isLocationDetermined = false;
+      _determinedLocation = '';
+      _displayLocation = '';
+      _locationDeterminedAt = null;
+    });
+    
+    // Clear any cached location data
+    await _clearLocationCache();
+    
+    // Force redetermine location (this will use system location)
+    await _determineLocation();
+    
+    // Show feedback
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Location refreshed: $_displayLocation'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   void _startAutoRetryTimer() {
     // Cancel any existing timer
     _autoRetryTimer?.cancel();
@@ -1036,13 +1048,15 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   /// Cache location data with timestamp
-  Future<void> _cacheLocation(String location, String displayLocation) async {
+  Future<void> _cacheLocation(String location, String displayLocation, {double? latitude, double? longitude}) async {
     await _safeSharedPreferencesOperation(() async {
       final prefs = await SharedPreferences.getInstance();
       final cacheData = {
         'location': location,
         'displayLocation': displayLocation,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'latitude': latitude,
+        'longitude': longitude,
       };
       await prefs.setString('cachedLocation', jsonEncode(cacheData));
       debugPrintIfDebugging('📍 Location cached: $location');
@@ -1050,8 +1064,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   /// Load cached location if still valid
-  Future<Map<String, String>?> _loadCachedLocation() async {
-    final result = await _safeSharedPreferencesOperation<Map<String, String>?>(() async {
+  Future<Map<String, dynamic>?> _loadCachedLocation() async {
+    final result = await _safeSharedPreferencesOperation<Map<String, dynamic>?>(() async {
       final prefs = await SharedPreferences.getInstance();
       final cachedData = prefs.getString('cachedLocation');
       if (cachedData == null) return null;
@@ -1070,6 +1084,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       return {
         'location': data['location'] as String,
         'displayLocation': data['displayLocation'] as String,
+        'latitude': data['latitude'] as double?,
+        'longitude': data['longitude'] as double?,
       };
     }, 'load cached location');
     return result;
@@ -1792,8 +1808,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           // Update AppState with the cached location
           final locationInfo = LocationInfo(
             displayName: cachedLocation['location']!,
-            latitude: 0.0, // Will be updated when we get actual coordinates
-            longitude: 0.0,
+            latitude: cachedLocation['latitude'] ?? 0.0,
+            longitude: cachedLocation['longitude'] ?? 0.0,
           );
           _appState.setCurrentLocation(locationInfo);
           
@@ -1861,6 +1877,21 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                     city = placemark.country!;
                   }
                 }
+                
+                // Create LocationInfo with actual coordinates
+                final locationInfo = LocationInfo(
+                  displayName: city,
+                  latitude: position.latitude,
+                  longitude: position.longitude,
+                );
+                _appState.setCurrentLocation(locationInfo);
+                
+                // Add to visited locations so it shows up in the location switcher
+                _appState.addVisitedLocation(locationInfo);
+                
+                // Cache the location with coordinates
+                await _cacheLocation(city, _extractDisplayLocation(city), 
+                    latitude: position.latitude, longitude: position.longitude);
               }
             } catch (e) {
               debugPrintIfDebugging('Geolocation timeout or error: $e');
@@ -1893,21 +1924,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           _isLocationDetermined = true;
           _locationDeterminedAt = DateTime.now(); // Record when location was determined
         });
-        
-        // Update AppState with the new location
-        final locationInfo = LocationInfo(
-          displayName: city,
-          latitude: 0.0, // Will be updated when we get actual coordinates
-          longitude: 0.0,
-        );
-        _appState.setCurrentLocation(locationInfo);
-        
-        // Add to visited locations so it shows up in the location switcher
-        _appState.addVisitedLocation(locationInfo);
       }
-      
-      // Cache the location
-      await _cacheLocation(city, _extractDisplayLocation(city));
       
       // Reset loading message timer to start temperature-related messages
       _loadingElapsedSeconds = 0;
@@ -3190,21 +3207,28 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
 
   void _handleLocationChange() {
-    // Update AppState with current location
-    if (_isLocationDetermined && _determinedLocation.isNotEmpty) {
-      final locationInfo = LocationInfo(
-        displayName: _determinedLocation,
-        latitude: 0.0, // Will be updated when we get actual coordinates
-        longitude: 0.0,
-      );
-      _appState.setCurrentLocation(locationInfo);
-      
-      // Add to visited locations so it shows up in the location switcher
-      _appState.addVisitedLocation(locationInfo);
-    }
-    
-    // Trigger location refresh
-    _refreshLocationAndData();
+    // Navigate to location switcher
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LocationSwitcherScreen(
+          appState: _appState,
+          onLocationSelected: () {
+            // Location was selected, refresh data
+            _onAppStateChanged();
+          },
+          onSettingsTapped: () {
+            // Navigate to settings
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SettingsScreen(),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   /// Build error indicator with icon, title, and message
@@ -5039,8 +5063,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           _buildGradientBackground(),
           // Weather-style navigation with TimeSwipePager
           _buildWeatherStyleNavigation(context, chartHeight),
-          // Debug floating action button (only in debug mode) - positioned in top right
-          if (AppConfig.shouldShowDebugFeatures)
+          // Debug floating action buttons (only in debug mode) - positioned in top right
+          if (AppConfig.shouldShowDebugFeatures) ...[
             Positioned(
               right: 16,
               top: MediaQuery.of(context).padding.top + 16,
@@ -5062,6 +5086,48 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 child: const Icon(Icons.refresh, color: Colors.white),
               ),
             ),
+            Positioned(
+              right: 16,
+              top: MediaQuery.of(context).padding.top + 80,
+              child: Builder(
+                builder: (context) {
+                  return FloatingActionButton(
+                    onPressed: () async {
+                      await _appState.clearVisitedLocations();
+                      if (mounted) {
+                        // ignore: use_build_context_synchronously
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Visited locations cleared'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                    backgroundColor: Colors.orange,
+                    tooltip: 'Clear Visited Locations',
+                    child: const Icon(Icons.location_off, color: Colors.white),
+                  );
+                },
+              ),
+            ),
+            Positioned(
+              right: 16,
+              top: MediaQuery.of(context).padding.top + 144,
+              child: Builder(
+                builder: (context) {
+                  return FloatingActionButton(
+                    onPressed: () async {
+                      await _forceLocationRefresh();
+                    },
+                    backgroundColor: Colors.green,
+                    tooltip: 'Refresh Location',
+                    child: const Icon(Icons.my_location, color: Colors.white),
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );

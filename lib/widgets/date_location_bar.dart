@@ -20,25 +20,30 @@ class DateLocationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          // DatePill
-          DatePill(
-            date: appState.currentDate,
-            period: appState.currentPeriod,
-            onTap: onTapDate,
+    return AnimatedBuilder(
+      animation: appState,
+      builder: (context, child) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              // DatePill
+              DatePill(
+                date: appState.currentDate,
+                period: appState.currentPeriod,
+                onTap: onTapDate,
+              ),
+              const SizedBox(width: 12),
+              // LocationPill
+              LocationPill(
+                city: appState.currentCityName,
+                hasMultipleLocations: appState.hasMultipleLocations,
+                onTap: appState.hasMultipleLocations ? onTapLocation : null,
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          // LocationPill
-          LocationPill(
-            city: appState.currentCityName,
-            hasMultipleLocations: appState.hasMultipleLocations,
-            onTap: appState.hasMultipleLocations ? onTapLocation : null,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

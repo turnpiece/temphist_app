@@ -88,10 +88,13 @@ class AppState extends ChangeNotifier {
   /// Add a new visited location
   Future<void> addVisitedLocation(LocationInfo location) async {
     try {
+      debugPrint('AppState: Adding visited location: ${location.displayName}');
       await VisitedLocationsService().addVisitedLocation(location);
       await _refreshVisitedLocations();
+      debugPrint('AppState: Visited locations count: ${_visitedLocations.length}');
+      debugPrint('AppState: Has multiple locations: $hasMultipleLocations');
     } catch (e) {
-      // Handle error
+      debugPrint('AppState: Error adding visited location: $e');
     }
   }
 
@@ -111,14 +114,30 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Clear all visited locations (for testing)
+  Future<void> clearVisitedLocations() async {
+    try {
+      debugPrint('AppState: Clearing all visited locations');
+      await VisitedLocationsService().clearVisitedLocations();
+      await _refreshVisitedLocations();
+      debugPrint('AppState: Visited locations cleared');
+    } catch (e) {
+      debugPrint('AppState: Error clearing visited locations: $e');
+    }
+  }
+
   /// Refresh visited locations from the service
   Future<void> _refreshVisitedLocations() async {
     try {
       final visited = await VisitedLocationsService().getVisitedLocations();
+      debugPrint('AppState: Refreshed visited locations: ${visited.length} locations');
+      for (final loc in visited) {
+        debugPrint('  - ${loc.displayName}');
+      }
       _visitedLocations = visited;
       notifyListeners();
     } catch (e) {
-      // Handle error
+      debugPrint('AppState: Error refreshing visited locations: $e');
     }
   }
 
