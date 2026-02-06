@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:temphist_app/main.dart';
+import 'package:temphist_app/widgets/temperature_bar_chart.dart';
 import 'dart:async';
 
 void main() {

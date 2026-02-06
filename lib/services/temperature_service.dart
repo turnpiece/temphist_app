@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import '../models/temperature_data.dart';
+import '../models/period_temperature_data.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../config/app_config.dart';
 import '../utils/debug_utils.dart';
@@ -170,5 +171,201 @@ class TemperatureService {
 
   Future<Map<String, dynamic>> fetchSummaryData(String city, String date) async {
     return _fetchApiData('summary', city, date);
+  }
+
+  // ---------------------------------------------------------------------------
+  // v1 Records API — used for period views (daily, weekly, monthly, yearly)
+  // ---------------------------------------------------------------------------
+
+  /// Maps internal period keys to API path segments.
+  static String _apiPeriodPath(String period) {
+    switch (period) {
+      case 'week':
+        return 'weekly';
+      case 'month':
+        return 'monthly';
+      case 'year':
+        return 'yearly';
+      case 'daily':
+      default:
+        return 'daily';
+    }
+  }
+
+  /// Fetch period temperature data using the async job endpoint with a
+  /// synchronous fallback, mirroring the web app's approach.
+  ///
+  /// [period] is one of 'daily', 'week', 'month', 'year'.
+  /// [location] is the city/location string (e.g. "London, UK").
+  /// [identifier] is the MM-DD date string (e.g. "02-06").
+  /// [onProgress] optional callback invoked while the job is processing.
+  Future<PeriodTemperatureData> fetchPeriodData(
+    String period,
+    String location,
+    String identifier, {
+    void Function(AsyncJobStatus)? onProgress,
+  }) async {
+    try {
+      debugLog('Attempting async fetch for $period data...');
+      final jobId = await _createAsyncJob(period, location, identifier);
+      final result = await _pollJobStatus(jobId, onProgress: onProgress);
+      debugLog('Async fetch successful for $period data');
+      return result.data;
+    } catch (e) {
+      final msg = e.toString();
+      // Fall back to synchronous endpoint on timeout or job failure
+      if (msg.contains('timed out') ||
+          msg.contains('polling failed') ||
+          msg.contains('Job failed')) {
+        debugLog('Async job failed ($msg), falling back to sync API...');
+        try {
+          final fallback =
+              await _fetchPeriodDataSync(period, location, identifier);
+          debugLog('Synchronous fallback successful for $period data');
+          return fallback;
+        } catch (fallbackError) {
+          throw Exception(
+            'Period data fetch failed: $msg. '
+            'Sync fallback also failed: $fallbackError',
+          );
+        }
+      }
+      rethrow;
+    }
+  }
+
+  /// POST to create an async job, returns the job ID.
+  Future<String> _createAsyncJob(
+    String period,
+    String location,
+    String identifier,
+  ) async {
+    final token = await getAuthToken();
+    final apiPeriod = _apiPeriodPath(period);
+    final encodedLocation = Uri.encodeComponent(location);
+    final url = Uri.parse(
+      '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier/async',
+    );
+
+    debugLog('Creating async job: $url');
+
+    final response = await http.post(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: 35));
+
+    if (response.statusCode == 429) {
+      throw RateLimitException('Rate limit exceeded creating async job');
+    }
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to create async job: ${response.statusCode}');
+    }
+
+    final json = jsonDecode(response.body);
+    final jobId = json['job_id'];
+    if (jobId == null || (jobId as String).isEmpty) {
+      throw Exception('Invalid job response: missing job_id');
+    }
+    return jobId;
+  }
+
+  /// Poll the job status endpoint until the job completes or fails.
+  Future<JobResult> _pollJobStatus(
+    String jobId, {
+    void Function(AsyncJobStatus)? onProgress,
+    int maxPolls = 100,
+    Duration pollInterval = const Duration(seconds: 3),
+  }) async {
+    int pollCount = 0;
+
+    while (pollCount < maxPolls) {
+      try {
+        final token = await getAuthToken();
+        final url = Uri.parse('$apiBaseUrl/v1/jobs/$jobId');
+        final response = await http.get(
+          url,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+        ).timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 429) {
+          throw RateLimitException('Rate limit exceeded polling job');
+        }
+
+        if (response.statusCode != 200) {
+          throw Exception('Job status check failed: ${response.statusCode}');
+        }
+
+        final status = AsyncJobStatus.fromJson(jsonDecode(response.body));
+
+        if (status.isReady) {
+          return status.result!;
+        } else if (status.isError) {
+          throw Exception('Job failed: ${status.error ?? "Unknown error"}');
+        }
+
+        // Still processing — notify caller and wait
+        if (onProgress != null) {
+          onProgress(status);
+        }
+        await Future.delayed(pollInterval);
+        pollCount++;
+      } catch (e) {
+        if (e is RateLimitException) rethrow;
+        if (pollCount > 10) {
+          throw Exception(
+            'Job polling failed after $pollCount attempts: $e',
+          );
+        }
+        await Future.delayed(pollInterval);
+        pollCount++;
+      }
+    }
+
+    throw Exception(
+      'Job polling timed out after $maxPolls attempts',
+    );
+  }
+
+  /// Synchronous fallback: GET the period data directly.
+  Future<PeriodTemperatureData> _fetchPeriodDataSync(
+    String period,
+    String location,
+    String identifier,
+  ) async {
+    final token = await getAuthToken();
+    final apiPeriod = _apiPeriodPath(period);
+    final encodedLocation = Uri.encodeComponent(location);
+    final url = Uri.parse(
+      '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier',
+    );
+
+    debugLog('Sync fallback: $url');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: 60));
+
+    if (response.statusCode == 429) {
+      throw RateLimitException('Rate limit exceeded on sync fallback');
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception('Sync API failed: ${response.statusCode}');
+    }
+
+    final json = jsonDecode(response.body);
+    return PeriodTemperatureData.fromJson(json);
   }
 }

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
-import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:geocoding/geocoding.dart';
@@ -21,6 +20,8 @@ import 'dart:io' as io;
 import 'services/temperature_service.dart';
 import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
+import 'widgets/temperature_bar_chart.dart';
+import 'widgets/period_page.dart';
 
 // App color constants
 // Note: These are no longer constants because they depend on runtime configuration
@@ -528,11 +529,20 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   static const Duration _memoryCleanupInterval = Duration(minutes: 5);
   int _memoryCleanupCount = 0;
 
+  // Page view for period switching (daily / weekly / monthly / yearly)
+  late final PageController _pageController;
+  int _currentPageIndex = 0;
+  static const List<String> _periodLabels = ['Today', 'This Week', 'This Month', 'This Year'];
+  final _weekPageKey = GlobalKey<PeriodPageState>();
+  final _monthPageKey = GlobalKey<PeriodPageState>();
+  final _yearPageKey = GlobalKey<PeriodPageState>();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    
+    _pageController = PageController();
+
     // Debug mode detection logging
     debugPrintIfDebugging('🔧 Debug mode detection:');
     debugPrintIfDebugging('  - kDebugMode: $kDebugMode');
@@ -562,6 +572,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _pageController.dispose();
     _positionStreamSubscription?.cancel();
     _connectivitySubscription?.cancel();
     _memoryCleanupTimer?.cancel();
@@ -3327,18 +3338,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  Widget _buildConstrainedContent(BuildContext context, double chartHeight) {
+  /// Top-level layout: fixed header (title + debug) and swipeable PageView below.
+  Widget _buildPageLayout(BuildContext context, double chartHeight) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = MediaQuery.of(context).size.width;
         final isTablet = screenWidth >= 768;
-        
-        // For all tablets (both portrait and landscape), constrain the overall content area width to 650px max
-        // Account for increased screen padding
         final maxContentWidth = isTablet ? 650.0 : constraints.maxWidth;
         final contentWidth = constraints.maxWidth > maxContentWidth ? maxContentWidth : constraints.maxWidth;
         final horizontalMargin = isTablet ? (constraints.maxWidth - contentWidth) / 2 : 0.0;
-        
+
         return SizedBox(
           width: constraints.maxWidth,
           child: Center(
@@ -3348,17 +3357,62 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- Title/logo row: uses normal padding, not iPad indentation ---
-                  _buildTitlePadding(context, _buildTitleLogoSection()),
-                  // Debug features (only show when debugging)
+                  // Fixed header — title / logo
+                  Padding(
+                    padding: EdgeInsets.only(
+                      top: kContentVerticalPadding,
+                      bottom: kTitleRowBottomPadding,
+                      left: kScreenPadding + kContentHorizontalMargin,
+                      right: kScreenPadding + kContentHorizontalMargin,
+                    ),
+                    child: _buildTitleLogoSection(),
+                  ),
+                  // Debug features (only shown in debug builds)
                   if (AppConfig.shouldShowDebugFeatures) ...[
                     _buildDebugPadding(context, _buildDebugToggleSection()),
                     _buildDebugPadding(context, _buildVersionSection()),
                   ],
-                  // --- The rest of the UI, including the FutureBuilder ---
-                  _buildContentPadding(context, _buildFutureBuilder(chartHeight: chartHeight)),
-                  // Add extra space to ensure content is always scrollable
-                  _buildContentPadding(context, const SizedBox(height: 100)),
+                  // Page indicator dots
+                  _buildPageIndicator(),
+                  // Swipeable pages — takes remaining vertical space
+                  Expanded(
+                    child: PageView(
+                      controller: _pageController,
+                      onPageChanged: (index) {
+                        setState(() {
+                          _currentPageIndex = index;
+                        });
+                      },
+                      children: [
+                        // Page 0: Daily (existing view)
+                        _buildDailyPage(context, chartHeight),
+                        // Page 1: Weekly
+                        PeriodPage(
+                          key: _weekPageKey,
+                          periodKey: 'week',
+                          periodLabel: 'Week',
+                          location: _determinedLocation,
+                          displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
+                        ),
+                        // Page 2: Monthly
+                        PeriodPage(
+                          key: _monthPageKey,
+                          periodKey: 'month',
+                          periodLabel: 'Month',
+                          location: _determinedLocation,
+                          displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
+                        ),
+                        // Page 3: Yearly
+                        PeriodPage(
+                          key: _yearPageKey,
+                          periodKey: 'year',
+                          periodLabel: 'Year',
+                          location: _determinedLocation,
+                          displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -3368,17 +3422,59 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  Widget _buildTitlePadding(BuildContext context, Widget child) {
+  /// Page indicator dots showing which period view is active.
+  Widget _buildPageIndicator() {
     return Padding(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + kContentVerticalPadding,
-        bottom: kTitleRowBottomPadding,
+      padding: const EdgeInsets.only(
         left: kScreenPadding + kContentHorizontalMargin,
         right: kScreenPadding + kContentHorizontalMargin,
+        bottom: 12.0,
       ),
-      child: child,
+      child: Row(
+        children: [
+          // Period label
+          Text(
+            _periodLabels[_currentPageIndex],
+            style: const TextStyle(
+              color: kTextPrimaryColour,
+              fontSize: kFontSizeBody,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Dots
+          for (int i = 0; i < _periodLabels.length; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Container(
+              width: i == _currentPageIndex ? 8 : 6,
+              height: i == _currentPageIndex ? 8 : 6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: i == _currentPageIndex
+                    ? kAccentColour
+                    : kGreyLabelColour.withValues(alpha: 0.4),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
+
+  /// The daily view page — wraps the existing daily content in a scrollable
+  /// RefreshIndicator so pull-to-refresh continues to work.
+  Widget _buildDailyPage(BuildContext context, double chartHeight) {
+    return _buildRefreshIndicator(
+      SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: _buildContentPadding(
+          context,
+          _buildFutureBuilder(chartHeight: chartHeight),
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildDebugPadding(BuildContext context, Widget child) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -3544,40 +3640,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     required String? city,
     required double chartHeight,
   }) {
-    // Calculate minimum and maximum temperature for Y-axis (only from years with data)
+    // If no data loaded yet, show the loading placeholder
     final validData = chartData.where((data) => data.hasData).toList();
-    
-    // If we have chart data but no valid data yet, show the chart with empty bars
-    // This allows the progressive loading to be visible
     if (validData.isEmpty) {
-      // Show chart with empty bars - they won't be visible but the structure will be there
       return _buildChartWithEmptyBars(chartData, averageTemperature, trendSlope, summaryText, displayDate, city, chartHeight);
     }
-    
-    double yAxisMin;
-    double yAxisMax;
-    double minTemp = 0.0;
-    double maxTemp = 0.0;
-    
-    minTemp = validData.map((data) => data.temperature).reduce((a, b) => a < b ? a : b);
-    maxTemp = validData.map((data) => data.temperature).reduce((a, b) => a > b ? a : b);
-    
-    // Calculate dynamic Y-axis range based on actual data
-    // Add padding above and below the data range for better visualization
-    yAxisMin = (minTemp - 2).floorToDouble(); // Start 2 degrees below minimum
-    yAxisMax = (maxTemp + 2).ceilToDouble(); // End 2 degrees above maximum
-    
-    // Ensure we have a reasonable minimum range even for small temperature variations
-    final range = maxTemp - minTemp;
-    if (range < 5) {
-      // For small ranges, ensure we have at least 5 degrees of scale
-      final midPoint = (maxTemp + minTemp) / 2;
-      yAxisMin = (midPoint - 2.5).floorToDouble();
-      yAxisMax = (midPoint + 2.5).ceilToDouble();
-    }
-    
-    debugPrintIfDebugging('Y-axis calculation - minTemp: $minTemp, maxTemp: $maxTemp, yAxisMin: $yAxisMin, yAxisMax: $yAxisMax');
-    
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3606,137 +3674,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           _buildDateSection(displayDate),
           _buildCitySection(city),
           _buildSummarySection(summaryText),
-          Padding(
-            padding: const EdgeInsets.all(kChartInnerPadding),
-            child: Builder(
-              builder: (context) {
-                final screenWidth = MediaQuery.of(context).size.width;
-                final isTablet = screenWidth >= 768; // iPad threshold
-                
-                // On tablets, constrain chart width to a reasonable maximum
-                // Account for chart margins and content padding to prevent overflow
-                final availableWidth = isTablet ? 600.0 : screenWidth;
-                // Subtract right margin and account for content padding
-                final contentPadding = kScreenPadding + kContentHorizontalMargin;
-                final chartWidth = availableWidth - kChartRightMargin - (contentPadding * 2);
-                
-                // Create the chart widget once to avoid duplication
-                final chartWidget = SfCartesianChart(
-                  margin: EdgeInsets.only(
-                    left: kChartHorizontalMargin, // Keep left margin consistent with text
-                    right: kChartRightMargin, // Extra right margin for Y-axis labels
-                  ),
-                  tooltipBehavior: TooltipBehavior(
-                    enable: true,
-                    format: 'point.x: point.y°C',
-                    canShowMarker: false,
-                    header: '',
-                    textStyle: TextStyle(fontSize: kFontSizeBody),
-                    builder: (data, point, series, pointIndex, seriesIndex) {
-                      final year = data.year;
-                      final temp = data.temperature.toStringAsFixed(1);
-                      return Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.black87,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          '$year: $temp°C',
-                          style: TextStyle(color: Colors.white, fontSize: kFontSizeBody - 4),
-                        ),
-                      );
-                    },
-                  ),
-                  series: [
-                    BarSeries<TemperatureChartData, int>(
-                      dataSource: chartData,
-                      xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                      yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                      pointColorMapper: (TemperatureChartData data, int index) =>
-                          data.isCurrentYear ? kBarCurrentYearColour : kBarOtherYearColour,
-                      width: 0.8, // Restored to proper thickness
-                      name: 'Yearly Temperature',
-                      enableTooltip: true,
-                      // Ensure consistent spacing and prevent edge cropping
-                      spacing: 0.1, // Reduced spacing to maintain bar thickness
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                    // Only show average and trend lines after all data has loaded
-                    if (averageTemperature != null && !_isDataLoading)
-                      LineSeries<TemperatureChartData, int>(
-                        dataSource: _generateAverageData(chartData, averageTemperature),
-                        xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                        yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                        color: kAverageColour,
-                        width: 2,
-                        name: 'Average Temperature',
-                        markerSettings: MarkerSettings(isVisible: false),
-                        enableTooltip: false, // Disable tooltips for average line
-                      ),
-                    if (trendSlope != null && !_isDataLoading)
-                      LineSeries<TemperatureChartData, int>(
-                        dataSource: _generateTrendData(chartData, trendSlope),
-                        xValueMapper: (TemperatureChartData data, int index) => int.parse(data.year),
-                        yValueMapper: (TemperatureChartData data, int index) => data.temperature,
-                        color: kTrendColour,
-                        width: 2,
-                        name: 'Trend',
-                        markerSettings: MarkerSettings(isVisible: false),
-                        enableTooltip: false, // Disable tooltips for trend line
-                      ),
-                  ],
-                  primaryXAxis: NumericAxis(
-                    labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
-                    majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
-                    labelIntersectAction: AxisLabelIntersectAction.hide,
-                    // For progressive loading, show the full year range (1975-2025) from the start
-                    // This ensures consistent bar spacing as data loads and includes current year
-                    minimum: 1975.0,
-                    maximum: 2025.0,
-                    interval: 5, // Show every 5th year to avoid crowding
-                    labelFormat: '{value}',
-                    // Ensure proper spacing and prevent cropping
-                    plotOffset: 20,
-                    // Show the axis line
-                    axisLine: AxisLine(width: 1, color: kAxisLabelColour),
-                  ),
-                  primaryYAxis: NumericAxis(
-                    labelFormat: '{value}°C',
-                    numberFormat: NumberFormat('0'),
-                    minimum: yAxisMin,
-                    maximum: yAxisMax,
-                    majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
-                    labelStyle: TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
-                    // Ensure bars start at the axis regardless of temperature values
-                    plotOffset: 0,
-                    // Force the axis to respect the exact minimum and maximum values
-                    desiredIntervals: 5,
-                    // Add margin for Y-axis labels
-                    labelPosition: ChartDataLabelPosition.outside,
-                    // Show the axis line
-                    axisLine: AxisLine(width: 1, color: kAxisLabelColour),
-                  ),
-                  plotAreaBorderWidth: 0,
-                  enableAxisAnimation: false, // Disable animation to prevent layout shifting
-                  // Ensure proper spacing for bars
-                );
-                
-                return isTablet 
-                  ? SizedBox(
-                      height: chartHeight,
-                      width: chartWidth,
-                      child: chartWidget,
-                    )
-                  : Center(
-                      child: SizedBox(
-                        height: chartHeight,
-                        width: chartWidth,
-                        child: chartWidget,
-                      ),
-                    );
-              },
-            ),
+          TemperatureBarChart(
+            chartData: chartData,
+            averageTemperature: averageTemperature,
+            trendSlope: trendSlope,
+            isLoading: _isDataLoading,
+            height: chartHeight,
           ),
           // Consistent spacing below chart - always show this
           const SizedBox(height: kSectionTopPadding),
@@ -4526,12 +4469,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         children: [
           // Gradient background fills the whole screen including system areas
           _buildGradientBackground(),
-          // Foreground content scrolls above the background
-          _buildRefreshIndicator(
-            SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: _buildConstrainedContent(context, chartHeight),
-            ),
+          // Foreground content with fixed header and swipeable pages
+          SafeArea(
+            bottom: false,
+            child: _buildPageLayout(context, chartHeight),
           ),
         ],
       ),
@@ -4579,79 +4520,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // If no failure is simulated, proceed with normal call
     return await apiCall();
   }
-}
-
-class TemperatureChartData {
-  final String year;
-  final double temperature;
-  final bool isCurrentYear;
-  final bool hasData; // Added for gap handling
-
-  TemperatureChartData({
-    required this.year,
-    required this.temperature,
-    required this.isCurrentYear,
-    this.hasData = true, // Default to true
-  });
-}
-
-List<TemperatureChartData> _generateTrendData(List<TemperatureChartData> chartData, double slope) {
-  if (chartData.isEmpty) return [];
-  
-  // Find the middle year to use as reference point (only from years with data)
-  final yearsWithData = chartData.where((data) => data.hasData).map((data) => int.parse(data.year)).toList();
-  if (yearsWithData.isEmpty) return [];
-  
-  yearsWithData.sort();
-  final middleYear = yearsWithData[yearsWithData.length ~/ 2];
-  
-  // Calculate the middle temperature (average of all temperatures with data)
-  final tempsWithData = chartData.where((data) => data.hasData).map((data) => data.temperature).toList();
-  final middleTemp = tempsWithData.reduce((a, b) => a + b) / tempsWithData.length;
-  
-  // Generate trend line points for all years in chronological order
-  final allYears = yearsWithData;
-  final minYear = allYears.first;
-  final maxYear = allYears.last;
-  
-  List<TemperatureChartData> trendData = [];
-  for (int year = minYear; year <= maxYear; year++) {
-    final yearsFromMiddle = year - middleYear;
-    final trendTemp = middleTemp + (slope * yearsFromMiddle / 10); // Convert decade slope to yearly
-    
-    trendData.add(TemperatureChartData(
-      year: year.toString(),
-      temperature: trendTemp,
-      isCurrentYear: year == DateTime.now().year,
-      hasData: true,
-    ));
-  }
-  
-  return trendData;
-}
-
-List<TemperatureChartData> _generateAverageData(List<TemperatureChartData> chartData, double averageTemp) {
-  if (chartData.isEmpty) return [];
-  
-  // Generate average line points for all years in chronological order
-  final yearsWithData = chartData.where((data) => data.hasData).map((data) => int.parse(data.year)).toList();
-  if (yearsWithData.isEmpty) return [];
-  
-  yearsWithData.sort();
-  final minYear = yearsWithData.first;
-  final maxYear = yearsWithData.last;
-  
-  List<TemperatureChartData> averageData = [];
-  for (int year = minYear; year <= maxYear; year++) {
-    averageData.add(TemperatureChartData(
-      year: year.toString(),
-      temperature: averageTemp,
-      isCurrentYear: year == DateTime.now().year,
-      hasData: true,
-    ));
-  }
-  
-  return averageData;
 }
 
 String _formatDayMonth(DateTime date) {
