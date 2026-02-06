@@ -315,7 +315,7 @@ class PeriodPageState extends State<PeriodPage>
       ),
       // Location
       Padding(
-        padding: const EdgeInsets.only(bottom: _kSectionBottomPadding),
+        padding: const EdgeInsets.only(bottom: 10.0),
         child: Text(
           widget.displayLocation ?? widget.location,
           style: const TextStyle(color: _kTextPrimaryColour, fontSize: _kFontSizeBody),
@@ -374,13 +374,11 @@ class PeriodPageState extends State<PeriodPage>
 
     switch (widget.periodKey) {
       case 'week':
-        final weekStart = dateToUse.subtract(Duration(days: dateToUse.weekday - 1));
-        final weekEnd = weekStart.add(const Duration(days: 6));
-        return 'Week ending ${_formatDate(weekEnd)}';
+        return 'Week ending ${_formatDate(dateToUse)}';
       case 'month':
-        return DateFormat('MMMM').format(dateToUse);
+        return 'Month ending ${_formatDate(dateToUse)}';
       case 'year':
-        return dateToUse.year.toString();
+        return 'Year ending ${_formatDate(dateToUse)}';
       default:
         return _formatDate(dateToUse);
     }

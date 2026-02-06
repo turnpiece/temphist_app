@@ -22,6 +22,7 @@ import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
 import 'widgets/temperature_bar_chart.dart';
 import 'widgets/period_page.dart';
+import 'models/period_temperature_data.dart';
 
 // App color constants
 // Note: These are no longer constants because they depend on runtime configuration
@@ -60,8 +61,8 @@ const double kChartInnerPadding = 0.0; // Inner padding within the chart area
 const double kChartRightMargin = 20.0; // Extra right margin for Y-axis labels
 
 // Section spacing - controls gaps between UI sections (date, location, summary, chart, etc.)
-const double kSectionBottomPadding = 22.0; // Space below each section
-const double kSectionTopPadding = 22.0; // Space above each section
+const double kSectionBottomPadding = 14.0; // Space below each section
+const double kSectionTopPadding = 14.0; // Space above each section
 
 // App constants
 const String kAppTitle = 'TempHist'; // Application title
@@ -532,7 +533,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   // Page view for period switching (daily / weekly / monthly / yearly)
   late final PageController _pageController;
   int _currentPageIndex = 0;
-  static const List<String> _periodLabels = ['Today', 'This Week', 'This Month', 'This Year'];
+  static const List<String> _periodLabels = ['Today', 'Past week', 'Past month', 'Past year'];
   final _weekPageKey = GlobalKey<PeriodPageState>();
   final _monthPageKey = GlobalKey<PeriodPageState>();
   final _yearPageKey = GlobalKey<PeriodPageState>();
@@ -2103,6 +2104,48 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         }
       }
       
+      // If current year is missing, try a v1 fallback to fill it.
+      final hasCurrentYear = chartData.any((data) =>
+          int.parse(data.year) == currentYear && data.hasData);
+      if (!hasCurrentYear) {
+        debugPrintIfDebugging('📊 Current year $currentYear missing, trying v1 fallback');
+        try {
+          final periodData = await service.fetchPeriodData('daily', city, mmdd);
+          PeriodDataPoint? currentYearData;
+          for (final value in periodData.values) {
+            if (value.year == currentYear) {
+              currentYearData = value;
+              break;
+            }
+          }
+
+          if (currentYearData != null) {
+            final yearIndex = chartData.indexWhere(
+              (data) => int.parse(data.year) == currentYear,
+            );
+            if (yearIndex != -1) {
+              chartData[yearIndex] = TemperatureChartData(
+                year: currentYear.toString(),
+                temperature: currentYearData.temperature,
+                isCurrentYear: true,
+                hasData: true,
+              );
+
+              _currentData!['chartData'] = chartData;
+              _failedYears.remove(currentYear);
+              if (mounted) {
+                setState(() {});
+              }
+              debugPrintIfDebugging('✅ Filled current year $currentYear via v1 fallback');
+            }
+          } else {
+            debugPrintIfDebugging('⚠️ v1 fallback returned no current year data');
+          }
+        } catch (e) {
+          debugPrintIfDebugging('❌ v1 fallback failed for current year: $e');
+        }
+      }
+
       // Log final loading summary
       debugPrintIfDebugging('📊 Progressive loading completed - attempted: $totalAttempts years, successful: $successfulAttempts, consecutive failures: $consecutiveFailures');
       
@@ -2743,7 +2786,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   Widget _buildDeterminedLocationSection() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+      padding: const EdgeInsets.only(bottom: 10.0),
       child: Text(
           _displayLocation,
           style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
@@ -3390,7 +3433,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                         PeriodPage(
                           key: _weekPageKey,
                           periodKey: 'week',
-                          periodLabel: 'Week',
+                          periodLabel: 'Past week',
                           location: _determinedLocation,
                           displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
                         ),
@@ -3398,7 +3441,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                         PeriodPage(
                           key: _monthPageKey,
                           periodKey: 'month',
-                          periodLabel: 'Month',
+                          periodLabel: 'Past month',
                           location: _determinedLocation,
                           displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
                         ),
@@ -3406,7 +3449,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                         PeriodPage(
                           key: _yearPageKey,
                           periodKey: 'year',
-                          periodLabel: 'Year',
+                          periodLabel: 'Past year',
                           location: _determinedLocation,
                           displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
                         ),
@@ -3432,16 +3475,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       ),
       child: Row(
         children: [
-          // Period label
-          Text(
-            _periodLabels[_currentPageIndex],
-            style: const TextStyle(
-              color: kTextPrimaryColour,
-              fontSize: kFontSizeBody,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 12),
           // Dots
           for (int i = 0; i < _periodLabels.length; i++) ...[
             if (i > 0) const SizedBox(width: 6),
@@ -3456,6 +3489,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               ),
             ),
           ],
+          const SizedBox(width: 12),
+          // Period label
+          Text(
+            _periodLabels[_currentPageIndex],
+            style: const TextStyle(
+              color: kTextPrimaryColour,
+              fontSize: kFontSizeBody,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -3582,7 +3625,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     if (city == null) return const SizedBox.shrink();
     
     return Padding(
-      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+      padding: const EdgeInsets.only(bottom: 10.0),
       child: Text(
         city,
         style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),

@@ -106,15 +106,58 @@ class TemperatureService {
   Future<TemperatureData> fetchCompleteData(String city, String date) async {
     // Extract month-day from the date (e.g., "2025-06-18" -> "06-18")
     final monthDay = date.substring(5); // Get "06-18" from "2025-06-18"
-    return _fetchTemperatureData('data', city, monthDay);
+    final json = await _fetchV1Records('daily', city, monthDay);
+    return TemperatureData.fromJson(json);
   }
 
   /// Common helper function for fetching data from API endpoints
   Future<Map<String, dynamic>> _fetchApiData(String endpoint, String city, String date) async {
-    final token = await getAuthToken();
-    final url = Uri.parse('$apiBaseUrl/$endpoint/$city/$date');
+    final normalizedEndpoint = endpoint.replaceAll('/', '').toLowerCase();
 
-    debugLog('Fetching /$endpoint/ for city=$city, date=$date');
+    // Legacy endpoints for summary/average/trend were removed; route to v1.
+    if (normalizedEndpoint == 'summary' ||
+        normalizedEndpoint == 'average' ||
+        normalizedEndpoint == 'trend') {
+      final json =
+          await _fetchV1Subresource('daily', city, date, normalizedEndpoint);
+      final data = json['data'];
+      if (normalizedEndpoint == 'summary') {
+        return {
+          'summary': data,
+          'metadata': json['metadata'],
+          'period': json['period'],
+          'location': json['location'],
+          'identifier': json['identifier'],
+        };
+      }
+      if (normalizedEndpoint == 'average') {
+        final mean = (data is Map<String, dynamic>) ? data['mean'] : null;
+        return {
+          'average': mean,
+          'data': data,
+          'metadata': json['metadata'],
+          'period': json['period'],
+          'location': json['location'],
+          'identifier': json['identifier'],
+        };
+      }
+      final slope = (data is Map<String, dynamic>) ? data['slope'] : null;
+      final unit = (data is Map<String, dynamic>) ? data['unit'] : null;
+      return {
+        'slope': slope,
+        'unit': unit,
+        'data': data,
+        'metadata': json['metadata'],
+        'period': json['period'],
+        'location': json['location'],
+        'identifier': json['identifier'],
+      };
+    }
+
+    final token = await getAuthToken();
+    final url = Uri.parse('$apiBaseUrl/$normalizedEndpoint/$city/$date');
+
+    debugLog('Fetching /$normalizedEndpoint/ for city=$city, date=$date');
 
     final response = await http.get(
       url,
@@ -125,7 +168,9 @@ class TemperatureService {
 
     if (response.statusCode == 200) {
       final responseBody = response.body;
-      debugLog('${endpoint.capitalize()} API Response for $city/$date: $responseBody');
+      debugLog(
+        '${normalizedEndpoint.capitalize()} API Response for $city/$date: $responseBody',
+      );
       
       if (responseBody.isEmpty) {
         throw Exception('Empty response from API');
@@ -138,7 +183,9 @@ class TemperatureService {
       
       return json;
     } else {
-      debugLog('${endpoint.capitalize()} API Error Response: ${response.statusCode} - ${response.body}');
+      debugLog(
+        '${normalizedEndpoint.capitalize()} API Error Response: ${response.statusCode} - ${response.body}',
+      );
       
       // Check if it's a rate limit error
       if (response.statusCode == 429) {
@@ -151,8 +198,79 @@ class TemperatureService {
         }
       }
       
-      throw Exception('Failed to fetch $endpoint data: ${response.statusCode}');
+      throw Exception(
+        'Failed to fetch $normalizedEndpoint data: ${response.statusCode}',
+      );
     }
+  }
+
+  /// Fetch v1 records data (full response) for a specific period and identifier.
+  Future<Map<String, dynamic>> _fetchV1Records(
+    String period,
+    String location,
+    String identifier,
+  ) async {
+    final token = await getAuthToken();
+    final apiPeriod = _apiPeriodPath(period);
+    final encodedLocation = Uri.encodeComponent(location);
+    final url = Uri.parse(
+      '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier',
+    );
+
+    debugLog('Fetching v1 records: $url');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: 60));
+
+    if (response.statusCode == 429) {
+      throw RateLimitException('Rate limit exceeded fetching v1 records');
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to fetch v1 records: ${response.statusCode}');
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// Fetch a v1 subresource (average/trend/summary) for daily records.
+  Future<Map<String, dynamic>> _fetchV1Subresource(
+    String period,
+    String location,
+    String identifier,
+    String subresource,
+  ) async {
+    final token = await getAuthToken();
+    final apiPeriod = _apiPeriodPath(period);
+    final encodedLocation = Uri.encodeComponent(location);
+    final url = Uri.parse(
+      '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier/$subresource',
+    );
+
+    debugLog('Fetching v1 subresource ($subresource): $url');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: 60));
+
+    if (response.statusCode == 429) {
+      throw RateLimitException('Rate limit exceeded fetching $subresource');
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to fetch $subresource: ${response.statusCode}');
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
   /// Common helper function for fetching TemperatureData from API endpoints
@@ -162,15 +280,44 @@ class TemperatureService {
   }
 
   Future<Map<String, dynamic>> fetchAverageData(String city, String date) async {
-    return _fetchApiData('average', city, date);
+    final json = await _fetchV1Subresource('daily', city, date, 'average');
+    final data = json['data'];
+    final mean = (data is Map<String, dynamic>) ? data['mean'] : null;
+    return {
+      'average': mean,
+      'data': data,
+      'metadata': json['metadata'],
+      'period': json['period'],
+      'location': json['location'],
+      'identifier': json['identifier'],
+    };
   }
 
   Future<Map<String, dynamic>> fetchTrendData(String city, String date) async {
-    return _fetchApiData('trend', city, date);
+    final json = await _fetchV1Subresource('daily', city, date, 'trend');
+    final data = json['data'];
+    final slope = (data is Map<String, dynamic>) ? data['slope'] : null;
+    final unit = (data is Map<String, dynamic>) ? data['unit'] : null;
+    return {
+      'slope': slope,
+      'unit': unit,
+      'data': data,
+      'metadata': json['metadata'],
+      'period': json['period'],
+      'location': json['location'],
+      'identifier': json['identifier'],
+    };
   }
 
   Future<Map<String, dynamic>> fetchSummaryData(String city, String date) async {
-    return _fetchApiData('summary', city, date);
+    final json = await _fetchV1Subresource('daily', city, date, 'summary');
+    return {
+      'summary': json['data'],
+      'metadata': json['metadata'],
+      'period': json['period'],
+      'location': json['location'],
+      'identifier': json['identifier'],
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -262,7 +409,7 @@ class TemperatureService {
       throw RateLimitException('Rate limit exceeded creating async job');
     }
 
-    if (response.statusCode != 200 && response.statusCode != 201) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Failed to create async job: ${response.statusCode}');
     }
 

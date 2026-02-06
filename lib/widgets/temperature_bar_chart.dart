@@ -106,6 +106,7 @@ class TemperatureBarChart extends StatelessWidget {
           final chartWidth = availableWidth - _kChartRightMargin - (contentPadding * 2);
 
           final chart = SfCartesianChart(
+            isTransposed: true,
             margin: const EdgeInsets.only(
               left: _kChartHorizontalMargin,
               right: _kChartRightMargin,
@@ -131,7 +132,7 @@ class TemperatureBarChart extends StatelessWidget {
                 );
               },
             ),
-            series: _buildSeries(),
+            series: _buildSeries(yAxisMin),
             primaryXAxis: NumericAxis(
               labelStyle: const TextStyle(fontSize: _kFontSizeAxisLabel, color: _kGreyLabelColour),
               majorGridLines: MajorGridLines(width: 0.5, color: _kAxisGridColour.withValues(alpha: 0.3)),
@@ -169,12 +170,13 @@ class TemperatureBarChart extends StatelessWidget {
     );
   }
 
-  List<CartesianSeries<TemperatureChartData, int>> _buildSeries() {
+  List<CartesianSeries<TemperatureChartData, int>> _buildSeries(double baseline) {
     return [
-      BarSeries<TemperatureChartData, int>(
+      RangeColumnSeries<TemperatureChartData, int>(
         dataSource: chartData,
         xValueMapper: (TemperatureChartData data, _) => int.parse(data.year),
-        yValueMapper: (TemperatureChartData data, _) => data.temperature,
+        lowValueMapper: (TemperatureChartData data, _) => baseline,
+        highValueMapper: (TemperatureChartData data, _) => data.temperature,
         pointColorMapper: (TemperatureChartData data, _) =>
             data.isCurrentYear ? _kBarCurrentYearColour : _kBarOtherYearColour,
         width: 0.8,
