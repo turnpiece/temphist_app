@@ -305,22 +305,10 @@ class PeriodPageState extends State<PeriodPage>
     final displayDate = _buildDisplayDate();
 
     return [
-      // Date
-      Padding(
-        padding: const EdgeInsets.only(bottom: _kSectionBottomPadding),
-        child: Text(
-          displayDate,
-          style: const TextStyle(color: _kTextPrimaryColour, fontSize: _kFontSizeBody),
-        ),
-      ),
+      // Date is shown in the header; omit it here.
+      const SizedBox.shrink(),
       // Location
-      Padding(
-        padding: const EdgeInsets.only(bottom: 10.0),
-        child: Text(
-          widget.displayLocation ?? widget.location,
-          style: const TextStyle(color: _kTextPrimaryColour, fontSize: _kFontSizeBody),
-        ),
-      ),
+      const SizedBox.shrink(),
       // Summary
       if (data.summary.isNotEmpty)
         Padding(

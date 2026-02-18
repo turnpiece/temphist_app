@@ -33,6 +33,7 @@ void debugLog(String message) {
 }
 
 class TemperatureService {
+  static final Map<String, PeriodTemperatureData> _periodCache = {};
   final String apiBaseUrl;
 
   TemperatureService({
@@ -352,11 +353,18 @@ class TemperatureService {
     String identifier, {
     void Function(AsyncJobStatus)? onProgress,
   }) async {
+    final cacheKey = '${_apiPeriodPath(period)}|$location|$identifier';
+    final cached = _periodCache[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
+
     try {
       debugLog('Attempting async fetch for $period data...');
       final jobId = await _createAsyncJob(period, location, identifier);
       final result = await _pollJobStatus(jobId, onProgress: onProgress);
       debugLog('Async fetch successful for $period data');
+      _periodCache[cacheKey] = result.data;
       return result.data;
     } catch (e) {
       final msg = e.toString();
@@ -369,6 +377,7 @@ class TemperatureService {
           final fallback =
               await _fetchPeriodDataSync(period, location, identifier);
           debugLog('Synchronous fallback successful for $period data');
+          _periodCache[cacheKey] = fallback;
           return fallback;
         } catch (fallbackError) {
           throw Exception(

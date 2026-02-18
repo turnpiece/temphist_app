@@ -533,7 +533,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   // Page view for period switching (daily / weekly / monthly / yearly)
   late final PageController _pageController;
   int _currentPageIndex = 0;
-  static const List<String> _periodLabels = ['Today', 'Past week', 'Past month', 'Past year'];
+  static const List<String> _periodKeys = ['daily', 'week', 'month', 'year'];
   final _weekPageKey = GlobalKey<PeriodPageState>();
   final _monthPageKey = GlobalKey<PeriodPageState>();
   final _yearPageKey = GlobalKey<PeriodPageState>();
@@ -1687,6 +1687,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Reset loading message timer to start temperature-related messages
       _loadingElapsedSeconds = 0;
       _updateLoadingMessage();
+
+      // Start preloading period data in the background (daily → week → month → year)
+      _prefetchPeriodData();
       
     } catch (e) {
       debugPrintIfDebugging('_determineLocation failed: $e');
@@ -1701,6 +1704,28 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Reset loading message timer to start temperature-related messages
       _loadingElapsedSeconds = 0;
       _updateLoadingMessage();
+
+      // Start preloading period data in the background (daily → week → month → year)
+      _prefetchPeriodData();
+    }
+  }
+
+  Future<void> _prefetchPeriodData() async {
+    if (!_isLocationDetermined || _determinedLocation.isEmpty) return;
+
+    final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+    final identifier = dateInfo['mmdd']!;
+    final location = _determinedLocation;
+    final service = TemperatureService();
+    const periods = ['daily', 'week', 'month', 'year'];
+
+    for (final period in periods) {
+      try {
+        DebugUtils.logLazy(() => 'Prefetching $period data for $location ($identifier)');
+        await service.fetchPeriodData(period, location, identifier);
+      } catch (e) {
+        DebugUtils.logLazy(() => 'Prefetch $period failed: $e');
+      }
     }
   }
 
@@ -1856,7 +1881,56 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       debugPrintIfDebugging('_loadChartDataProgressive: Using determined city: $city');
       final currentYear = dateToUse.year;
+      final identifier = formattedDate.substring(5);
 
+      // Use v1 daily endpoint to fetch all years in one call.
+      final periodData = await service.fetchPeriodData('daily', city, identifier);
+
+      final chartData = periodData.values
+          .map((value) => TemperatureChartData(
+                year: value.year.toString(),
+                temperature: value.temperature,
+                isCurrentYear: value.year == currentYear,
+                hasData: true,
+              ))
+          .toList();
+
+      _failedYears
+        ..clear()
+        ..addAll(periodData.metadata?.missingYears.map((m) => m.year) ?? []);
+
+      _chartDataFailed = _failedYears.isNotEmpty;
+
+      _currentData = _createResultMap(
+        chartData: chartData,
+        averageTemperature: periodData.average.mean,
+        trendSlope: periodData.trend.slope,
+        summaryText: periodData.summary,
+        dateToUse: dateToUse,
+        city: city,
+      );
+
+      if (mounted) {
+        setState(() {});
+      }
+
+      // Stop loading message timer when data loading completes
+      _stopLoadingMessageTimer();
+      _stopAverageTrendDisplayTimer();
+      _isDataLoading = false;
+      _progressiveLoadingCompleted = true;
+
+      // Log final results
+      final successfulYears = chartData.where((data) => data.hasData).length;
+      final totalYears = chartData.length;
+      debugPrintIfDebugging('📊 Chart data loading completed: $successfulYears/$totalYears years loaded successfully');
+      if (_failedYears.isNotEmpty) {
+        debugPrintIfDebugging('❌ Missing years: $_failedYears');
+      }
+
+      return;
+
+      /*
       // Skip main /data/ endpoint for progressive loading to ensure year-by-year loading is visible
       // This forces the fallback method which loads data progressively
       debugPrintIfDebugging('_loadChartDataProgressive: Skipping main endpoint to force progressive loading');
@@ -1864,7 +1938,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Fallback: use individual endpoints with progressive loading
       debugPrintIfDebugging('Using fallback endpoints for $city, $formattedDate');
       
-      final mmdd = formattedDate.substring(5);
+      final identifier = formattedDate.substring(5);
       double? averageTemperature;
       double? trendSlope;
       String? summaryText;
@@ -2110,7 +2184,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       if (!hasCurrentYear) {
         debugPrintIfDebugging('📊 Current year $currentYear missing, trying v1 fallback');
         try {
-          final periodData = await service.fetchPeriodData('daily', city, mmdd);
+      final periodData = await service.fetchPeriodData('daily', city, identifier);
           PeriodDataPoint? currentYearData;
           for (final value in periodData.values) {
             if (value.year == currentYear) {
@@ -2175,6 +2249,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       // Load average and trend data after chart data is complete
       await _loadAverageAndTrendData(city, mmdd);
+      */
       
     } catch (e) {
       debugPrintIfDebugging('_loadChartDataProgressive failed: $e');
@@ -2752,16 +2827,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Date section - show as soon as we have it
-        _buildLoadingDateSection(),
-        
-        // Location section - show the determined location
-        if (_isLocationDetermined)
-          _buildDeterminedLocationSection()
-        else
+        // Location status message only if location is still unknown
+        if (!_isLocationDetermined)
           _buildLocationDeterminingSection(),
-        
-        // Progressive loading messages - show below location
+
+        // Progressive loading messages - show below date
         if (_isLocationDetermined)
           _buildProgressiveLoadingSection(),
       ],
@@ -2785,14 +2855,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Widget _buildDeterminedLocationSection() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10.0),
-      child: Text(
-          _displayLocation,
-          style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-          textAlign: TextAlign.left,
-        ),
-    );
+    return const SizedBox.shrink();
   }
 
   Widget _buildLocationDeterminingSection() {
@@ -2878,45 +2941,52 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Widget _buildTitleLogoSection() {
+    final headerText = _displayLocation.isNotEmpty
+        ? _displayLocation
+        : (_determinedLocation.isNotEmpty ? _determinedLocation : 'Loading location...');
+
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
       child: Row(
-          children: [
-            Builder(
-              builder: (context) {
-                final screenWidth = MediaQuery.of(context).size.width;
-                final isTablet = screenWidth >= 768;
-                
-                // Only apply transform on phones to align logo with content
-                // On tablets, logo doesn't need to align with anything
-                final logoWidget = Padding(
-                  padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
-                  child: SvgPicture.asset(
-                    'assets/logo.svg',
-                    width: 40,
-                    height: 40,
-                  ),
-                );
-                
-                return isTablet 
-                  ? logoWidget 
+        children: [
+          Builder(
+            builder: (context) {
+              final screenWidth = MediaQuery.of(context).size.width;
+              final isTablet = screenWidth >= 768;
+
+              // Only apply transform on phones to align logo with content
+              // On tablets, logo doesn't need to align with anything
+              final logoWidget = Padding(
+                padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
+                child: SvgPicture.asset(
+                  'assets/logo.svg',
+                  width: 40,
+                  height: 40,
+                ),
+              );
+
+              return isTablet
+                  ? logoWidget
                   : Transform.translate(
                       offset: const Offset(-8.0, 0.0), // Shift logo 8px left to compensate for SVG's internal left margin
                       child: logoWidget,
                     );
-              },
-            ),
-            Text(
-              kAppTitle,
+            },
+          ),
+          Expanded(
+            child: Text(
+              headerText,
               style: TextStyle(
                 color: kAccentColour,
                 fontSize: kFontSizeTitle,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3476,7 +3546,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       child: Row(
         children: [
           // Dots
-          for (int i = 0; i < _periodLabels.length; i++) ...[
+          for (int i = 0; i < _periodKeys.length; i++) ...[
             if (i > 0) const SizedBox(width: 6),
             Container(
               width: i == _currentPageIndex ? 8 : 6,
@@ -3492,7 +3562,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           const SizedBox(width: 12),
           // Period label
           Text(
-            _periodLabels[_currentPageIndex],
+            _buildPeriodHeaderLabel(),
             style: const TextStyle(
               color: kTextPrimaryColour,
               fontSize: kFontSizeBody,
@@ -3502,6 +3572,25 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         ],
       ),
     );
+  }
+
+  String _buildPeriodHeaderLabel() {
+    final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+    final dateToUse = DateTime.parse(dateInfo['date']!);
+    final displayDate = _formatDayMonth(dateToUse);
+
+    switch (_currentPageIndex) {
+      case 0:
+        return displayDate;
+      case 1:
+        return 'Week ending $displayDate';
+      case 2:
+        return 'Month ending $displayDate';
+      case 3:
+        return 'Year ending $displayDate';
+      default:
+        return displayDate;
+    }
   }
 
   /// The daily view page — wraps the existing daily content in a scrollable
@@ -3599,7 +3688,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildDateSection(displayDate),
           _buildCitySection(city),
           _buildSummarySection(summaryText),
           _buildLoadingChartSection(chartHeight),
@@ -3622,16 +3710,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Widget _buildCitySection(String? city) {
-    if (city == null) return const SizedBox.shrink();
-    
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10.0),
-      child: Text(
-        city,
-        style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-        textAlign: TextAlign.left,
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
 
@@ -3714,7 +3793,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             const SizedBox(height: 16),
           ],
           
-          _buildDateSection(displayDate),
           _buildCitySection(city),
           _buildSummarySection(summaryText),
           TemperatureBarChart(
