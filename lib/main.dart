@@ -72,6 +72,9 @@ const double kFontSizeTitle = 26.0; // Main title text (e.g., "TempHist")
 const double kFontSizeBody = 17.0; // Body text (date, location, summary, etc.)
 const double kFontSizeAxisLabel = 16.0; // Chart axis labels (years and temperatures)
 const double kIconSize = 17.0; // Standard icon size for UI elements
+const double kSummaryFontSize = kFontSizeBody - 2;
+const double kSummaryLineHeight = 1.2;
+const double kSummaryMinLines = 3;
 
 // Time constants
 const int kUseYesterdayHourThreshold = 3; // Use yesterday's data if current hour is before this (3 AM)
@@ -459,6 +462,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<Map<String, dynamic>?>? futureChartData;
   Timer? _loadingMessageTimer;
   int _loadingElapsedSeconds = 0;
+  final ValueNotifier<int> _loadingDotsTick = ValueNotifier<int>(0);
   String _currentLoadingMessage = '';
   String _determinedLocation = ''; // Full location for API
   String _displayLocation = ''; // Short location for display
@@ -532,7 +536,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   // Page view for period switching (daily / weekly / monthly / yearly)
   late final PageController _pageController;
-  int _currentPageIndex = 0;
+  final ValueNotifier<int> _pageIndexNotifier = ValueNotifier<int>(0);
   static const List<String> _periodKeys = ['daily', 'week', 'month', 'year'];
   final _weekPageKey = GlobalKey<PeriodPageState>();
   final _monthPageKey = GlobalKey<PeriodPageState>();
@@ -579,6 +583,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _memoryCleanupTimer?.cancel();
     _stopAverageTrendDisplayTimer();
     _splashScreenTimer?.cancel();
+    _pageIndexNotifier.dispose();
+    _loadingDotsTick.dispose();
     super.dispose();
   }
 
@@ -1772,10 +1778,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   void _startLoadingMessageTimer() {
     _loadingElapsedSeconds = 0;
+    _loadingDotsTick.value = 0;
     _updateLoadingMessage();
     
     _loadingMessageTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _loadingElapsedSeconds++;
+      _loadingDotsTick.value++;
       _updateLoadingMessage();
     });
   }
@@ -1883,8 +1891,15 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       final currentYear = dateToUse.year;
       final identifier = formattedDate.substring(5);
 
-      // Use v1 daily endpoint to fetch all years in one call.
-      final periodData = await service.fetchPeriodData('daily', city, identifier);
+      // Use v1 daily endpoint to fetch all years in one call, with a hard timeout.
+      final periodData = await service
+          .fetchPeriodData('daily', city, identifier)
+          .timeout(const Duration(seconds: 45), onTimeout: () {
+        throw TimeoutException(
+          'Daily data request timed out',
+          const Duration(seconds: 45),
+        );
+      });
 
       final chartData = periodData.values
           .map((value) => TemperatureChartData(
@@ -2253,6 +2268,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
     } catch (e) {
       debugPrintIfDebugging('_loadChartDataProgressive failed: $e');
+
+      if (e is RateLimitException) {
+        _chartDataFailedDueToRateLimit = true;
+      }
+      _chartDataFailed = true;
       
       // Stop loading message timer on error
       _stopLoadingMessageTimer();
@@ -2864,30 +2884,29 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: kGreyLabelColour,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Determining your location...',
-                style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
-                textAlign: TextAlign.left,
-              ),
-            ],
+          const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: kGreyLabelColour,
+            ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            'Once we know your location, we\'ll fetch temperature data for your area.',
-            style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2),
-            textAlign: TextAlign.left,
+          const SizedBox(height: 12),
+          AnimatedBuilder(
+            animation: _loadingDotsTick,
+            builder: (context, _) {
+              final dots = '.' * ((_loadingElapsedSeconds % 3) + 1);
+              return Text(
+                dots,
+                style: TextStyle(
+                  color: kGreyLabelColour,
+                  fontSize: kSummaryFontSize,
+                  fontWeight: FontWeight.w400,
+                ),
+                textAlign: TextAlign.left,
+              );
+            },
           ),
         ],
       ),
@@ -2912,10 +2931,14 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           const SizedBox(height: 16),
           // Loading message below the spinner
           Text(
-            _currentLoadingMessage.isNotEmpty 
-              ? _currentLoadingMessage 
-              : 'Loading temperature data...',
-            style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 1, fontWeight: FontWeight.w400),
+            _currentLoadingMessage.isNotEmpty
+                ? _currentLoadingMessage
+                : 'Loading temperature data...',
+            style: TextStyle(
+              color: kGreyLabelColour,
+              fontSize: kSummaryFontSize,
+              fontWeight: FontWeight.w400,
+            ),
             textAlign: TextAlign.left,
           ),
         ],
@@ -2978,7 +3001,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               headerText,
               style: TextStyle(
                 color: kAccentColour,
-                fontSize: kFontSizeTitle,
+                fontSize: kFontSizeBody,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.5,
               ),
@@ -3492,9 +3515,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                     child: PageView(
                       controller: _pageController,
                       onPageChanged: (index) {
-                        setState(() {
-                          _currentPageIndex = index;
-                        });
+                        _pageIndexNotifier.value = index;
                       },
                       children: [
                         // Page 0: Daily (existing view)
@@ -3543,43 +3564,55 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         right: kScreenPadding + kContentHorizontalMargin,
         bottom: 12.0,
       ),
-      child: Row(
-        children: [
-          // Dots
-          for (int i = 0; i < _periodKeys.length; i++) ...[
-            if (i > 0) const SizedBox(width: 6),
-            Container(
-              width: i == _currentPageIndex ? 8 : 6,
-              height: i == _currentPageIndex ? 8 : 6,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: i == _currentPageIndex
-                    ? kAccentColour
-                    : kGreyLabelColour.withValues(alpha: 0.4),
+      child: ValueListenableBuilder<int>(
+        valueListenable: _pageIndexNotifier,
+        builder: (context, pageIndex, _) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Transform.translate(
+                offset: const Offset(0, -2),
+                child: Row(
+                  children: [
+                    for (int i = 0; i < _periodKeys.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 6),
+                      Container(
+                        width: i == pageIndex ? 10 : 8,
+                        height: i == pageIndex ? 10 : 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: i == pageIndex
+                              ? kAccentColour
+                              : kGreyLabelColour.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          ],
-          const SizedBox(width: 12),
-          // Period label
-          Text(
-            _buildPeriodHeaderLabel(),
-            style: const TextStyle(
-              color: kTextPrimaryColour,
-              fontSize: kFontSizeBody,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+              const SizedBox(height: 4),
+              Text(
+                _buildPeriodHeaderLabel(pageIndex),
+                style: const TextStyle(
+                  color: kTextPrimaryColour,
+                  fontSize: kFontSizeBody - 3,
+                  fontWeight: FontWeight.w600,
+                ),
+                softWrap: true,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  String _buildPeriodHeaderLabel() {
+  String _buildPeriodHeaderLabel(int pageIndex) {
     final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
     final dateToUse = DateTime.parse(dateInfo['date']!);
     final displayDate = _formatDayMonth(dateToUse);
 
-    switch (_currentPageIndex) {
+    switch (pageIndex) {
       case 0:
         return displayDate;
       case 1:
@@ -3716,13 +3749,29 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   Widget _buildSummarySection(String? summaryText) {
     if (summaryText?.isEmpty != false) return const SizedBox.shrink();
-    
+
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Text(
-        summaryText!,
-        style: TextStyle(color: kSummaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-        textAlign: TextAlign.left,
+      child: Container(
+        alignment: Alignment.topLeft,
+        constraints: const BoxConstraints(
+          minHeight: kSummaryFontSize * kSummaryLineHeight * kSummaryMinLines + 8,
+        ),
+        child: Text(
+          summaryText!,
+          style: TextStyle(
+            color: kSummaryColour,
+            fontSize: kSummaryFontSize,
+            fontWeight: FontWeight.w400,
+            height: kSummaryLineHeight,
+          ),
+          strutStyle: const StrutStyle(
+            fontSize: kSummaryFontSize,
+            height: kSummaryLineHeight,
+            forceStrutHeight: true,
+          ),
+          textAlign: TextAlign.left,
+        ),
       ),
     );
   }
@@ -3745,7 +3794,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           const SizedBox(height: 16),
           Text(
             'Loading temperature data...',
-            style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
+            style: TextStyle(color: kGreyLabelColour, fontSize: kSummaryFontSize),
           ),
         ],
       ),

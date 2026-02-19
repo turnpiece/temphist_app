@@ -242,7 +242,7 @@ class PeriodPageState extends State<PeriodPage>
           const SizedBox(height: 16),
           Text(
             _loadingMessage,
-            style: const TextStyle(color: _kGreyLabelColour, fontSize: _kFontSizeBody),
+            style: const TextStyle(color: _kGreyLabelColour, fontSize: _kFontSizeBody - 2),
           ),
         ],
       ),
@@ -313,9 +313,19 @@ class PeriodPageState extends State<PeriodPage>
       if (data.summary.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(bottom: _kSectionBottomPadding),
-          child: Text(
-            data.summary,
-            style: const TextStyle(color: _kSummaryColour, fontSize: _kFontSizeBody),
+          child: Container(
+            alignment: Alignment.topLeft,
+            constraints: BoxConstraints(
+              minHeight: (_kFontSizeBody - 2) * 1.2 * 3 + 2,
+            ),
+            child: Text(
+              data.summary,
+              style: const TextStyle(
+                color: _kSummaryColour,
+                fontSize: _kFontSizeBody - 2,
+                height: 1.2,
+              ),
+            ),
           ),
         ),
       // Chart

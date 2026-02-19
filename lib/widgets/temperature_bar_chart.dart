@@ -180,6 +180,7 @@ class TemperatureBarChart extends StatelessWidget {
         pointColorMapper: (TemperatureChartData data, _) =>
             data.isCurrentYear ? _kBarCurrentYearColour : _kBarOtherYearColour,
         width: 0.8,
+        animationDuration: 0,
         name: 'Temperature',
         enableTooltip: true,
         spacing: 0.1,
@@ -192,6 +193,7 @@ class TemperatureBarChart extends StatelessWidget {
           yValueMapper: (TemperatureChartData data, _) => data.temperature,
           color: _kAverageColour,
           width: 2,
+          animationDuration: 0,
           name: 'Average Temperature',
           markerSettings: const MarkerSettings(isVisible: false),
           enableTooltip: false,
@@ -203,6 +205,7 @@ class TemperatureBarChart extends StatelessWidget {
           yValueMapper: (TemperatureChartData data, _) => data.temperature,
           color: _kTrendColour,
           width: 2,
+          animationDuration: 0,
           name: 'Trend',
           markerSettings: const MarkerSettings(isVisible: false),
           enableTooltip: false,
