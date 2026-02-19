@@ -74,7 +74,7 @@ const double kFontSizeAxisLabel = 16.0; // Chart axis labels (years and temperat
 const double kIconSize = 17.0; // Standard icon size for UI elements
 const double kSummaryFontSize = kFontSizeBody - 2;
 const double kSummaryLineHeight = 1.2;
-const double kSummaryMinLines = 3;
+const double kSummaryMinLines = 4;
 
 // Time constants
 const int kUseYesterdayHourThreshold = 3; // Use yesterday's data if current hour is before this (3 AM)
@@ -2297,7 +2297,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         );
       }
       
-      rethrow;
+      return;
     } finally {
       // Always reset the loading operation flag and ensure loading is marked as completed
       _isLoadingOperationActive = false;
@@ -2968,48 +2968,32 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         ? _displayLocation
         : (_determinedLocation.isNotEmpty ? _determinedLocation : 'Loading location...');
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Row(
-        children: [
-          Builder(
-            builder: (context) {
-              final screenWidth = MediaQuery.of(context).size.width;
-              final isTablet = screenWidth >= 768;
-
-              // Only apply transform on phones to align logo with content
-              // On tablets, logo doesn't need to align with anything
-              final logoWidget = Padding(
-                padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
-                child: SvgPicture.asset(
-                  'assets/logo.svg',
-                  width: 40,
-                  height: 40,
-                ),
-              );
-
-              return isTablet
-                  ? logoWidget
-                  : Transform.translate(
-                      offset: const Offset(-8.0, 0.0), // Shift logo 8px left to compensate for SVG's internal left margin
-                      child: logoWidget,
-                    );
-            },
-          ),
-          Expanded(
-            child: Text(
-              headerText,
-              style: TextStyle(
-                color: kAccentColour,
-                fontSize: kFontSizeBody,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
-              overflow: TextOverflow.ellipsis,
+    return Row(
+      children: [
+        Transform.translate(
+          offset: const Offset(-11.0, 0.0), // Shift logo left to compensate for SVG's internal margin
+          child: Padding(
+            padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
+            child: SvgPicture.asset(
+              'assets/logo.svg',
+              width: 40,
+              height: 40,
             ),
           ),
-        ],
-      ),
+        ),
+        Expanded(
+          child: Text(
+            headerText,
+            style: TextStyle(
+              color: kAccentColour,
+              fontSize: kFontSizeBody,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 
@@ -3642,27 +3626,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
 
   Widget _buildDebugPadding(BuildContext context, Widget child) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth >= 768; // iPad threshold
-    
-    double leftPadding;
-    double rightPadding;
-    
-    if (isTablet) {
-      // For all iPads, align debug content with the title text (not the logo)
-      final titleTextStartPosition = 40 + 6; // Logo width + right padding
-      leftPadding = kScreenPadding + kContentHorizontalMargin + titleTextStartPosition;
-      rightPadding = leftPadding; // Symmetric padding
-    } else {
-      // For phones, use the original padding
-      leftPadding = kScreenPadding + kContentHorizontalMargin;
-      rightPadding = kScreenPadding + kContentHorizontalMargin;
-    }
-    
-    // Ensure padding values are non-negative
-    leftPadding = leftPadding.clamp(0.0, double.infinity);
-    rightPadding = rightPadding.clamp(0.0, double.infinity);
-    
+    final leftPadding = _standardHorizontalPadding().clamp(0.0, double.infinity);
+    final rightPadding = leftPadding;
+
     return Padding(
       padding: EdgeInsets.only(
         bottom: 8.0, // Reduced bottom padding for debug sections
@@ -3674,30 +3640,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Widget _buildContentPadding(BuildContext context, Widget child) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth >= 768; // iPad threshold
-    
-    double leftPadding;
-    double rightPadding;
-    
-    if (isTablet) {
-      // For all iPads (both portrait and landscape), align content with the title text (not the logo)
-      // Calculate the position where the title text starts
-      // Logo width (40) + logo right padding (6) = 46px from left edge
-      // We want content to align with the title text, so we need to account for the logo's visual position
-      final titleTextStartPosition = 40 + 6; // Logo width + right padding (logo stays in original position)
-      leftPadding = kScreenPadding + kContentHorizontalMargin + titleTextStartPosition;
-      rightPadding = leftPadding; // Symmetric padding
-    } else {
-      // For phones, use the original padding
-      leftPadding = kScreenPadding + kContentHorizontalMargin;
-      rightPadding = kScreenPadding + kContentHorizontalMargin;
-    }
-    
-    // Ensure padding values are non-negative
-    leftPadding = leftPadding.clamp(0.0, double.infinity);
-    rightPadding = rightPadding.clamp(0.0, double.infinity);
-    
+    final leftPadding = _standardHorizontalPadding().clamp(0.0, double.infinity);
+    final rightPadding = leftPadding;
+
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).padding.bottom + kContentVerticalPadding,
@@ -3707,6 +3652,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       child: child,
     );
   }
+
+  double _standardHorizontalPadding() => kScreenPadding + kContentHorizontalMargin;
 
   Widget _buildChartWithEmptyBars(
     List<TemperatureChartData> chartData,
@@ -3752,25 +3699,25 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Container(
-        alignment: Alignment.topLeft,
-        constraints: const BoxConstraints(
-          minHeight: kSummaryFontSize * kSummaryLineHeight * kSummaryMinLines + 8,
-        ),
-        child: Text(
-          summaryText!,
-          style: TextStyle(
-            color: kSummaryColour,
-            fontSize: kSummaryFontSize,
-            fontWeight: FontWeight.w400,
-            height: kSummaryLineHeight,
+      child: SizedBox(
+        height: kSummaryFontSize * kSummaryLineHeight * kSummaryMinLines + 8,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Text(
+            summaryText!,
+            style: TextStyle(
+              color: kSummaryColour,
+              fontSize: kSummaryFontSize,
+              fontWeight: FontWeight.w400,
+              height: kSummaryLineHeight,
+            ),
+            strutStyle: const StrutStyle(
+              fontSize: kSummaryFontSize,
+              height: kSummaryLineHeight,
+              forceStrutHeight: true,
+            ),
+            textAlign: TextAlign.left,
           ),
-          strutStyle: const StrutStyle(
-            fontSize: kSummaryFontSize,
-            height: kSummaryLineHeight,
-            forceStrutHeight: true,
-          ),
-          textAlign: TextAlign.left,
         ),
       ),
     );
@@ -4550,7 +4497,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   void _startListeningToLocationChanges() {
-    _positionStreamSubscription = geo.Geolocator.getPositionStream(
+      _positionStreamSubscription = geo.Geolocator.getPositionStream(
       locationSettings: geo.LocationSettings(
         accuracy: geo.LocationAccuracy.low,
         distanceFilter: 500, // meters, adjust as needed
@@ -4612,6 +4559,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           debugPrintIfDebugging('Error checking location change: $e');
         }
       }
+    }, onError: (error) {
+      debugPrintIfDebugging('Location stream error: $error');
+      // Stop listening if permissions are denied or stream fails.
+      _positionStreamSubscription?.cancel();
+      _positionStreamSubscription = null;
     });
   }
 

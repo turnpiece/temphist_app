@@ -188,20 +188,8 @@ class PeriodPageState extends State<PeriodPage>
   }
 
   Widget _buildContent(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth >= 768;
-
-    double leftPadding;
-    double rightPadding;
-
-    if (isTablet) {
-      final titleTextStartPosition = 40 + 6;
-      leftPadding = _kScreenPadding + _kContentHorizontalMargin + titleTextStartPosition;
-      rightPadding = leftPadding;
-    } else {
-      leftPadding = _kScreenPadding + _kContentHorizontalMargin;
-      rightPadding = _kScreenPadding + _kContentHorizontalMargin;
-    }
+    final leftPadding = _kScreenPadding + _kContentHorizontalMargin;
+    final rightPadding = leftPadding;
 
     return Padding(
       padding: EdgeInsets.only(

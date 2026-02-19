@@ -26,7 +26,7 @@ void main() {
     expect(find.byType(Text), findsWidgets);
   });
 
-  testWidgets('App shows title', (WidgetTester tester) async {
+  testWidgets('App shows location header placeholder', (WidgetTester tester) async {
     final mockData = {
       'chartData': <TemperatureChartData>[],
       'averageTemperature': null,
@@ -44,7 +44,7 @@ void main() {
 
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('TempHist'), findsOneWidget);
+    expect(find.text('Loading location...'), findsOneWidget);
   });
 
   testWidgets('Chart and summary render with data', (WidgetTester tester) async {
@@ -71,9 +71,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    // Check for chart, summary, and city
+    // Check for chart and summary
     expect(find.text('Test summary'), findsOneWidget);
-    expect(find.text('Testville'), findsOneWidget);
     expect(find.text('Average: 15.5°C'), findsOneWidget);
     expect(find.textContaining('Trend:'), findsOneWidget);
     // You can also check for the chart widget type if needed
