@@ -46,7 +46,7 @@ dependencies:
   http: ^1.2.1
 
   # Added Syncfusion charts package
-  syncfusion_flutter_charts: ^31.1.17
+  syncfusion_flutter_charts: ^32.2.5
 
   # Render SVGs
   flutter_svg: ^2.0.9
@@ -59,7 +59,7 @@ dependencies:
   shared_preferences: ^2.2.2
 
   # For network connectivity detection
-  connectivity_plus: ^6.0.5
+  connectivity_plus: ^7.0.0
 
 dev_dependencies:
   flutter_test:
