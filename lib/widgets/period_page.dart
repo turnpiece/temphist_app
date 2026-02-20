@@ -38,6 +38,9 @@ class PeriodPage extends StatefulWidget {
   /// Callback invoked when pull-to-refresh is triggered.
   final Future<void> Function()? onRefresh;
 
+  /// Whether this widget wraps its own scroll/refresh UI.
+  final bool useInternalScroll;
+
   const PeriodPage({
     super.key,
     required this.periodKey,
@@ -45,6 +48,7 @@ class PeriodPage extends StatefulWidget {
     required this.location,
     this.displayLocation,
     this.onRefresh,
+    this.useInternalScroll = true,
   });
 
   @override
@@ -159,6 +163,15 @@ class PeriodPageState extends State<PeriodPage>
     _fetchData();
   }
 
+  /// Public refresh hook for external RefreshIndicator.
+  Future<void> refresh() async {
+    _lastFetchKey = '';
+    await _fetchData();
+    if (widget.onRefresh != null) {
+      await widget.onRefresh!();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context); // required by AutomaticKeepAliveClientMixin
@@ -170,6 +183,10 @@ class PeriodPageState extends State<PeriodPage>
           style: TextStyle(color: _kGreyLabelColour, fontSize: _kFontSizeBody),
         ),
       );
+    }
+
+    if (!widget.useInternalScroll) {
+      return _buildContent(context);
     }
 
     return RefreshIndicator(

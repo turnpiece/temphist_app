@@ -3474,62 +3474,34 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             child: Container(
               width: contentWidth,
               margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: (index) {
+                  _pageIndexNotifier.value = index;
+                },
                 children: [
-                  // Fixed header — title / logo
-                  Padding(
-                    padding: EdgeInsets.only(
-                      top: kContentVerticalPadding,
-                      bottom: kTitleRowBottomPadding,
-                      left: kScreenPadding + kContentHorizontalMargin,
-                      right: kScreenPadding + kContentHorizontalMargin,
-                    ),
-                    child: _buildTitleLogoSection(),
+                  // Page 0: Daily (existing view)
+                  _buildDailyPage(context, chartHeight),
+                  // Page 1: Weekly
+                  _buildPeriodPage(
+                    context,
+                    pageKey: _weekPageKey,
+                    periodKey: 'week',
+                    periodLabel: 'Past week',
                   ),
-                  // Debug features (only shown in debug builds)
-                  if (AppConfig.shouldShowDebugFeatures) ...[
-                    _buildDebugPadding(context, _buildDebugToggleSection()),
-                    _buildDebugPadding(context, _buildVersionSection()),
-                  ],
-                  // Page indicator dots
-                  _buildPageIndicator(),
-                  // Swipeable pages — takes remaining vertical space
-                  Expanded(
-                    child: PageView(
-                      controller: _pageController,
-                      onPageChanged: (index) {
-                        _pageIndexNotifier.value = index;
-                      },
-                      children: [
-                        // Page 0: Daily (existing view)
-                        _buildDailyPage(context, chartHeight),
-                        // Page 1: Weekly
-                        PeriodPage(
-                          key: _weekPageKey,
-                          periodKey: 'week',
-                          periodLabel: 'Past week',
-                          location: _determinedLocation,
-                          displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
-                        ),
-                        // Page 2: Monthly
-                        PeriodPage(
-                          key: _monthPageKey,
-                          periodKey: 'month',
-                          periodLabel: 'Past month',
-                          location: _determinedLocation,
-                          displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
-                        ),
-                        // Page 3: Yearly
-                        PeriodPage(
-                          key: _yearPageKey,
-                          periodKey: 'year',
-                          periodLabel: 'Past year',
-                          location: _determinedLocation,
-                          displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
-                        ),
-                      ],
-                    ),
+                  // Page 2: Monthly
+                  _buildPeriodPage(
+                    context,
+                    pageKey: _monthPageKey,
+                    periodKey: 'month',
+                    periodLabel: 'Past month',
+                  ),
+                  // Page 3: Yearly
+                  _buildPeriodPage(
+                    context,
+                    pageKey: _yearPageKey,
+                    periodKey: 'year',
+                    periodLabel: 'Past year',
                   ),
                 ],
               ),
@@ -3591,6 +3563,57 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
+  Widget _buildPageHeader(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(
+            top: kContentVerticalPadding,
+            bottom: kTitleRowBottomPadding,
+            left: kScreenPadding + kContentHorizontalMargin,
+            right: kScreenPadding + kContentHorizontalMargin,
+          ),
+          child: _buildTitleLogoSection(),
+        ),
+        if (AppConfig.shouldShowDebugFeatures) ...[
+          _buildDebugPadding(context, _buildDebugToggleSection()),
+          _buildDebugPadding(context, _buildVersionSection()),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildScrollablePageBody(BuildContext context, Widget content) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildPageHeader(context),
+          _buildPageIndicator(),
+          content,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExternalRefreshIndicator({
+    required Widget child,
+    required Future<void> Function() onRefresh,
+  }) {
+    if (widget.testFuture != null) {
+      return child;
+    }
+
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      color: kAccentColour,
+      backgroundColor: kBackgroundColour,
+      child: child,
+    );
+  }
+
   String _buildPeriodHeaderLabel(int pageIndex) {
     final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
     final dateToUse = DateTime.parse(dateInfo['date']!);
@@ -3613,14 +3636,35 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   /// The daily view page — wraps the existing daily content in a scrollable
   /// RefreshIndicator so pull-to-refresh continues to work.
   Widget _buildDailyPage(BuildContext context, double chartHeight) {
-    return _buildRefreshIndicator(
-      SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: _buildContentPadding(
-          context,
-          _buildFutureBuilder(chartHeight: chartHeight),
-        ),
-      ),
+    final content = _buildContentPadding(
+      context,
+      _buildFutureBuilder(chartHeight: chartHeight),
+    );
+    final scrollView = _buildScrollablePageBody(context, content);
+    return _buildRefreshIndicator(scrollView);
+  }
+
+  Widget _buildPeriodPage(
+    BuildContext context, {
+    required GlobalKey<PeriodPageState> pageKey,
+    required String periodKey,
+    required String periodLabel,
+  }) {
+    final page = PeriodPage(
+      key: pageKey,
+      periodKey: periodKey,
+      periodLabel: periodLabel,
+      location: _determinedLocation,
+      displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
+      useInternalScroll: false,
+    );
+
+    final scrollView = _buildScrollablePageBody(context, page);
+    return _buildExternalRefreshIndicator(
+      child: scrollView,
+      onRefresh: () async {
+        await pageKey.currentState?.refresh();
+      },
     );
   }
 
@@ -3664,15 +3708,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     String? city,
     double chartHeight,
   ) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildCitySection(city),
-          _buildSummarySection(summaryText),
-          _buildLoadingChartSection(chartHeight),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCitySection(city),
+        _buildSummarySection(summaryText),
+        _buildLoadingChartSection(chartHeight),
+      ],
     );
   }
 
@@ -3764,216 +3806,214 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       return _buildChartWithEmptyBars(chartData, averageTemperature, trendSlope, summaryText, displayDate, city, chartHeight);
     }
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Show offline indicator if not online
-          if (!_isOnline) ...[
-            Builder(
-              builder: (context) {
-                debugPrintIfDebugging('🚫 Displaying offline indicator - _isOnline: $_isOnline');
-                return _buildErrorIndicator(
-                  icon: Icons.wifi_off,
-                  title: 'No internet connection',
-                  message: 'Please check your internet connection and try again.',
-                  color: kAccentColour,
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            _buildRetryButton(() {
-              debugPrintIfDebugging('Retry button pressed while offline');
-              _handleOfflineRetry();
-            }),
-            const SizedBox(height: 16),
-          ],
-          
-          _buildCitySection(city),
-          _buildSummarySection(summaryText),
-          TemperatureBarChart(
-            chartData: chartData,
-            averageTemperature: averageTemperature,
-            trendSlope: trendSlope,
-            isLoading: _isDataLoading,
-            height: chartHeight,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Show offline indicator if not online
+        if (!_isOnline) ...[
+          Builder(
+            builder: (context) {
+              debugPrintIfDebugging('🚫 Displaying offline indicator - _isOnline: $_isOnline');
+              return _buildErrorIndicator(
+                icon: Icons.wifi_off,
+                title: 'No internet connection',
+                message: 'Please check your internet connection and try again.',
+                color: kAccentColour,
+              );
+            },
           ),
-          // Consistent spacing below chart - always show this
-          const SizedBox(height: kSectionTopPadding),
-          // Average temperature text below chart (only show after loading)
-          if (averageTemperature != null && !_isDataLoading)
-            Padding(
-              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-              child: Text(
-                'Average: ${averageTemperature.toStringAsFixed(1)}°C',
-                style: TextStyle(color: kAverageColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                textAlign: TextAlign.left,
-              ),
-            ),
-          // Average data error message if it failed
-          if (_averageDataFailed)
-            Padding(
-              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-              child: Row(
-                children: [
-                  Icon(
-                    _isRetryingAverage ? Icons.hourglass_empty : 
-                    _averageDataRateLimited ? Icons.timer : Icons.error_outline,
-                    color: _isRetryingAverage ? kGreyLabelColour : 
-                           _averageDataRateLimited ? kGreyLabelColour : kAccentColour,
-                    size: kIconSize,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _isRetryingAverage 
-                        ? 'Retrying average temperature data...'
-                        : _averageDataRateLimited 
-                          ? 'Rate limit exceeded - please wait before retrying'
-                          : 'Failed to load average temperature data',
-                      style: TextStyle(
-                        color: _isRetryingAverage ? kGreyLabelColour : 
-                               _averageDataRateLimited ? kGreyLabelColour : kAccentColour, 
-                        fontSize: kFontSizeBody - 1, 
-                        fontWeight: FontWeight.w400
-                      ),
-                      textAlign: TextAlign.left,
-                    ),
-                  ),
-                  if (!_isRetryingAverage && !_averageDataRateLimited) ...[
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: _retryAverageData,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: kAccentColour.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'Retry',
-                          style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          // Trend text below chart (only show after loading)
-          if (trendSlope != null && !_isDataLoading)
-            Padding(
-              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-              child: Text(
-                trendSlope.abs() < 0.05
-                  ? 'Trend: Steady at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
-                  : trendSlope > 0 
-                    ? 'Trend: Rising at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
-                    : 'Trend: Falling at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
-                style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-                textAlign: TextAlign.left,
-              ),
-            ),
-          // Trend data error message if it failed
-          if (_trendDataFailed)
-            Padding(
-              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-              child: Row(
-                children: [
-                  Icon(
-                    _isRetryingTrend ? Icons.hourglass_empty : Icons.error_outline,
-                    color: _isRetryingTrend ? kGreyLabelColour : kAccentColour,
-                    size: kIconSize,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _isRetryingTrend 
-                        ? 'Retrying trend data...'
-                        : _trendDataRateLimited 
-                          ? 'Rate limit exceeded - please wait before retrying'
-                          : 'Failed to load trend data',
-                      style: TextStyle(
-                        color: _isRetryingTrend ? kGreyLabelColour : 
-                               _trendDataRateLimited ? kGreyLabelColour : kAccentColour, 
-                        fontSize: kFontSizeBody - 1, 
-                        fontWeight: FontWeight.w400
-                      ),
-                      textAlign: TextAlign.left,
-                    ),
-                  ),
-                  if (!_isRetryingTrend && !_trendDataRateLimited) ...[
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: _retryTrendData,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: kAccentColour.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'Retry',
-                          style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          // Summary error message if it failed
-          if (_summaryDataFailed)
-            Padding(
-              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-              child: Row(
-                children: [
-                  Icon(
-                    _isRetryingSummary ? Icons.hourglass_empty : Icons.error_outline,
-                    color: _isRetryingSummary ? kGreyLabelColour : kAccentColour,
-                    size: kIconSize,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _isRetryingSummary 
-                        ? 'Retrying summary data...'
-                        : _summaryDataRateLimited 
-                          ? 'Rate limit exceeded - please wait before retrying'
-                          : 'Failed to load summary data',
-                      style: TextStyle(
-                        color: _isRetryingSummary ? kGreyLabelColour : 
-                               _summaryDataRateLimited ? kGreyLabelColour : kAccentColour, 
-                        fontSize: kFontSizeBody - 1, 
-                        fontWeight: FontWeight.w400
-                      ),
-                      textAlign: TextAlign.left,
-                    ),
-                  ),
-                  if (!_isRetryingSummary && !_summaryDataRateLimited) ...[
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: _retrySummaryData,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: kAccentColour.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'Retry',
-                          style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          // Data completeness indicator
-          _buildDataCompletenessIndicator(chartData),
+          const SizedBox(height: 12),
+          _buildRetryButton(() {
+            debugPrintIfDebugging('Retry button pressed while offline');
+            _handleOfflineRetry();
+          }),
+          const SizedBox(height: 16),
         ],
-      ),
+
+        _buildCitySection(city),
+        _buildSummarySection(summaryText),
+        TemperatureBarChart(
+          chartData: chartData,
+          averageTemperature: averageTemperature,
+          trendSlope: trendSlope,
+          isLoading: _isDataLoading,
+          height: chartHeight,
+        ),
+        // Consistent spacing below chart - always show this
+        const SizedBox(height: kSectionTopPadding),
+        // Average temperature text below chart (only show after loading)
+        if (averageTemperature != null && !_isDataLoading)
+          Padding(
+            padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+            child: Text(
+              'Average: ${averageTemperature.toStringAsFixed(1)}°C',
+              style: TextStyle(color: kAverageColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+              textAlign: TextAlign.left,
+            ),
+          ),
+        // Average data error message if it failed
+        if (_averageDataFailed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+            child: Row(
+              children: [
+                Icon(
+                  _isRetryingAverage ? Icons.hourglass_empty : 
+                  _averageDataRateLimited ? Icons.timer : Icons.error_outline,
+                  color: _isRetryingAverage ? kGreyLabelColour : 
+                         _averageDataRateLimited ? kGreyLabelColour : kAccentColour,
+                  size: kIconSize,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _isRetryingAverage 
+                      ? 'Retrying average temperature data...'
+                      : _averageDataRateLimited 
+                        ? 'Rate limit exceeded - please wait before retrying'
+                        : 'Failed to load average temperature data',
+                    style: TextStyle(
+                      color: _isRetryingAverage ? kGreyLabelColour : 
+                             _averageDataRateLimited ? kGreyLabelColour : kAccentColour, 
+                      fontSize: kFontSizeBody - 1, 
+                      fontWeight: FontWeight.w400
+                    ),
+                    textAlign: TextAlign.left,
+                  ),
+                ),
+                if (!_isRetryingAverage && !_averageDataRateLimited) ...[
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _retryAverageData,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: kAccentColour.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Retry',
+                        style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        // Trend text below chart (only show after loading)
+        if (trendSlope != null && !_isDataLoading)
+          Padding(
+            padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+            child: Text(
+              trendSlope.abs() < 0.05
+                ? 'Trend: Steady at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
+                : trendSlope > 0 
+                  ? 'Trend: Rising at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
+                  : 'Trend: Falling at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
+              style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
+              textAlign: TextAlign.left,
+            ),
+          ),
+        // Trend data error message if it failed
+        if (_trendDataFailed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+            child: Row(
+              children: [
+                Icon(
+                  _isRetryingTrend ? Icons.hourglass_empty : Icons.error_outline,
+                  color: _isRetryingTrend ? kGreyLabelColour : kAccentColour,
+                  size: kIconSize,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _isRetryingTrend 
+                      ? 'Retrying trend data...'
+                      : _trendDataRateLimited 
+                        ? 'Rate limit exceeded - please wait before retrying'
+                        : 'Failed to load trend data',
+                    style: TextStyle(
+                      color: _isRetryingTrend ? kGreyLabelColour : 
+                             _trendDataRateLimited ? kGreyLabelColour : kAccentColour, 
+                      fontSize: kFontSizeBody - 1, 
+                      fontWeight: FontWeight.w400
+                    ),
+                    textAlign: TextAlign.left,
+                  ),
+                ),
+                if (!_isRetryingTrend && !_trendDataRateLimited) ...[
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _retryTrendData,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: kAccentColour.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Retry',
+                        style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        // Summary error message if it failed
+        if (_summaryDataFailed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+            child: Row(
+              children: [
+                Icon(
+                  _isRetryingSummary ? Icons.hourglass_empty : Icons.error_outline,
+                  color: _isRetryingSummary ? kGreyLabelColour : kAccentColour,
+                  size: kIconSize,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _isRetryingSummary 
+                      ? 'Retrying summary data...'
+                      : _summaryDataRateLimited 
+                        ? 'Rate limit exceeded - please wait before retrying'
+                        : 'Failed to load summary data',
+                    style: TextStyle(
+                      color: _isRetryingSummary ? kGreyLabelColour : 
+                             _summaryDataRateLimited ? kGreyLabelColour : kAccentColour, 
+                      fontSize: kFontSizeBody - 1, 
+                      fontWeight: FontWeight.w400
+                    ),
+                    textAlign: TextAlign.left,
+                  ),
+                ),
+                if (!_isRetryingSummary && !_summaryDataRateLimited) ...[
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _retrySummaryData,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: kAccentColour.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Retry',
+                        style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        // Data completeness indicator
+        _buildDataCompletenessIndicator(chartData),
+      ],
     );
   }
 
