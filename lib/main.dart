@@ -12,10 +12,9 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:flutter/services.dart';
-import 'dart:io' show Platform;
+import 'dart:io' as io;
 import 'dart:async'; // Added for StreamSubscription and StreamController
 import 'dart:convert'; // Added for jsonEncode/jsonDecode
-import 'dart:io' as io;
 
 import 'services/temperature_service.dart';
 import 'config/app_config.dart';
@@ -128,7 +127,7 @@ String _cleanupLocationString(String location) {
 /// Check available storage space and return true if sufficient space is available
 Future<bool> _checkStorageSpace() async {
   try {
-    if (Platform.isAndroid || Platform.isIOS) {
+    if (io.Platform.isAndroid || io.Platform.isIOS) {
       // For mobile platforms, we can't easily check storage space
       // but we can try to write a small test file to see if storage is available
       final tempDir = io.Directory.systemTemp;
@@ -139,7 +138,7 @@ Future<bool> _checkStorageSpace() async {
         await testFile.delete();
         return true;
       } catch (e) {
-        debugPrintIfDebugging('Storage test failed: $e');
+        DebugUtils.logLazy(() => 'Storage test failed: $e');
         return false;
       }
     } else {
@@ -149,7 +148,7 @@ Future<bool> _checkStorageSpace() async {
       return true;
     }
   } catch (e) {
-    debugPrintIfDebugging('Storage space check failed: $e');
+    DebugUtils.logLazy(() => 'Storage space check failed: $e');
     return false;
   }
 }
@@ -163,26 +162,26 @@ Future<T?> _safeSharedPreferencesOperation<T>(
     // Check storage space before attempting operation
     final hasSpace = await _checkStorageSpace();
     if (!hasSpace) {
-      debugPrintIfDebugging('⚠️ Insufficient storage space for $operationName');
+      DebugUtils.logLazy(() => '⚠️ Insufficient storage space for $operationName');
       return null;
     }
     
     return await operation();
   } catch (e) {
-    debugPrintIfDebugging('❌ SharedPreferences $operationName failed: $e');
+    DebugUtils.logLazy(() => '❌ SharedPreferences $operationName failed: $e');
     
     // If it's a storage-related error, try to clear some cache
     if (e.toString().contains('No space left') || 
         e.toString().contains('ENOSPC') ||
         e.toString().contains('storage')) {
-      debugPrintIfDebugging('🧹 Storage error detected, attempting cache cleanup');
+      DebugUtils.logLazy(() => '🧹 Storage error detected, attempting cache cleanup');
       await _emergencyCacheCleanup();
       
       // Try the operation once more after cleanup
       try {
         return await operation();
       } catch (e2) {
-        debugPrintIfDebugging('❌ Operation still failed after cleanup: $e2');
+        DebugUtils.logLazy(() => '❌ Operation still failed after cleanup: $e2');
         return null;
       }
     }
@@ -230,9 +229,9 @@ Future<void> _emergencyCacheCleanup() async {
       cleanedCount++;
     }
     
-    debugPrintIfDebugging('🧹 Emergency cleanup removed $cleanedCount cache entries');
+    DebugUtils.logLazy(() => '🧹 Emergency cleanup removed $cleanedCount cache entries');
   } catch (e) {
-    debugPrintIfDebugging('❌ Emergency cache cleanup failed: $e');
+    DebugUtils.logLazy(() => '❌ Emergency cache cleanup failed: $e');
   }
 }
 
@@ -254,11 +253,6 @@ bool _isLocationSuspicious(String location) {
   return false;
 }
 
-/// Legacy function for backward compatibility.
-/// @deprecated Use DebugUtils.logLazy() directly for better performance and consistency.
-void debugPrintIfDebugging(Object? message) {
-  DebugUtils.logLazy(() => message);
-}
 
 
 
@@ -277,7 +271,7 @@ void main() async {
 }
 
 void _setSystemUIOverlayStyle() {
-  if (Platform.isIOS) {
+  if (io.Platform.isIOS) {
     // iOS-specific configuration
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -287,7 +281,7 @@ void _setSystemUIOverlayStyle() {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
-  } else if (Platform.isAndroid) {
+  } else if (io.Platform.isAndroid) {
     // Android-specific configuration
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -322,7 +316,7 @@ Future<void> _signInWithRetry({int maxRetries = 3}) async {
   while (attempts < maxRetries) {
     try {
       attempts++;
-      debugPrintIfDebugging('🔐 Firebase auth attempt $attempts/$maxRetries');
+      DebugUtils.logLazy(() => '🔐 Firebase auth attempt $attempts/$maxRetries');
       
       final auth = FirebaseAuth.instance;
       await auth.signInAnonymously().timeout(
@@ -332,15 +326,15 @@ Future<void> _signInWithRetry({int maxRetries = 3}) async {
         },
       );
       
-      debugPrintIfDebugging('✅ Firebase authentication successful');
+      DebugUtils.logLazy(() => '✅ Firebase authentication successful');
       return;
       
     } catch (e) {
-      debugPrintIfDebugging('❌ Firebase auth attempt $attempts failed: $e');
+      DebugUtils.logLazy(() => '❌ Firebase auth attempt $attempts failed: $e');
       
       // If this is the last attempt, rethrow the error
       if (attempts >= maxRetries) {
-        debugPrintIfDebugging('🚨 All Firebase auth attempts failed, app will continue without authentication');
+        DebugUtils.logLazy(() => '🚨 All Firebase auth attempts failed, app will continue without authentication');
         // Don't crash the app - continue without authentication
         // The app should still work for basic functionality
         return;
@@ -348,7 +342,7 @@ Future<void> _signInWithRetry({int maxRetries = 3}) async {
       
       // Wait before retrying (exponential backoff)
       final delay = Duration(seconds: attempts * 2);
-      debugPrintIfDebugging('⏳ Waiting ${delay.inSeconds}s before retry...');
+      DebugUtils.logLazy(() => '⏳ Waiting ${delay.inSeconds}s before retry...');
       await Future.delayed(delay);
     }
   }
@@ -549,11 +543,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _pageController = PageController();
 
     // Debug mode detection logging
-    debugPrintIfDebugging('🔧 Debug mode detection:');
-    debugPrintIfDebugging('  - kDebugMode: $kDebugMode');
-    debugPrintIfDebugging('  - AppConfig.isDebugMode: ${AppConfig.isDebugMode}');
-    debugPrintIfDebugging('  - AppConfig.enableDebugUI: ${AppConfig.enableDebugUI}');
-    debugPrintIfDebugging('  - AppConfig.shouldShowDebugFeatures: ${AppConfig.shouldShowDebugFeatures}');
+    DebugUtils.logLazy(() => '🔧 Debug mode detection:');
+    DebugUtils.logLazy(() => '  - kDebugMode: $kDebugMode');
+    DebugUtils.logLazy(() => '  - AppConfig.isDebugMode: ${AppConfig.isDebugMode}');
+    DebugUtils.logLazy(() => '  - AppConfig.enableDebugUI: ${AppConfig.enableDebugUI}');
+    DebugUtils.logLazy(() => '  - AppConfig.shouldShowDebugFeatures: ${AppConfig.shouldShowDebugFeatures}');
     
     // Start network connectivity monitoring
     _startConnectivityMonitoring();
@@ -593,14 +587,14 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     super.didChangeAppLifecycleState(state);
     
     if (state == AppLifecycleState.resumed) {
-      debugPrintIfDebugging('App resumed - checking if location or date needs refresh');
+      DebugUtils.logLazy(() => 'App resumed - checking if location or date needs refresh');
       _checkAndRefreshLocationIfNeeded();
       _checkAndRefreshDataIfDateChanged();
     } else if (state == AppLifecycleState.paused) {
-      debugPrintIfDebugging('App paused - performing memory cleanup');
+      DebugUtils.logLazy(() => 'App paused - performing memory cleanup');
       _performAggressiveMemoryCleanup();
     } else if (state == AppLifecycleState.detached) {
-      debugPrintIfDebugging('App detached - performing final cleanup');
+      DebugUtils.logLazy(() => 'App detached - performing final cleanup');
       _performAggressiveMemoryCleanup();
     }
   }
@@ -665,10 +659,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Refresh location if it's been more than 1 hour
     if (timeSinceLastLocation.inHours >= 1) {
-      debugPrintIfDebugging('Location is ${timeSinceLastLocation.inHours} hours old, refreshing...');
+      DebugUtils.logLazy(() => 'Location is ${timeSinceLastLocation.inHours} hours old, refreshing...');
       await _refreshLocationAndData();
     } else {
-      debugPrintIfDebugging('Location is only ${timeSinceLastLocation.inMinutes} minutes old, keeping cached location');
+      DebugUtils.logLazy(() => 'Location is only ${timeSinceLastLocation.inMinutes} minutes old, keeping cached location');
     }
   }
 
@@ -683,10 +677,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Check if the date has changed
     if (!_isSameDate(_currentDataDate!, currentDate)) {
-      debugPrintIfDebugging('Date changed from ${_formatDayMonth(_currentDataDate!)} to ${_formatDayMonth(currentDate)}, refreshing data...');
+      DebugUtils.logLazy(() => 'Date changed from ${_formatDayMonth(_currentDataDate!)} to ${_formatDayMonth(currentDate)}, refreshing data...');
       await _refreshDataForNewDate(currentDateInfo);
     } else {
-      debugPrintIfDebugging('Date unchanged (${_formatDayMonth(currentDate)}), keeping current data');
+      DebugUtils.logLazy(() => 'Date unchanged (${_formatDayMonth(currentDate)}), keeping current data');
     }
   }
 
@@ -697,7 +691,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Future<void> _refreshDataForNewDate([Map<String, String>? dateInfo]) async {
-    debugPrintIfDebugging('Refreshing data for new date...');
+    DebugUtils.logLazy(() => 'Refreshing data for new date...');
     
     // Use provided date info or get current date info
     final currentDateInfo = dateInfo ?? _getCurrentDateAndLocation(_determinedLocation);
@@ -726,7 +720,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Future<void> _refreshLocationAndData() async {
-    debugPrintIfDebugging('Refreshing location and data...');
+    DebugUtils.logLazy(() => 'Refreshing location and data...');
     
     // Reset location state
     setState(() {
@@ -783,7 +777,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Start a timer that will show average/trend lines after the configured delay
     _averageTrendDisplayTimer = Timer(const Duration(seconds: kAverageTrendDisplayDelaySeconds), () {
-      debugPrintIfDebugging('Average/trend display timer triggered - showing lines after timeout');
+      DebugUtils.logLazy(() => 'Average/trend display timer triggered - showing lines after timeout');
       setState(() {
         // Force show average and trend lines by setting _isDataLoading to false
         _isDataLoading = false;
@@ -856,7 +850,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Clear location cache
       await prefs.remove('cachedLocation');
       
-      debugPrintIfDebugging('All cache cleared: chart data, API responses, temperature data, and location');
+      DebugUtils.logLazy(() => 'All cache cleared: chart data, API responses, temperature data, and location');
     }, 'clear cache');
   }
 
@@ -865,7 +859,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     await _safeSharedPreferencesOperation(() async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('cachedLocation');
-      debugPrintIfDebugging('Location cache cleared');
+      DebugUtils.logLazy(() => 'Location cache cleared');
     }, 'clear location cache');
   }
 
@@ -879,7 +873,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
       await prefs.setString('cachedLocation', jsonEncode(cacheData));
-      debugPrintIfDebugging('📍 Location cached: $location');
+      DebugUtils.logLazy(() => '📍 Location cached: $location');
     }, 'cache location');
   }
 
@@ -895,12 +889,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       final age = DateTime.now().difference(timestamp);
 
       if (age > _locationCacheExpiration) {
-        debugPrintIfDebugging('📍 Cached location expired (${age.inMinutes} minutes old)');
+        DebugUtils.logLazy(() => '📍 Cached location expired (${age.inMinutes} minutes old)');
         await prefs.remove('cachedLocation');
         return null;
       }
 
-      debugPrintIfDebugging('📍 Using cached location: ${data['location']} (${age.inMinutes} minutes old)');
+      DebugUtils.logLazy(() => '📍 Using cached location: ${data['location']} (${age.inMinutes} minutes old)');
       return {
         'location': data['location'] as String,
         'displayLocation': data['displayLocation'] as String,
@@ -922,7 +916,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         'date': date,
       };
       await prefs.setString(cacheKey, jsonEncode(cacheData));
-      debugPrintIfDebugging('🌡️ Temperature data cached: $year for $location');
+      DebugUtils.logLazy(() => '🌡️ Temperature data cached: $year for $location');
     }, 'cache temperature data');
   }
 
@@ -943,12 +937,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       final expiration = isCurrentYear ? _currentDateCacheExpiration : _historicalDataCacheExpiration;
 
       if (age > expiration) {
-        debugPrintIfDebugging('🌡️ Cached temperature data expired: $year (${age.inHours} hours old)');
+        DebugUtils.logLazy(() => '🌡️ Cached temperature data expired: $year (${age.inHours} hours old)');
         await prefs.remove(cacheKey);
         return null;
       }
 
-      debugPrintIfDebugging('🌡️ Using cached temperature data: $year (${age.inMinutes} minutes old)');
+      DebugUtils.logLazy(() => '🌡️ Using cached temperature data: $year (${age.inMinutes} minutes old)');
       return data['data'] as Map<String, dynamic>;
     }, 'load cached temperature data');
     return result;
@@ -967,7 +961,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         'date': date,
       };
       await prefs.setString(cacheKey, jsonEncode(cacheData));
-      debugPrintIfDebugging('📊 API response cached: $endpoint for $location');
+      DebugUtils.logLazy(() => '📊 API response cached: $endpoint for $location');
     }, 'cache API response');
   }
 
@@ -998,12 +992,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       }
 
       if (age > expiration) {
-        debugPrintIfDebugging('📊 Cached API response expired: $endpoint (${age.inHours} hours old)');
+        DebugUtils.logLazy(() => '📊 Cached API response expired: $endpoint (${age.inHours} hours old)');
         await prefs.remove(cacheKey);
         return null;
       }
 
-      debugPrintIfDebugging('📊 Using cached API response: $endpoint (${age.inMinutes} minutes old)');
+      DebugUtils.logLazy(() => '📊 Using cached API response: $endpoint (${age.inMinutes} minutes old)');
       return data['data'] as Map<String, dynamic>;
     }, 'load cached API response');
     return result;
@@ -1064,7 +1058,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       }
 
       if (cleanedCount > 0) {
-        debugPrintIfDebugging('🧹 Cleaned up $cleanedCount expired cache entries');
+        DebugUtils.logLazy(() => '🧹 Cleaned up $cleanedCount expired cache entries');
       }
     }, 'cleanup expired cache');
   }
@@ -1075,7 +1069,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       return; // Nothing to retry
     }
     
-    debugPrintIfDebugging('Retrying failed data fetches...');
+    DebugUtils.logLazy(() => 'Retrying failed data fetches...');
     
     try {
       final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
@@ -1113,11 +1107,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             });
           }
         } catch (e) {
-          debugPrintIfDebugging('Retry of average data failed: $e');
+          DebugUtils.logLazy(() => 'Retry of average data failed: $e');
           
           // Check if it's a network error and test actual connectivity
           if (_isNetworkError(e.toString())) {
-            debugPrintIfDebugging('🌐 Potential network error detected during average data retry, testing connectivity');
+            DebugUtils.logLazy(() => '🌐 Potential network error detected during average data retry, testing connectivity');
             final isActuallyOffline = await _testConnectivity();
             if (!isActuallyOffline) {
               _isOnline = false;
@@ -1173,11 +1167,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             });
           }
         } catch (e) {
-          debugPrintIfDebugging('Retry of trend data failed: $e');
+          DebugUtils.logLazy(() => 'Retry of trend data failed: $e');
           
           // Check if it's a network error and test actual connectivity
           if (_isNetworkError(e.toString())) {
-            debugPrintIfDebugging('🌐 Potential network error detected during trend data retry, testing connectivity');
+            DebugUtils.logLazy(() => '🌐 Potential network error detected during trend data retry, testing connectivity');
             final isActuallyOffline = await _testConnectivity();
             if (!isActuallyOffline) {
               _isOnline = false;
@@ -1222,11 +1216,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             });
           }
         } catch (e) {
-          debugPrintIfDebugging('Retry of summary data failed: $e');
+          DebugUtils.logLazy(() => 'Retry of summary data failed: $e');
           
           // Check if it's a network error and test actual connectivity
           if (_isNetworkError(e.toString())) {
-            debugPrintIfDebugging('🌐 Potential network error detected during summary data retry, testing connectivity');
+            DebugUtils.logLazy(() => '🌐 Potential network error detected during summary data retry, testing connectivity');
             final isActuallyOffline = await _testConnectivity();
             if (!isActuallyOffline) {
               _isOnline = false;
@@ -1243,14 +1237,14 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         }
       }
     } catch (e) {
-      debugPrintIfDebugging('Error during retry: $e');
+      DebugUtils.logLazy(() => 'Error during retry: $e');
     }
   }
 
   Future<void> _retryAverageData() async {
     if (!_averageDataFailed) return;
     
-    debugPrintIfDebugging('Retrying average data...');
+    DebugUtils.logLazy(() => 'Retrying average data...');
     
     try {
       final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
@@ -1285,11 +1279,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           });
         }
       } catch (e) {
-        debugPrintIfDebugging('Retry of average data failed: $e');
+        DebugUtils.logLazy(() => 'Retry of average data failed: $e');
         
         // Check if it's a network error and test actual connectivity
         if (_isNetworkError(e.toString())) {
-          debugPrintIfDebugging('🌐 Potential network error detected during average data retry, testing connectivity');
+          DebugUtils.logLazy(() => '🌐 Potential network error detected during average data retry, testing connectivity');
           final isActuallyOffline = await _testConnectivity();
           if (!isActuallyOffline) {
             _isOnline = false;
@@ -1305,7 +1299,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         });
       }
     } catch (e) {
-      debugPrintIfDebugging('Error during average retry: $e');
+      DebugUtils.logLazy(() => 'Error during average retry: $e');
       setState(() {
         _isRetryingAverage = false;
       });
@@ -1315,7 +1309,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<void> _retryTrendData() async {
     if (!_trendDataFailed) return;
     
-    debugPrintIfDebugging('Retrying trend data...');
+    DebugUtils.logLazy(() => 'Retrying trend data...');
     
     try {
       final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
@@ -1349,13 +1343,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           });
         }
       } catch (e) {
-        debugPrintIfDebugging('Retry of trend data failed: $e');
+        DebugUtils.logLazy(() => 'Retry of trend data failed: $e');
         setState(() {
           _isRetryingTrend = false;
         });
       }
     } catch (e) {
-      debugPrintIfDebugging('Error during trend retry: $e');
+      DebugUtils.logLazy(() => 'Error during trend retry: $e');
       setState(() {
         _isRetryingTrend = false;
       });
@@ -1365,7 +1359,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<void> _retrySummaryData() async {
     if (!_summaryDataFailed) return;
     
-    debugPrintIfDebugging('Retrying summary data...');
+    DebugUtils.logLazy(() => 'Retrying summary data...');
     
     try {
       final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
@@ -1399,13 +1393,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           });
         }
       } catch (e) {
-        debugPrintIfDebugging('Retry of summary data failed: $e');
+        DebugUtils.logLazy(() => 'Retry of summary data failed: $e');
         setState(() {
           _isRetryingSummary = false;
         });
       }
     } catch (e) {
-      debugPrintIfDebugging('Error during summary retry: $e');
+      DebugUtils.logLazy(() => 'Error during summary retry: $e');
       setState(() {
         _isRetryingSummary = false;
       });
@@ -1414,12 +1408,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   Future<void> _retryChartData() async {
     if (_chartDataRetryCount >= _maxChartDataRetries) {
-      debugPrintIfDebugging('🛑 Max chart data retries reached ($_chartDataRetryCount/$_maxChartDataRetries), not retrying further');
+      DebugUtils.logLazy(() => '🛑 Max chart data retries reached ($_chartDataRetryCount/$_maxChartDataRetries), not retrying further');
       return;
     }
     
-    debugPrintIfDebugging('🔄 Retrying chart data... (attempt ${_chartDataRetryCount + 1}/$_maxChartDataRetries)');
-    debugPrintIfDebugging('📋 Failed years to retry: $_failedYears');
+    DebugUtils.logLazy(() => '🔄 Retrying chart data... (attempt ${_chartDataRetryCount + 1}/$_maxChartDataRetries)');
+    DebugUtils.logLazy(() => '📋 Failed years to retry: $_failedYears');
     
     // Store the failed years before clearing them
     final yearsToRetry = List<int>.from(_failedYears);
@@ -1437,12 +1431,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       // Retry loading the failed years specifically
       if (yearsToRetry.isNotEmpty) {
-        debugPrintIfDebugging('🎯 Retrying specific failed years: $yearsToRetry');
+        DebugUtils.logLazy(() => '🎯 Retrying specific failed years: $yearsToRetry');
         // Temporarily restore the failed years for the retry function
         _failedYears.addAll(yearsToRetry);
         await _retryFailedYears();
       } else {
-        debugPrintIfDebugging('🔄 No specific failed years, triggering full refresh');
+        DebugUtils.logLazy(() => '🔄 No specific failed years, triggering full refresh');
         // If no specific failed years, trigger a full refresh
         await _handleRefresh();
       }
@@ -1450,9 +1444,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       setState(() {
         _isRetryingChartData = false;
       });
-      debugPrintIfDebugging('✅ Chart data retry completed');
+      DebugUtils.logLazy(() => '✅ Chart data retry completed');
     } catch (e) {
-      debugPrintIfDebugging('❌ Error during chart data retry: $e');
+      DebugUtils.logLazy(() => '❌ Error during chart data retry: $e');
       setState(() {
         _isRetryingChartData = false;
       });
@@ -1462,23 +1456,23 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   // if years didn't load before try loading them again
   Future<void> _retryFailedYears() async {
     if (_failedYears.isEmpty) {
-      debugPrintIfDebugging('⚠️ No failed years to retry');
+      DebugUtils.logLazy(() => '⚠️ No failed years to retry');
       return;
     }
     
-    debugPrintIfDebugging('🔄 Retrying failed years: $_failedYears');
+    DebugUtils.logLazy(() => '🔄 Retrying failed years: $_failedYears');
     
     try {
       final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
       final mmdd = dateInfo['mmdd']!;
       final city = dateInfo['city']!;
       
-      debugPrintIfDebugging('📍 Retry parameters - city: $city, date: $mmdd');
+      DebugUtils.logLazy(() => '📍 Retry parameters - city: $city, date: $mmdd');
       
       final service = TemperatureService();
       final currentData = _currentData;
       if (currentData == null) {
-        debugPrintIfDebugging('❌ No current data available for retry');
+        DebugUtils.logLazy(() => '❌ No current data available for retry');
         return;
       }
       
@@ -1490,7 +1484,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Retry each failed year
       for (int year in _failedYears) {
         final dateForYear = '$year-$mmdd';
-        debugPrintIfDebugging('🔄 Retrying year $year ($dateForYear)');
+        DebugUtils.logLazy(() => '🔄 Retrying year $year ($dateForYear)');
         try {
           final tempData = await service.fetchTemperature(city, dateForYear);
           final temperature = tempData.temperature ?? tempData.average?.temperature;
@@ -1507,17 +1501,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               );
               
               successCount++;
-              debugPrintIfDebugging('✅ Successfully retried year $year: ${temperature.toStringAsFixed(1)}°C');
+              DebugUtils.logLazy(() => '✅ Successfully retried year $year: ${temperature.toStringAsFixed(1)}°C');
             }
           } else {
-            debugPrintIfDebugging('❌ No valid temperature data for retry year $year');
+            DebugUtils.logLazy(() => '❌ No valid temperature data for retry year $year');
           }
         } catch (e) {
-          debugPrintIfDebugging('❌ Failed to retry year $year: $e');
+          DebugUtils.logLazy(() => '❌ Failed to retry year $year: $e');
           
           // Check if this is a network error and test actual connectivity
           if (_isNetworkError(e.toString())) {
-            debugPrintIfDebugging('🌐 Potential network error detected during retry, testing connectivity');
+            DebugUtils.logLazy(() => '🌐 Potential network error detected during retry, testing connectivity');
             final isActuallyOffline = await _testConnectivity();
             if (!isActuallyOffline) {
               _isOnline = false;
@@ -1529,7 +1523,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           }
           
           if (e is RateLimitException) {
-            debugPrintIfDebugging('⚠️ Rate limit hit during retry, stopping');
+            DebugUtils.logLazy(() => '⚠️ Rate limit hit during retry, stopping');
             setState(() {
               _chartDataFailedDueToRateLimit = true;
             });
@@ -1544,14 +1538,14 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Update the current data with retried results
       _currentData!['chartData'] = chartData;
       
-      debugPrintIfDebugging('📊 Retry completed: $successCount/${_failedYears.length} years successfully retried');
+      DebugUtils.logLazy(() => '📊 Retry completed: $successCount/${_failedYears.length} years successfully retried');
       
       if (mounted) {
         setState(() {});
       }
       
     } catch (e) {
-      debugPrintIfDebugging('❌ Error during failed years retry: $e');
+      DebugUtils.logLazy(() => '❌ Error during failed years retry: $e');
     }
   }
 
@@ -1587,7 +1581,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Try to load cached location first
       final cachedLocation = await _loadCachedLocation();
       if (cachedLocation != null) {
-        debugPrintIfDebugging('Using cached location: ${cachedLocation['location']}');
+        DebugUtils.logLazy(() => 'Using cached location: ${cachedLocation['location']}');
         setState(() {
           _determinedLocation = cachedLocation['location']!;
           _displayLocation = cachedLocation['displayLocation']!;
@@ -1599,7 +1593,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       // Try to get user's city via geolocation
       try {
-        debugPrintIfDebugging('_determineLocation: Starting geolocation');
+        DebugUtils.logLazy(() => '_determineLocation: Starting geolocation');
         
         bool serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
         if (serviceEnabled) {
@@ -1615,7 +1609,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 ),
               ).timeout(const Duration(seconds: 10));
               
-              debugPrintIfDebugging('_determineLocation: Position obtained - lat: ${position.latitude}, lon: ${position.longitude}');
+              DebugUtils.logLazy(() => '_determineLocation: Position obtained - lat: ${position.latitude}, lon: ${position.longitude}');
               
               List<Placemark> placemarks = await placemarkFromCoordinates(
                 position.latitude, 
@@ -1642,7 +1636,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                     city = locality;
                   }
                   
-                  debugPrintIfDebugging('Geolocation result - Locality: $locality, Admin: $administrativeArea, Country: $country, Final: $city');
+                  DebugUtils.logLazy(() => 'Geolocation result - Locality: $locality, Admin: $administrativeArea, Country: $country, Final: $city');
                 } else {
                   // If no locality, try to use administrative area + country
                   if (placemark.administrativeArea != null && placemark.administrativeArea!.isNotEmpty) {
@@ -1657,12 +1651,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 }
               }
             } catch (e) {
-              debugPrintIfDebugging('Geolocation timeout or error: $e');
+              DebugUtils.logLazy(() => 'Geolocation timeout or error: $e');
             }
           }
         }
       } catch (e) {
-        debugPrintIfDebugging('Geolocation failed, falling back to $city: $e');
+        DebugUtils.logLazy(() => 'Geolocation failed, falling back to $city: $e');
       }
       
       // Validate and clean up the city string
@@ -1670,11 +1664,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       // Additional validation to catch obviously wrong locations
       if (_isLocationSuspicious(city)) {
-        debugPrintIfDebugging('Suspicious location detected: $city, falling back to default');
+        DebugUtils.logLazy(() => 'Suspicious location detected: $city, falling back to default');
         city = kDefaultLocation;
       }
       
-      debugPrintIfDebugging('_determineLocation: Final city: $city');
+      DebugUtils.logLazy(() => '_determineLocation: Final city: $city');
       
       // Verbose logging for location determination
       DebugUtils.verboseWithContextLazy('Location', () => 'Determined location: $city (display: ${_extractDisplayLocation(city)})');
@@ -1698,7 +1692,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       _prefetchPeriodData();
       
     } catch (e) {
-      debugPrintIfDebugging('_determineLocation failed: $e');
+      DebugUtils.logLazy(() => '_determineLocation failed: $e');
       // Set default location if everything fails
       setState(() {
         _determinedLocation = kDefaultLocation;
@@ -1856,13 +1850,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<void> _loadChartDataProgressive() async {
     // Prevent multiple concurrent loading operations
     if (_isLoadingOperationActive) {
-      debugPrintIfDebugging('_loadChartDataProgressive: Already loading, skipping duplicate request');
+      DebugUtils.logLazy(() => '_loadChartDataProgressive: Already loading, skipping duplicate request');
       return;
     }
     
     // Check network connectivity before attempting to load data
     if (!_isOnline) {
-      debugPrintIfDebugging('📡 No network connection, skipping data load');
+      DebugUtils.logLazy(() => '📡 No network connection, skipping data load');
       setState(() {
         _isDataLoading = false;
         _progressiveLoadingCompleted = true;
@@ -1871,7 +1865,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }
     
     _isLoadingOperationActive = true;
-    debugPrintIfDebugging('_loadChartDataProgressive: Starting progressive chart data load');
+    DebugUtils.logLazy(() => '_loadChartDataProgressive: Starting progressive chart data load');
     
     try {
       final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
@@ -1879,7 +1873,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       final dateToUse = DateTime.parse(formattedDate);
       final now = DateTime.now();
       final useYesterday = now.hour < kUseYesterdayHourThreshold;
-      debugPrintIfDebugging('_loadChartDataProgressive: Current time: ${now.hour}:${now.minute}, useYesterday: $useYesterday, dateToUse: $formattedDate');
+      DebugUtils.logLazy(() => '_loadChartDataProgressive: Current time: ${now.hour}:${now.minute}, useYesterday: $useYesterday, dateToUse: $formattedDate');
 
       final service = TemperatureService();
       String city = dateInfo['city']!;
@@ -1887,7 +1881,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Update the current data date
       _currentDataDate = dateToUse;
       
-      debugPrintIfDebugging('_loadChartDataProgressive: Using determined city: $city');
+      DebugUtils.logLazy(() => '_loadChartDataProgressive: Using determined city: $city');
       final currentYear = dateToUse.year;
       final identifier = formattedDate.substring(5);
 
@@ -1938,336 +1932,14 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Log final results
       final successfulYears = chartData.where((data) => data.hasData).length;
       final totalYears = chartData.length;
-      debugPrintIfDebugging('📊 Chart data loading completed: $successfulYears/$totalYears years loaded successfully');
+      DebugUtils.logLazy(() => '📊 Chart data loading completed: $successfulYears/$totalYears years loaded successfully');
       if (_failedYears.isNotEmpty) {
-        debugPrintIfDebugging('❌ Missing years: $_failedYears');
+        DebugUtils.logLazy(() => '❌ Missing years: $_failedYears');
       }
 
       return;
-
-      /*
-      // Skip main /data/ endpoint for progressive loading to ensure year-by-year loading is visible
-      // This forces the fallback method which loads data progressively
-      debugPrintIfDebugging('_loadChartDataProgressive: Skipping main endpoint to force progressive loading');
-
-      // Fallback: use individual endpoints with progressive loading
-      debugPrintIfDebugging('Using fallback endpoints for $city, $formattedDate');
-      
-      final identifier = formattedDate.substring(5);
-      double? averageTemperature;
-      double? trendSlope;
-      String? summaryText;
-      int startYear = currentYear - 50;
-      int endYear = currentYear;
-      
-      // Get summary data first (displayed at the top)
-      try {
-        Map<String, dynamic> summaryData;
-        
-        // Skip cache if simulation is enabled to ensure simulation always runs
-        if (_simulateSummaryFailure) {
-          debugPrintIfDebugging('📊 Simulation enabled - bypassing cache for summary data');
-          summaryData = await _simulateEndpointFailure('summary', () => 
-            service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-          );
-        } else {
-          // Try to load from cache first
-          final cachedSummary = await _loadCachedApiResponse('summary', city, mmdd);
-          
-          if (cachedSummary != null) {
-            debugPrintIfDebugging('📊 Using cached summary data');
-            // Add a small delay to make progressive loading visible even with cached data
-            await Future.delayed(const Duration(milliseconds: 100));
-            summaryData = cachedSummary;
-          } else {
-            debugPrintIfDebugging('📊 Fetching fresh summary data');
-            summaryData = await _simulateEndpointFailure('summary', () => 
-              service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-            );
-            // Cache the successful response
-            await _cacheApiResponse('summary', city, mmdd, summaryData);
-          }
-        }
-        
-        final summaryRaw = summaryData['summary'];
-        summaryText = summaryRaw?.toString();
-      } catch (e) {
-        debugPrintIfDebugging('Failed to fetch summary data: $e');
-        setState(() {
-          _summaryDataFailed = true;
-          if (e is RateLimitException) {
-            _summaryDataRateLimited = true;
-          }
-        });
-      }
-      
-      // Calculate final year range
-      final finalStartYear = startYear < 1975 ? 1975 : startYear;
-      final finalEndYear = endYear > currentYear ? currentYear : endYear;
-      
-      // Create chart data with placeholder entries for all years in the range
-      List<TemperatureChartData> chartData = [];
-      for (int year = finalStartYear; year <= finalEndYear; year++) {
-        chartData.add(TemperatureChartData(
-          year: year.toString(),
-          temperature: 0.0, // Placeholder value
-          isCurrentYear: year == currentYear,
-          hasData: false, // Will be set to true when data is loaded
-        ));
-      }
-      
-      // Set initial result with placeholder chart data
-      final initialResult = _createResultMap(
-        chartData: chartData,
-        averageTemperature: averageTemperature,
-        trendSlope: trendSlope,
-        summaryText: summaryText,
-        dateToUse: dateToUse,
-        city: city,
-      );
-      _currentData = initialResult;
-      
-      // Update the UI to show the chart structure
-      if (mounted) {
-        setState(() {});
-      }
-      
-      // Load from most recent to oldest (2025 -> 1975) to create right-to-left filling effect
-      debugPrintIfDebugging('Starting chart data loading for years $finalEndYear to $finalStartYear');
-      int consecutiveFailures = 0;
-      const int maxConsecutiveFailures = 5; // Stop after 5 consecutive failures
-      int totalAttempts = 0;
-      int successfulAttempts = 0;
-      
-      for (int year = finalEndYear; year >= finalStartYear; year--) {
-        totalAttempts++;
-        
-        // Check if we've hit a rate limit - stop making more requests
-        if (_chartDataRateLimited) {
-          debugPrintIfDebugging('Rate limit detected, stopping chart data loading at year $year (attempted $totalAttempts years, $successfulAttempts successful)');
-          break;
-        }
-        
-        // Check for too many consecutive failures - might indicate API is down
-        if (consecutiveFailures >= maxConsecutiveFailures) {
-          debugPrintIfDebugging('Too many consecutive failures ($consecutiveFailures), stopping at year $year (attempted $totalAttempts years, $successfulAttempts successful)');
-          setState(() {
-            _chartDataFailed = true;
-          });
-          break;
-        }
-        
-        final dateForYear = '$year-$mmdd';
-        debugPrintIfDebugging('🔄 About to fetch temperature data for year $year ($dateForYear) - attempt $totalAttempts');
-        
-        // Try to load from cache first
-        final cachedData = await _loadCachedTemperatureData(year, city, dateForYear);
-        if (cachedData != null) {
-          debugPrintIfDebugging('📦 Using cached data for year $year');
-          // Add a small delay to make progressive loading visible even with cached data
-          await Future.delayed(const Duration(milliseconds: 50));
-          // Process cached data the same way as fresh data
-          final temperature = cachedData['temperature'] ?? cachedData['average']?['temperature'];
-          if (temperature != null) {
-            final yearIndex = chartData.indexWhere((data) => data.year == year.toString());
-            if (yearIndex != -1) {
-              chartData[yearIndex] = TemperatureChartData(
-                year: year.toString(),
-                temperature: temperature,
-                isCurrentYear: year == currentYear,
-                hasData: true,
-              );
-              
-              _currentData!['chartData'] = chartData;
-              if (mounted) {
-                setState(() {});
-              }
-              
-              successfulAttempts++;
-              consecutiveFailures = 0;
-              debugPrintIfDebugging('✓ Successfully loaded cached data for year $year: ${temperature.toStringAsFixed(1)}°C');
-            }
-            continue; // Skip API call since we have cached data
-          }
-        }
-        
-        try {
-          // Add a timeout to individual API calls to prevent hanging
-          final tempData = await service.fetchTemperature(city, dateForYear)
-              .timeout(const Duration(seconds: 30), onTimeout: () {
-            debugPrintIfDebugging('⚠️ API request for year $year timed out after 30 seconds');
-            throw TimeoutException('API request for year $year timed out', const Duration(seconds: 30));
-          });
-          debugPrintIfDebugging('✅ API response received for year $year');
-          
-          // Check if we have valid temperature data
-          final temperature = tempData.temperature ?? tempData.average?.temperature;
-          
-          if (temperature != null) {
-            // Find the existing entry for this year and update it
-            final yearIndex = chartData.indexWhere((data) => data.year == year.toString());
-            if (yearIndex != -1) {
-              chartData[yearIndex] = TemperatureChartData(
-                year: year.toString(),
-                temperature: temperature,
-                isCurrentYear: year == currentYear,
-                hasData: true,
-              );
-              
-              // Update the current data and trigger a rebuild
-              _currentData!['chartData'] = chartData;
-              
-              // Trigger a UI update to show the new bar
-              if (mounted) {
-                setState(() {});
-              }
-              
-              // Cache the successful data
-              final dataToCache = {
-                'temperature': temperature,
-                'year': year,
-                'date': dateForYear,
-              };
-              await _cacheTemperatureData(year, city, dateForYear, dataToCache);
-              
-              successfulAttempts++;
-              consecutiveFailures = 0; // Reset failure counter on success
-              debugPrintIfDebugging('✓ Successfully loaded data for year $year: ${temperature.toStringAsFixed(1)}°C (successful: $successfulAttempts/$totalAttempts)');
-            }
-          } else {
-            debugPrintIfDebugging('✗ No valid temperature data returned for year $year (tempData: $tempData)');
-            // Mark this year as failed for tracking
-            if (!_failedYears.contains(year)) {
-              _failedYears.add(year);
-            }
-            consecutiveFailures++;
-            debugPrintIfDebugging('⚠️ Consecutive failures: $consecutiveFailures/$maxConsecutiveFailures (successful: $successfulAttempts/$totalAttempts)');
-          }
-        } catch (e) {
-          debugPrintIfDebugging('✗ Failed to fetch temperature for year $year: $e');
-          
-          // Track this year as failed
-          if (!_failedYears.contains(year)) {
-            _failedYears.add(year);
-          }
-          consecutiveFailures++;
-          debugPrintIfDebugging('⚠️ Consecutive failures: $consecutiveFailures/$maxConsecutiveFailures (successful: $successfulAttempts/$totalAttempts)');
-          
-          // Check if it's a network error and test actual connectivity
-          if (_isNetworkError(e.toString())) {
-            debugPrintIfDebugging('🌐 Potential network error detected during data loading, testing connectivity');
-            final isActuallyOffline = await _testConnectivity();
-            if (!isActuallyOffline) {
-              _isOnline = false;
-              if (mounted) {
-                setState(() {});
-              }
-              break; // Stop loading if we're offline
-            }
-          }
-          
-          // Check if it's a rate limit error
-          if (e is RateLimitException) {
-            debugPrintIfDebugging('⚠️ Rate limit exceeded for chart data, stopping further requests at year $year');
-            setState(() {
-              _chartDataRateLimited = true;
-              _chartDataFailed = true;
-              _chartDataFailedDueToRateLimit = true;
-            });
-            break; // Stop making more requests
-          } else {
-            // Other error - mark as failed but continue trying other years
-            debugPrintIfDebugging('⚠️ Other error for year $year, continuing with next year');
-            setState(() {
-              _chartDataFailed = true;
-            });
-          }
-        }
-        
-        // Add a delay to make progressive loading more visible
-        await Future.delayed(const Duration(milliseconds: 100));
-        
-        // Log progress every 5 years to help track where it might be stalling
-        if (totalAttempts % 5 == 0) {
-          debugPrintIfDebugging('📊 Progress update: attempted $totalAttempts years, successful: $successfulAttempts, current year: $year');
-        }
-      }
-      
-      // If current year is missing, try a v1 fallback to fill it.
-      final hasCurrentYear = chartData.any((data) =>
-          int.parse(data.year) == currentYear && data.hasData);
-      if (!hasCurrentYear) {
-        debugPrintIfDebugging('📊 Current year $currentYear missing, trying v1 fallback');
-        try {
-      final periodData = await service.fetchPeriodData('daily', city, identifier);
-          PeriodDataPoint? currentYearData;
-          for (final value in periodData.values) {
-            if (value.year == currentYear) {
-              currentYearData = value;
-              break;
-            }
-          }
-
-          if (currentYearData != null) {
-            final yearIndex = chartData.indexWhere(
-              (data) => int.parse(data.year) == currentYear,
-            );
-            if (yearIndex != -1) {
-              chartData[yearIndex] = TemperatureChartData(
-                year: currentYear.toString(),
-                temperature: currentYearData.temperature,
-                isCurrentYear: true,
-                hasData: true,
-              );
-
-              _currentData!['chartData'] = chartData;
-              _failedYears.remove(currentYear);
-              if (mounted) {
-                setState(() {});
-              }
-              debugPrintIfDebugging('✅ Filled current year $currentYear via v1 fallback');
-            }
-          } else {
-            debugPrintIfDebugging('⚠️ v1 fallback returned no current year data');
-          }
-        } catch (e) {
-          debugPrintIfDebugging('❌ v1 fallback failed for current year: $e');
-        }
-      }
-
-      // Log final loading summary
-      debugPrintIfDebugging('📊 Progressive loading completed - attempted: $totalAttempts years, successful: $successfulAttempts, consecutive failures: $consecutiveFailures');
-      
-      // Stop loading message timer when data loading completes
-      _stopLoadingMessageTimer();
-      _stopAverageTrendDisplayTimer(); // Stop the timer since loading completed
-      _isDataLoading = false;
-      _progressiveLoadingCompleted = true;
-      
-      // Reset chart data failure flag since loading completed successfully
-      // (even if some individual years failed, the overall loading process succeeded)
-      _chartDataFailed = false;
-      
-      // Log final results
-      final successfulYears = chartData.where((data) => data.hasData).length;
-      final totalYears = chartData.length;
-      debugPrintIfDebugging('📊 Chart data loading completed: $successfulYears/$totalYears years loaded successfully');
-      if (_failedYears.isNotEmpty) {
-        debugPrintIfDebugging('❌ Failed years: $_failedYears');
-      }
-      if (_chartDataFailed) {
-        debugPrintIfDebugging('⚠️ Chart data loading had failures - rate limited: $_chartDataFailedDueToRateLimit');
-      }
-      
-      // Don't start auto-retry timer here - it will be started after loading completes
-      // This prevents immediate retry while the first request might still be running
-      
-      // Load average and trend data after chart data is complete
-      await _loadAverageAndTrendData(city, mmdd);
-      */
-      
     } catch (e) {
-      debugPrintIfDebugging('_loadChartDataProgressive failed: $e');
+      DebugUtils.logLazy(() => '_loadChartDataProgressive failed: $e');
 
       if (e is RateLimitException) {
         _chartDataFailedDueToRateLimit = true;
@@ -2313,7 +1985,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   /// Load average and trend data after chart data is complete
   Future<void> _loadAverageAndTrendData(String city, String mmdd) async {
-    debugPrintIfDebugging('📊 Loading average and trend data after chart completion');
+    DebugUtils.logLazy(() => '📊 Loading average and trend data after chart completion');
     
     final service = TemperatureService();
     
@@ -2329,7 +2001,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Wait for both to complete
     await Future.wait(futures);
     
-    debugPrintIfDebugging('📊 Average and trend data loading completed');
+    DebugUtils.logLazy(() => '📊 Average and trend data loading completed');
   }
 
   /// Load average data
@@ -2339,7 +2011,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       // Skip cache if simulation is enabled to ensure simulation always runs
       if (_simulateAverageFailure) {
-        debugPrintIfDebugging('📊 Simulation enabled - bypassing cache for average data');
+        DebugUtils.logLazy(() => '📊 Simulation enabled - bypassing cache for average data');
         averageData = await _simulateEndpointFailure('average', () => 
           service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
         );
@@ -2348,10 +2020,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         final cachedAverage = await _loadCachedApiResponse('average', city, mmdd);
         
         if (cachedAverage != null) {
-          debugPrintIfDebugging('📊 Using cached average data');
+          DebugUtils.logLazy(() => '📊 Using cached average data');
           averageData = cachedAverage;
         } else {
-          debugPrintIfDebugging('📊 Fetching fresh average data');
+          DebugUtils.logLazy(() => '📊 Fetching fresh average data');
           averageData = await _simulateEndpointFailure('average', () => 
             service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
           );
@@ -2361,7 +2033,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       }
       
       final averageTemperature = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
-      debugPrintIfDebugging('📊 Extracted average temperature: $averageTemperature');
+      DebugUtils.logLazy(() => '📊 Extracted average temperature: $averageTemperature');
       
       // Update the current data with average temperature
       if (_currentData != null && averageTemperature != null) {
@@ -2372,7 +2044,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       }
       
     } catch (e) {
-      debugPrintIfDebugging('Failed to fetch average data: $e');
+      DebugUtils.logLazy(() => 'Failed to fetch average data: $e');
       setState(() {
         _averageDataFailed = true;
         if (e is RateLimitException) {
@@ -2389,7 +2061,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       // Skip cache if simulation is enabled to ensure simulation always runs
       if (_simulateTrendFailure) {
-        debugPrintIfDebugging('📊 Simulation enabled - bypassing cache for trend data');
+        DebugUtils.logLazy(() => '📊 Simulation enabled - bypassing cache for trend data');
         trendData = await _simulateEndpointFailure('trend', () => 
           service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
         );
@@ -2398,10 +2070,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         final cachedTrend = await _loadCachedApiResponse('trend', city, mmdd);
         
         if (cachedTrend != null) {
-          debugPrintIfDebugging('📊 Using cached trend data');
+          DebugUtils.logLazy(() => '📊 Using cached trend data');
           trendData = cachedTrend;
         } else {
-          debugPrintIfDebugging('📊 Fetching fresh trend data');
+          DebugUtils.logLazy(() => '📊 Fetching fresh trend data');
           trendData = await _simulateEndpointFailure('trend', () => 
             service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
           );
@@ -2412,7 +2084,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       final slope = trendData['slope'];
       final trendSlope = (slope is num) ? slope.toDouble() : null;
-      debugPrintIfDebugging('📊 Extracted trend slope: $trendSlope');
+      DebugUtils.logLazy(() => '📊 Extracted trend slope: $trendSlope');
       
       // Update the current data with trend slope
       if (_currentData != null && trendSlope != null) {
@@ -2423,7 +2095,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       }
       
     } catch (e) {
-      debugPrintIfDebugging('Failed to fetch trend data: $e');
+      DebugUtils.logLazy(() => 'Failed to fetch trend data: $e');
       setState(() {
         _trendDataFailed = true;
         if (e is RateLimitException) {
@@ -2435,24 +2107,24 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   /// Handle retry when offline - intelligently decide what to retry
   Future<void> _handleOfflineRetry() async {
-    debugPrintIfDebugging('🔄 Offline retry triggered');
+    DebugUtils.logLazy(() => '🔄 Offline retry triggered');
     
     // Check if we're actually online now
     if (_isOnline) {
-      debugPrintIfDebugging('🌐 Network is now online, resuming data loading');
+      DebugUtils.logLazy(() => '🌐 Network is now online, resuming data loading');
       
       // If we have partial data, resume loading missing years
       if (_currentData != null && _progressiveLoadingCompleted) {
-        debugPrintIfDebugging('📊 Resuming missing years loading');
+        DebugUtils.logLazy(() => '📊 Resuming missing years loading');
         await _loadMissingYears();
       } else if (_currentData == null) {
-        debugPrintIfDebugging('📊 No data available, doing full refresh');
+        DebugUtils.logLazy(() => '📊 No data available, doing full refresh');
         await _handleRefresh();
       } else {
-        debugPrintIfDebugging('📊 Data loading in progress, no action needed');
+        DebugUtils.logLazy(() => '📊 Data loading in progress, no action needed');
       }
     } else {
-      debugPrintIfDebugging('📡 Still offline, checking connectivity...');
+      DebugUtils.logLazy(() => '📡 Still offline, checking connectivity...');
       
       // Try to detect if we're actually online by making a quick test request
       try {
@@ -2465,7 +2137,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         await service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 5));
         
         // If we get here, we're actually online
-        debugPrintIfDebugging('🌐 Connectivity test successful, network is online');
+        DebugUtils.logLazy(() => '🌐 Connectivity test successful, network is online');
         _isOnline = true;
         if (mounted) {
           setState(() {});
@@ -2473,15 +2145,15 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         
         // Now resume loading
         if (_currentData != null && _progressiveLoadingCompleted) {
-          debugPrintIfDebugging('📊 Resuming missing years loading after connectivity test');
+          DebugUtils.logLazy(() => '📊 Resuming missing years loading after connectivity test');
           await _loadMissingYears();
         } else if (_currentData == null) {
-          debugPrintIfDebugging('📊 No data available, doing full refresh after connectivity test');
+          DebugUtils.logLazy(() => '📊 No data available, doing full refresh after connectivity test');
           await _handleRefresh();
         }
         
       } catch (e) {
-        debugPrintIfDebugging('📡 Connectivity test failed, still offline: $e');
+        DebugUtils.logLazy(() => '📡 Connectivity test failed, still offline: $e');
         // Show a brief message that we're still offline
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -2501,7 +2173,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
 
   Future<void> _handleRefresh() async {
-    debugPrintIfDebugging('Pull-to-refresh triggered');
+    DebugUtils.logLazy(() => 'Pull-to-refresh triggered');
     
     // Cancel any existing background refresh to prevent race conditions
     
@@ -2533,7 +2205,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   /// Force refresh without using cache (for debugging/testing)
   Future<void> _handleForceRefresh() async {
-    debugPrintIfDebugging('Force refresh triggered - clearing all cache');
+    DebugUtils.logLazy(() => 'Force refresh triggered - clearing all cache');
     
     // Clear all cache to force fresh data loading
     await _clearCache();
@@ -2558,7 +2230,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   /// Clear only location cache (for testing different locations in Simulator)
   Future<void> _handleLocationRefresh() async {
-    debugPrintIfDebugging('Location refresh triggered - clearing location cache only');
+    DebugUtils.logLazy(() => 'Location refresh triggered - clearing location cache only');
     
     // Clear only location cache
     await _clearLocationCache();
@@ -2583,25 +2255,25 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   /// Test date change detection (for debugging)
   Future<void> _handleTestDateChange() async {
-    debugPrintIfDebugging('Test date change triggered - simulating date change detection');
+    DebugUtils.logLazy(() => 'Test date change triggered - simulating date change detection');
     
     // Simulate a date change by temporarily setting the stored date to yesterday
     // This will make the date comparison think the date has changed
     if (_currentDataDate != null) {
       final yesterday = _currentDataDate!.subtract(const Duration(days: 1));
       _currentDataDate = yesterday;
-      debugPrintIfDebugging('Simulated date change: stored date set to ${_formatDayMonth(yesterday)}');
+      DebugUtils.logLazy(() => 'Simulated date change: stored date set to ${_formatDayMonth(yesterday)}');
       
       // Now call the date change detection logic
       await _checkAndRefreshDataIfDateChanged();
     } else {
-      debugPrintIfDebugging('No current data date available for testing');
+      DebugUtils.logLazy(() => 'No current data date available for testing');
     }
   }
 
   /// Clear all cache (for debugging)
   Future<void> _handleClearCache() async {
-    debugPrintIfDebugging('Clear cache triggered - clearing all cached data');
+    DebugUtils.logLazy(() => 'Clear cache triggered - clearing all cached data');
     
     // Clear all cache
     await _clearCache();
@@ -2618,23 +2290,23 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Widget _buildRefreshIndicator(Widget child) {
-    debugPrintIfDebugging('_buildRefreshIndicator: futureChartData=${futureChartData != null}, _currentData=${_currentData != null}, _isDataLoading=$_isDataLoading');
+    DebugUtils.logLazy(() => '_buildRefreshIndicator: futureChartData=${futureChartData != null}, _currentData=${_currentData != null}, _isDataLoading=$_isDataLoading');
     
     // In test mode, don't create RefreshIndicator to avoid async operations
     if (widget.testFuture != null) {
-      debugPrintIfDebugging('_buildRefreshIndicator: Test mode, returning child without RefreshIndicator');
+      DebugUtils.logLazy(() => '_buildRefreshIndicator: Test mode, returning child without RefreshIndicator');
       return child;
     }
     
     // Show RefreshIndicator when we have data (either futureChartData or _currentData)
     // This ensures pull-to-refresh works in both old and new loading systems
     if (futureChartData == null && _currentData == null) {
-      debugPrintIfDebugging('_buildRefreshIndicator: No data, returning child without RefreshIndicator');
+      DebugUtils.logLazy(() => '_buildRefreshIndicator: No data, returning child without RefreshIndicator');
       return child;
     }
     
     // Show RefreshIndicator with refresh function
-    debugPrintIfDebugging('_buildRefreshIndicator: Showing RefreshIndicator');
+    DebugUtils.logLazy(() => '_buildRefreshIndicator: Showing RefreshIndicator');
     return RefreshIndicator(
       onRefresh: _handleRefresh,
       color: kAccentColour,
@@ -2707,7 +2379,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           ? 'API rate limit exceeded. Please wait a few minutes before trying again.'
           : 'No temperature data available. Please check your internet connection and try again.',
         isRateLimited ? null : () {
-          debugPrintIfDebugging('Retry button pressed after no data');
+          DebugUtils.logLazy(() => 'Retry button pressed after no data');
           _handleRefresh();
         },
       );
@@ -2721,7 +2393,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Use display location instead of full location from API data
     final city = _displayLocation.isNotEmpty ? _displayLocation : (data['city'] as String?);
     
-    debugPrintIfDebugging('Average temperature for plot band: $averageTemperature°C');
+    DebugUtils.logLazy(() => 'Average temperature for plot band: $averageTemperature°C');
 
 
     return _buildChartContent(
@@ -3156,7 +2828,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       ).timeout(const Duration(seconds: 5));
       return response.statusCode == 200;
     } catch (e) {
-      debugPrintIfDebugging('🌐 Connectivity test failed: $e');
+      DebugUtils.logLazy(() => '🌐 Connectivity test failed: $e');
       return false;
     }
   }
@@ -3813,7 +3485,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         if (!_isOnline) ...[
           Builder(
             builder: (context) {
-              debugPrintIfDebugging('🚫 Displaying offline indicator - _isOnline: $_isOnline');
+              DebugUtils.logLazy(() => '🚫 Displaying offline indicator - _isOnline: $_isOnline');
               return _buildErrorIndicator(
                 icon: Icons.wifi_off,
                 title: 'No internet connection',
@@ -3824,7 +3496,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           ),
           const SizedBox(height: 12),
           _buildRetryButton(() {
-            debugPrintIfDebugging('Retry button pressed while offline');
+            DebugUtils.logLazy(() => 'Retry button pressed while offline');
             _handleOfflineRetry();
           }),
           const SizedBox(height: 16),
@@ -4026,7 +3698,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     final missingYears = chartData.where((data) => !data.hasData).map((data) => int.parse(data.year)).toList();
     final hasGaps = missingYears.isNotEmpty || _chartDataHasGaps || _chartDataFailed;
     
-    debugPrintIfDebugging('📊 Data completeness check - missing years: $missingYears, hasGaps: $hasGaps, chartDataFailed: $_chartDataFailed, progressiveLoadingCompleted: $_progressiveLoadingCompleted');
+    DebugUtils.logLazy(() => '📊 Data completeness check - missing years: $missingYears, hasGaps: $hasGaps, chartDataFailed: $_chartDataFailed, progressiveLoadingCompleted: $_progressiveLoadingCompleted');
     
     // Check for missing recent years (2022-2025) - but only if we actually attempted to load them
     final currentYear = DateTime.now().year;
@@ -4041,7 +3713,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Debug log the user-facing messages
     if (hasGaps || missingRecentYears.isNotEmpty || hasVeryLittleData) {
-      debugPrintIfDebugging('📝 Showing data completeness message - missingYears: $missingYears, missingRecentYears: $missingRecentYears, hasVeryLittleData: $hasVeryLittleData, successfulYears: $successfulYears');
+      DebugUtils.logLazy(() => '📝 Showing data completeness message - missingYears: $missingYears, missingRecentYears: $missingRecentYears, hasVeryLittleData: $hasVeryLittleData, successfulYears: $successfulYears');
     }
     
     if (hasGaps || missingRecentYears.isNotEmpty || hasVeryLittleData) {
@@ -4060,10 +3732,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                   String message;
                   if (hasVeryLittleData && missingYears.isEmpty && missingRecentYears.isEmpty) {
                     message = 'Note: Very limited data available for this location. Only $successfulYears years of data were loaded.';
-                    debugPrintIfDebugging('📝 User message: $message');
+                    DebugUtils.logLazy(() => '📝 User message: $message');
                   } else {
                     message = 'Note: ${_buildMissingYearsText(missingYears, missingRecentYears)}.';
-                    debugPrintIfDebugging('📝 User message: $message');
+                    DebugUtils.logLazy(() => '📝 User message: $message');
                   }
                   
                   return Text(
@@ -4136,7 +3808,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       }
     }
     
-    debugPrintIfDebugging('📝 Generated missing years text: "$missingText"');
+    DebugUtils.logLazy(() => '📝 Generated missing years text: "$missingText"');
     return missingText;
   }
 
@@ -4150,7 +3822,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       message = 'Failed to load some chart data';
     }
     
-    debugPrintIfDebugging('📝 Chart data failure message: "$message"');
+    DebugUtils.logLazy(() => '📝 Chart data failure message: "$message"');
     
     return Row(
       children: [
@@ -4272,7 +3944,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       if (!_chartDataFailed && successfulYears >= 10) {
         const message = 'Data appears to be incomplete for this location. Some years may not have data available.';
-        debugPrintIfDebugging('📝 User message: $message');
+        DebugUtils.logLazy(() => '📝 User message: $message');
         
         return Column(
           children: [
@@ -4302,7 +3974,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         );
       } else {
         // Don't show the "incomplete" message if we hit a timeout or have very little data
-        debugPrintIfDebugging('📝 Skipping "incomplete" message - chartDataFailed: $_chartDataFailed, successfulYears: $successfulYears');
+        DebugUtils.logLazy(() => '📝 Skipping "incomplete" message - chartDataFailed: $_chartDataFailed, successfulYears: $successfulYears');
         return const SizedBox.shrink();
       }
     }
@@ -4343,17 +4015,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           result == ConnectivityResult.ethernet
         );
         
-        debugPrintIfDebugging('🌐 Network connectivity changed: ${_isOnline ? "online" : "offline"}');
+        DebugUtils.logLazy(() => '🌐 Network connectivity changed: ${_isOnline ? "online" : "offline"}');
         
         // If we just came back online and were offline, try to refresh data
         if (!wasOnline && _isOnline) {
-          debugPrintIfDebugging('🔄 Network restored, attempting to refresh data');
+          DebugUtils.logLazy(() => '🔄 Network restored, attempting to refresh data');
           _handleNetworkRestored();
         }
         
         // Update UI to reflect connectivity state
         if (mounted) {
-          debugPrintIfDebugging('🌐 Updating UI for connectivity state: ${_isOnline ? "online" : "offline"}');
+          DebugUtils.logLazy(() => '🌐 Updating UI for connectivity state: ${_isOnline ? "online" : "offline"}');
           setState(() {});
         }
       },
@@ -4368,11 +4040,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         _trendDataFailed || 
         _summaryDataFailed ||
         _chartDataFailed) {
-      debugPrintIfDebugging('🔄 Network restored, refreshing failed data');
+      DebugUtils.logLazy(() => '🔄 Network restored, refreshing failed data');
       _handleRefresh();
     } else if (_currentData != null && _progressiveLoadingCompleted) {
       // If we have partial data but loading is complete, try to load missing years
-      debugPrintIfDebugging('🔄 Network restored, attempting to load missing years');
+      DebugUtils.logLazy(() => '🔄 Network restored, attempting to load missing years');
       _loadMissingYears();
     }
   }
@@ -4394,11 +4066,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }
     
     if (missingYears.isEmpty) {
-      debugPrintIfDebugging('📊 No missing years to load');
+      DebugUtils.logLazy(() => '📊 No missing years to load');
       return;
     }
     
-    debugPrintIfDebugging('📊 Loading missing years: ${missingYears.take(10).join(', ')}${missingYears.length > 10 ? '...' : ''}');
+    DebugUtils.logLazy(() => '📊 Loading missing years: ${missingYears.take(10).join(', ')}${missingYears.length > 10 ? '...' : ''}');
     
     // Set loading state
     setState(() {
@@ -4414,7 +4086,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       int successCount = 0;
       for (int year in missingYears) {
         final dateForYear = '$year-$mmdd';
-        debugPrintIfDebugging('🔄 Loading missing year $year ($dateForYear)');
+        DebugUtils.logLazy(() => '🔄 Loading missing year $year ($dateForYear)');
         
         try {
           final tempData = await service.fetchTemperature(city, dateForYear)
@@ -4437,11 +4109,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               _currentData!['chartData'] = chartData;
               
               successCount++;
-              debugPrintIfDebugging('✅ Successfully loaded missing year $year: ${temperature.toStringAsFixed(1)}°C');
+              DebugUtils.logLazy(() => '✅ Successfully loaded missing year $year: ${temperature.toStringAsFixed(1)}°C');
             }
           }
         } catch (e) {
-          debugPrintIfDebugging('❌ Failed to load missing year $year: $e');
+          DebugUtils.logLazy(() => '❌ Failed to load missing year $year: $e');
           // Continue with next year instead of breaking
         }
         
@@ -4449,7 +4121,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         await Future.delayed(const Duration(milliseconds: 100));
       }
       
-      debugPrintIfDebugging('📊 Missing years loading completed: $successCount/${missingYears.length} years loaded successfully');
+      DebugUtils.logLazy(() => '📊 Missing years loading completed: $successCount/${missingYears.length} years loaded successfully');
       
       // Update UI once after all missing years are loaded
       if (mounted && successCount > 0) {
@@ -4473,7 +4145,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   /// Perform memory cleanup and data optimization
   void _performMemoryCleanup() {
     _memoryCleanupCount++;
-    debugPrintIfDebugging('🧹 Performing memory cleanup #$_memoryCleanupCount');
+    DebugUtils.logLazy(() => '🧹 Performing memory cleanup #$_memoryCleanupCount');
     
     try {
       // Clean up expired cache entries
@@ -4482,31 +4154,31 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Clear old failed years list if it's getting too large
       if (_failedYears.length > 20) {
         _failedYears.clear();
-        debugPrintIfDebugging('🧹 Cleared old failed years list');
+        DebugUtils.logLazy(() => '🧹 Cleared old failed years list');
       }
       
       // Clear any old loading messages
       if (_currentLoadingMessage.isNotEmpty && !_isDataLoading) {
         _currentLoadingMessage = '';
-        debugPrintIfDebugging('🧹 Cleared old loading message');
+        DebugUtils.logLazy(() => '🧹 Cleared old loading message');
       }
       
       // Force garbage collection if available (this is a hint, not guaranteed)
       if (kDebugMode) {
         // In debug mode, we can be more aggressive with cleanup
         _currentData?.clear();
-        debugPrintIfDebugging('🧹 Cleared current data for memory optimization');
+        DebugUtils.logLazy(() => '🧹 Cleared current data for memory optimization');
       }
       
-      debugPrintIfDebugging('✅ Memory cleanup completed');
+      DebugUtils.logLazy(() => '✅ Memory cleanup completed');
     } catch (e) {
-      debugPrintIfDebugging('❌ Memory cleanup failed: $e');
+      DebugUtils.logLazy(() => '❌ Memory cleanup failed: $e');
     }
   }
 
   /// Perform aggressive memory cleanup when app goes to background
   void _performAggressiveMemoryCleanup() {
-    debugPrintIfDebugging('🧹 Performing aggressive memory cleanup');
+    DebugUtils.logLazy(() => '🧹 Performing aggressive memory cleanup');
     
     try {
       // Clear all non-essential data
@@ -4530,9 +4202,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         _currentData = essentialData;
       }
       
-      debugPrintIfDebugging('✅ Aggressive memory cleanup completed');
+      DebugUtils.logLazy(() => '✅ Aggressive memory cleanup completed');
     } catch (e) {
-      debugPrintIfDebugging('❌ Aggressive memory cleanup failed: $e');
+      DebugUtils.logLazy(() => '❌ Aggressive memory cleanup failed: $e');
     }
   }
 
@@ -4549,11 +4221,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         
         // Don't start new data loading if we're already loading or if location hasn't been determined yet
         if (_isDataLoading || _isLoadingOperationActive || !_isLocationDetermined) {
-          debugPrintIfDebugging('Skipping location change - already loading: $_isDataLoading, operation active: $_isLoadingOperationActive, location determined: $_isLocationDetermined');
+          DebugUtils.logLazy(() => 'Skipping location change - already loading: $_isDataLoading, operation active: $_isLoadingOperationActive, location determined: $_isLocationDetermined');
           return;
         }
         
-        debugPrintIfDebugging('Significant location change detected, refreshing data...');
+        DebugUtils.logLazy(() => 'Significant location change detected, refreshing data...');
         
         // Check if the city has actually changed before reloading data
         try {
@@ -4589,18 +4261,18 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             
             // Only reload if the city has actually changed
             if (newCity != _determinedLocation) {
-              debugPrintIfDebugging('City changed from $_determinedLocation to $newCity, refreshing data');
+              DebugUtils.logLazy(() => 'City changed from $_determinedLocation to $newCity, refreshing data');
               await _refreshLocationAndData();
             } else {
-              debugPrintIfDebugging('Location change detected but city is the same, no refresh needed');
+              DebugUtils.logLazy(() => 'Location change detected but city is the same, no refresh needed');
             }
           }
         } catch (e) {
-          debugPrintIfDebugging('Error checking location change: $e');
+          DebugUtils.logLazy(() => 'Error checking location change: $e');
         }
       }
     }, onError: (error) {
-      debugPrintIfDebugging('Location stream error: $error');
+      DebugUtils.logLazy(() => 'Location stream error: $error');
       // Stop listening if permissions are denied or stream fails.
       _positionStreamSubscription?.cancel();
       _positionStreamSubscription = null;
@@ -4647,8 +4319,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         systemNavigationBarColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
         // iOS uses statusBarBrightness, Android uses statusBarIconBrightness
-        statusBarBrightness: Platform.isIOS ? Brightness.dark : null,
-        statusBarIconBrightness: Platform.isIOS ? null : Brightness.light,
+        statusBarBrightness: io.Platform.isIOS ? Brightness.dark : null,
+        statusBarIconBrightness: io.Platform.isIOS ? null : Brightness.light,
       ),
       child: appContent,
     );
@@ -4662,19 +4334,19 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Simulate different failure scenarios based on state
     if (endpointName == 'average' && _simulateAverageFailure) {
-      debugPrintIfDebugging('Simulating average endpoint failure');
+      DebugUtils.logLazy(() => 'Simulating average endpoint failure');
       await Future.delayed(const Duration(seconds: 2)); // Simulate delay
       throw Exception('Simulated average endpoint failure for testing');
     }
     
     if (endpointName == 'trend' && _simulateTrendFailure) {
-      debugPrintIfDebugging('Simulating trend endpoint failure');
+      DebugUtils.logLazy(() => 'Simulating trend endpoint failure');
       await Future.delayed(const Duration(seconds: 2)); // Simulate delay
       throw Exception('Simulated trend endpoint failure for testing');
     }
     
     if (endpointName == 'summary' && _simulateSummaryFailure) {
-      debugPrintIfDebugging('Simulating summary endpoint failure');
+      DebugUtils.logLazy(() => 'Simulating summary endpoint failure');
       await Future.delayed(const Duration(seconds: 2)); // Simulate delay
       throw Exception('Simulated summary endpoint failure for testing');
     }
