@@ -524,8 +524,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   // Memory management
-  Timer? _memoryCleanupTimer;
-  static const Duration _memoryCleanupInterval = Duration(minutes: 5);
   int _memoryCleanupCount = 0;
 
   // Page view for period switching (daily / weekly / monthly / yearly)
@@ -551,10 +549,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Start network connectivity monitoring
     _startConnectivityMonitoring();
-    
-    // Start memory cleanup timer
-    _startMemoryCleanupTimer();
-    
+
     // Start minimum splash screen timer
     _startSplashScreenTimer();
     
@@ -574,7 +569,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _pageController.dispose();
     _positionStreamSubscription?.cancel();
     _connectivitySubscription?.cancel();
-    _memoryCleanupTimer?.cancel();
     _stopAverageTrendDisplayTimer();
     _splashScreenTimer?.cancel();
     _pageIndexNotifier.dispose();
@@ -585,11 +579,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
+
     if (state == AppLifecycleState.resumed) {
       DebugUtils.logLazy(() => 'App resumed - checking if location or date needs refresh');
       _checkAndRefreshLocationIfNeeded();
       _checkAndRefreshDataIfDateChanged();
+      // Cleanup expired cache on resume
+      _performMemoryCleanup();
     } else if (state == AppLifecycleState.paused) {
       DebugUtils.logLazy(() => 'App paused - performing memory cleanup');
       _performAggressiveMemoryCleanup();
@@ -701,12 +697,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _currentData = null;
     
     // Reload data with new date using progressive loading
-    _isDataLoading = true;
-    _progressiveLoadingCompleted = false;
-    
     // Immediately update UI to show loading state
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _isDataLoading = true;
+        _progressiveLoadingCompleted = false;
+      });
     }
     
     // Start the average/trend display timer
@@ -1114,9 +1110,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             DebugUtils.logLazy(() => '🌐 Potential network error detected during average data retry, testing connectivity');
             final isActuallyOffline = await _testConnectivity();
             if (!isActuallyOffline) {
-              _isOnline = false;
               if (mounted) {
-                setState(() {});
+                setState(() {
+                  _isOnline = false;
+                });
               }
               return; // Stop retrying if we're offline
             }
@@ -1174,9 +1171,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             DebugUtils.logLazy(() => '🌐 Potential network error detected during trend data retry, testing connectivity');
             final isActuallyOffline = await _testConnectivity();
             if (!isActuallyOffline) {
-              _isOnline = false;
               if (mounted) {
-                setState(() {});
+                setState(() {
+                  _isOnline = false;
+                });
               }
               return; // Stop retrying if we're offline
             }
@@ -1223,9 +1221,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             DebugUtils.logLazy(() => '🌐 Potential network error detected during summary data retry, testing connectivity');
             final isActuallyOffline = await _testConnectivity();
             if (!isActuallyOffline) {
-              _isOnline = false;
               if (mounted) {
-                setState(() {});
+                setState(() {
+                  _isOnline = false;
+                });
               }
               return; // Stop retrying if we're offline
             }
@@ -1286,9 +1285,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           DebugUtils.logLazy(() => '🌐 Potential network error detected during average data retry, testing connectivity');
           final isActuallyOffline = await _testConnectivity();
           if (!isActuallyOffline) {
-            _isOnline = false;
             if (mounted) {
-              setState(() {});
+              setState(() {
+                _isOnline = false;
+              });
             }
             return; // Stop retrying if we're offline
           }
@@ -1514,9 +1514,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             DebugUtils.logLazy(() => '🌐 Potential network error detected during retry, testing connectivity');
             final isActuallyOffline = await _testConnectivity();
             if (!isActuallyOffline) {
-              _isOnline = false;
               if (mounted) {
-                setState(() {});
+                setState(() {
+                  _isOnline = false;
+                });
               }
               break; // Stop retrying if we're offline
             }
@@ -1535,13 +1536,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         await Future.delayed(const Duration(milliseconds: 200));
       }
       
-      // Update the current data with retried results
-      _currentData!['chartData'] = chartData;
-      
+      // Update the current data with retried results and refresh UI
       DebugUtils.logLazy(() => '📊 Retry completed: $successCount/${_failedYears.length} years successfully retried');
-      
+
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _currentData!['chartData'] = chartData;
+        });
       }
       
     } catch (e) {
@@ -1719,14 +1720,19 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     final service = TemperatureService();
     const periods = ['daily', 'week', 'month', 'year'];
 
-    for (final period in periods) {
-      try {
-        DebugUtils.logLazy(() => 'Prefetching $period data for $location ($identifier)');
-        await service.fetchPeriodData(period, location, identifier);
-      } catch (e) {
-        DebugUtils.logLazy(() => 'Prefetch $period failed: $e');
-      }
-    }
+    // Fetch all periods in parallel for better performance
+    DebugUtils.logLazy(() => 'Prefetching period data in parallel for $location ($identifier)');
+
+    await Future.wait(
+      periods.map((period) async {
+        try {
+          DebugUtils.logLazy(() => 'Prefetching $period data');
+          await service.fetchPeriodData(period, location, identifier);
+        } catch (e) {
+          DebugUtils.logLazy(() => 'Prefetch $period failed: $e');
+        }
+      }),
+    );
   }
 
   void _startSplashScreenTimer() {
@@ -1904,30 +1910,31 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               ))
           .toList();
 
-      _failedYears
-        ..clear()
-        ..addAll(periodData.metadata?.missingYears.map((m) => m.year) ?? []);
-
-      _chartDataFailed = _failedYears.isNotEmpty;
-
-      _currentData = _createResultMap(
-        chartData: chartData,
-        averageTemperature: periodData.average.mean,
-        trendSlope: periodData.trend.slope,
-        summaryText: periodData.summary,
-        dateToUse: dateToUse,
-        city: city,
-      );
-
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _failedYears
+            ..clear()
+            ..addAll(periodData.metadata?.missingYears.map((m) => m.year) ?? []);
+
+          _chartDataFailed = _failedYears.isNotEmpty;
+
+          _currentData = _createResultMap(
+            chartData: chartData,
+            averageTemperature: periodData.average.mean,
+            trendSlope: periodData.trend.slope,
+            summaryText: periodData.summary,
+            dateToUse: dateToUse,
+            city: city,
+          );
+
+          _isDataLoading = false;
+          _progressiveLoadingCompleted = true;
+        });
       }
 
       // Stop loading message timer when data loading completes
       _stopLoadingMessageTimer();
       _stopAverageTrendDisplayTimer();
-      _isDataLoading = false;
-      _progressiveLoadingCompleted = true;
 
       // Log final results
       final successfulYears = chartData.where((data) => data.hasData).length;
@@ -2037,9 +2044,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       // Update the current data with average temperature
       if (_currentData != null && averageTemperature != null) {
-        _currentData!['averageTemperature'] = averageTemperature;
         if (mounted) {
-          setState(() {});
+          setState(() {
+            _currentData!['averageTemperature'] = averageTemperature;
+          });
         }
       }
       
@@ -2088,9 +2096,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       
       // Update the current data with trend slope
       if (_currentData != null && trendSlope != null) {
-        _currentData!['trendSlope'] = trendSlope;
         if (mounted) {
-          setState(() {});
+          setState(() {
+            _currentData!['trendSlope'] = trendSlope;
+          });
         }
       }
       
@@ -2138,9 +2147,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         
         // If we get here, we're actually online
         DebugUtils.logLazy(() => '🌐 Connectivity test successful, network is online');
-        _isOnline = true;
         if (mounted) {
-          setState(() {});
+          setState(() {
+            _isOnline = true;
+          });
         }
         
         // Now resume loading
@@ -4023,10 +4033,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           _handleNetworkRestored();
         }
         
-        // Update UI to reflect connectivity state
+        // Update UI to reflect connectivity state (_isOnline was updated above)
         if (mounted) {
           DebugUtils.logLazy(() => '🌐 Updating UI for connectivity state: ${_isOnline ? "online" : "offline"}');
-          setState(() {});
+          setState(() {}); // Triggers rebuild for _isOnline change
         }
       },
     );
@@ -4122,10 +4132,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       }
       
       DebugUtils.logLazy(() => '📊 Missing years loading completed: $successCount/${missingYears.length} years loaded successfully');
-      
-      // Update UI once after all missing years are loaded
+
+      // Update UI once after all missing years are loaded (_currentData was updated in loop)
       if (mounted && successCount > 0) {
-        setState(() {});
+        setState(() {}); // Batched rebuild for all loaded years
       }
       
     } finally {
@@ -4135,14 +4145,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }
   }
 
-  /// Start periodic memory cleanup timer
-  void _startMemoryCleanupTimer() {
-    _memoryCleanupTimer = Timer.periodic(_memoryCleanupInterval, (timer) {
-      _performMemoryCleanup();
-    });
-  }
-
   /// Perform memory cleanup and data optimization
+  /// Called on app lifecycle events (resume/pause/detach) instead of periodic timer
   void _performMemoryCleanup() {
     _memoryCleanupCount++;
     DebugUtils.logLazy(() => '🧹 Performing memory cleanup #$_memoryCleanupCount');
