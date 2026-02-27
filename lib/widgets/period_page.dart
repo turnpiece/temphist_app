@@ -1,24 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../constants/app_constants.dart';
 import '../models/period_temperature_data.dart';
 import '../services/temperature_service.dart';
 import '../utils/debug_utils.dart';
 import 'temperature_bar_chart.dart';
-
-// Colour / layout constants matching main.dart
-const _kBackgroundColour = Color(0xFF242456);
-const _kAccentColour = Color(0xFFFF6B6B);
-const _kTextPrimaryColour = Color(0xFFECECEC);
-const _kSummaryColour = Color(0xFF51CF66);
-const _kAverageColour = Color(0xFF4DABF7);
-const _kTrendColour = Color(0xFFAAAA00);
-const _kGreyLabelColour = Color(0xFFB0B0B0);
-const double _kFontSizeBody = 17.0;
-const double _kScreenPadding = 12.0;
-const double _kContentHorizontalMargin = 8.0;
-const double _kSectionBottomPadding = 22.0;
-const double _kContentVerticalPadding = 32.0;
 
 /// A reusable page that fetches and displays period temperature data
 /// (weekly, monthly, or yearly) using the v1 records API.
@@ -180,7 +167,7 @@ class PeriodPageState extends State<PeriodPage>
       return const Center(
         child: Text(
           'Determining location...',
-          style: TextStyle(color: _kGreyLabelColour, fontSize: _kFontSizeBody),
+          style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
         ),
       );
     }
@@ -195,8 +182,8 @@ class PeriodPageState extends State<PeriodPage>
         await _fetchData();
         if (widget.onRefresh != null) await widget.onRefresh!();
       },
-      color: _kAccentColour,
-      backgroundColor: _kBackgroundColour,
+      color: kAccentColour,
+      backgroundColor: kBackgroundColour,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: _buildContent(context),
@@ -205,14 +192,14 @@ class PeriodPageState extends State<PeriodPage>
   }
 
   Widget _buildContent(BuildContext context) {
-    final leftPadding = _kScreenPadding + _kContentHorizontalMargin;
+    final leftPadding = kScreenPadding + kContentHorizontalMargin;
     final rightPadding = leftPadding;
 
     return Padding(
       padding: EdgeInsets.only(
         left: leftPadding,
         right: rightPadding,
-        bottom: MediaQuery.of(context).padding.bottom + _kContentVerticalPadding,
+        bottom: MediaQuery.of(context).padding.bottom + kContentVerticalPadding,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,13 +228,13 @@ class PeriodPageState extends State<PeriodPage>
             height: 32,
             child: CircularProgressIndicator(
               strokeWidth: 3,
-              color: _kGreyLabelColour,
+              color: kGreyLabelColour,
             ),
           ),
           const SizedBox(height: 16),
           Text(
             _loadingMessage,
-            style: const TextStyle(color: _kGreyLabelColour, fontSize: _kFontSizeBody),
+            style: const TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
           ),
         ],
       ),
@@ -262,12 +249,12 @@ class PeriodPageState extends State<PeriodPage>
         children: [
           Row(
             children: [
-              const Icon(Icons.error_outline, color: _kAccentColour, size: 17),
+              const Icon(Icons.error_outline, color: kAccentColour, size: 17),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   _error!,
-                  style: const TextStyle(color: _kAccentColour, fontSize: _kFontSizeBody),
+                  style: const TextStyle(color: kAccentColour, fontSize: kFontSizeBody),
                 ),
               ),
             ],
@@ -278,12 +265,12 @@ class PeriodPageState extends State<PeriodPage>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: _kAccentColour.withValues(alpha: 0.2),
+                color: kAccentColour.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: const Text(
                 'Retry',
-                style: TextStyle(color: _kAccentColour, fontSize: _kFontSizeBody, fontWeight: FontWeight.w500),
+                style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w500),
               ),
             ),
           ),
@@ -306,9 +293,6 @@ class PeriodPageState extends State<PeriodPage>
       );
     }).toList();
 
-    // Build display date string
-    final displayDate = _buildDisplayDate();
-
     return [
       // Date is shown in the header; omit it here.
       const SizedBox.shrink(),
@@ -317,17 +301,17 @@ class PeriodPageState extends State<PeriodPage>
       // Summary
       if (data.summary.isNotEmpty)
         Padding(
-          padding: const EdgeInsets.only(bottom: _kSectionBottomPadding),
+          padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
           child: Container(
             alignment: Alignment.topLeft,
             constraints: BoxConstraints(
-              minHeight: _kFontSizeBody * 1.2 * 3 + 2,
+              minHeight: kFontSizeBody * 1.2 * 3 + 2,
             ),
             child: Text(
               data.summary,
               style: const TextStyle(
-                color: _kSummaryColour,
-                fontSize: _kFontSizeBody,
+                color: kSummaryColour,
+                fontSize: kFontSizeBody,
                 height: 1.2,
                 overflow: TextOverflow.visible,
               ),
@@ -344,71 +328,33 @@ class PeriodPageState extends State<PeriodPage>
         isLoading: false,
         height: 800,
       ),
-      const SizedBox(height: _kSectionBottomPadding),
+      const SizedBox(height: kSectionBottomPadding),
       // Average text
       Padding(
-        padding: const EdgeInsets.only(bottom: _kSectionBottomPadding),
+        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
         child: Text(
           'Average: ${data.average.mean.toStringAsFixed(1)}°C',
-          style: const TextStyle(color: _kAverageColour, fontSize: _kFontSizeBody),
+          style: const TextStyle(color: kAverageColour, fontSize: kFontSizeBody),
         ),
       ),
       // Trend text
       Padding(
-        padding: const EdgeInsets.only(bottom: _kSectionBottomPadding),
+        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
         child: Text(
           _formatTrend(data.trend.slope),
-          style: const TextStyle(color: _kTrendColour, fontSize: _kFontSizeBody),
+          style: const TextStyle(color: kTrendColour, fontSize: kFontSizeBody),
         ),
       ),
       // Completeness notice
       if (data.metadata != null && data.metadata!.completeness < 100)
         Padding(
-          padding: const EdgeInsets.only(bottom: _kSectionBottomPadding),
+          padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
           child: Text(
             'Data completeness: ${data.metadata!.completeness.toStringAsFixed(0)}%',
-            style: const TextStyle(color: _kGreyLabelColour, fontSize: _kFontSizeBody),
+            style: const TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
           ),
         ),
     ];
-  }
-
-  String _buildDisplayDate() {
-    final now = DateTime.now();
-    final useYesterday = now.hour < 3;
-    final dateToUse = useYesterday ? now.subtract(const Duration(days: 1)) : now;
-
-    switch (widget.periodKey) {
-      case 'week':
-        return 'Week ending ${_formatDate(dateToUse)}';
-      case 'month':
-        return 'Month ending ${_formatDate(dateToUse)}';
-      case 'year':
-        return 'Year ending ${_formatDate(dateToUse)}';
-      default:
-        return _formatDate(dateToUse);
-    }
-  }
-
-  String _formatDate(DateTime date) {
-    final day = date.day;
-    String suffix;
-    if (day >= 11 && day <= 13) {
-      suffix = 'th';
-    } else {
-      switch (day % 10) {
-        case 1:
-          suffix = 'st';
-        case 2:
-          suffix = 'nd';
-        case 3:
-          suffix = 'rd';
-        default:
-          suffix = 'th';
-      }
-    }
-    final month = DateFormat('MMMM').format(date);
-    return '$day$suffix $month';
   }
 
   String _formatTrend(double slope) {

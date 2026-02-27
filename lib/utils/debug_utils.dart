@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
-import '../constants.dart';
+import '../constants/app_constants.dart';
 
 /// Centralized debug utility functions that are only active in debug mode
 /// Uses kDebugMode for zero-cost production builds

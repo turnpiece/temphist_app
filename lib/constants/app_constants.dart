@@ -52,6 +52,10 @@ const double kSummaryFontSize = kFontSizeBody; // Changed from -2 for consistenc
 const double kSummaryLineHeight = 1.2;
 const double kSummaryMinLines = 4;
 
+/// Enable verbose logging in production builds via dart-define.
+/// Usage: flutter build ios --dart-define=VERBOSE_LOGS=true
+const bool verboseLogs = bool.fromEnvironment('VERBOSE_LOGS', defaultValue: false);
+
 /// Time constants
 const int kUseYesterdayHourThreshold = 3;
 const int kAverageTrendDisplayDelaySeconds = 35;

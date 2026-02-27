@@ -21,68 +21,8 @@ import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
 import 'widgets/temperature_bar_chart.dart';
 import 'widgets/period_page.dart';
-import 'models/period_temperature_data.dart';
-import 'constants/app_constants.dart' as app_constants;
-
-// App color constants
-// Note: These are no longer constants because they depend on runtime configuration
-// but they maintain the same interface for backward compatibility
-const kBackgroundColour = Color(0xFF242456);
-const kBackgroundColourDark = Color(0xFF343499);
-const kAccentColour = Color(0xFFFF6B6B);
-const kTextPrimaryColour = Color(0xFFECECEC);
-const kSummaryColour = Color(0xFF51CF66);
-const kAverageColour = Color(0xFF4DABF7);
-const kTrendColour = Color(0xFFAAAA00);
-const kTrendLineColour = kTrendColour;
-const kBarOtherYearColour = kAccentColour;
-const kBarCurrentYearColour = kSummaryColour;
-const kAxisLabelColour = Color(0xFFECECEC);
-const kAxisGridColour = kAxisLabelColour;
-const kGreyLabelColour = Color(0xFFB0B0B0);
-
-// Layout constants for easy adjustment
-// These constants control the spacing and padding throughout the app's UI
-
-// Base padding from screen edges - affects all content
-const double kScreenPadding = 12.0;
-
-// Title/logo section spacing
-const double kTitleRowIconRightPadding = 6.0; // Space between logo and title text
-const double kTitleRowBottomPadding = 16.0; // Space below each section
-
-// Main content area margins
-const double kContentHorizontalMargin = 8.0; // Additional horizontal margin for content
-const double kContentVerticalPadding = 32.0; // Vertical padding for main content area (top and bottom)
-
-// Chart-specific spacing
-const double kChartHorizontalMargin = 0.0; // Horizontal margins around the chart
-const double kChartInnerPadding = 0.0; // Inner padding within the chart area
-const double kChartRightMargin = 20.0; // Extra right margin for Y-axis labels
-
-// Section spacing - controls gaps between UI sections (date, location, summary, chart, etc.)
-const double kSectionBottomPadding = 14.0; // Space below each section
-const double kSectionTopPadding = 14.0; // Space above each section
-
-// App constants
-const String kAppTitle = 'TempHist'; // Application title
-
-// Font size constants - control text sizing throughout the app
-const double kFontSizeTitle = 26.0; // Main title text (e.g., "TempHist")
-const double kFontSizeBody = 17.0; // Body text (date, location, summary, etc.)
-const double kFontSizeAxisLabel = 17.0; // Chart axis labels (changed from 16.0 to match body)
-const double kIconSize = 17.0; // Standard icon size for UI elements
-const double kSummaryFontSize = kFontSizeBody; // Changed from kFontSizeBody - 2 for consistency
-const double kSummaryLineHeight = 1.2;
-const double kSummaryMinLines = 4;
-
-// Time constants
-const int kUseYesterdayHourThreshold = 3; // Use yesterday's data if current hour is before this (3 AM)
-const int kAverageTrendDisplayDelaySeconds = 35; // Delay before showing average/trend lines (seconds)
-const int kApiTimeoutSeconds = 35; // API timeout (must be longer than display timer to prevent race conditions)
-
-// Default location constant
-const String kDefaultLocation = 'London, UK';
+import 'widgets/splash_screen.dart';
+import 'constants/app_constants.dart';
 
 /// Helper function to get current date and location for API calls
 /// Returns a map with 'date', 'mmdd', and 'city' keys
@@ -384,75 +324,6 @@ class TemperatureScreen extends StatefulWidget {
   TemperatureScreenState createState() => TemperatureScreenState();
 }
 
-class SplashScreen extends StatelessWidget {
-  const SplashScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              kBackgroundColour, // Top color
-              kBackgroundColourDark, // Bottom color
-            ],
-          ),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.only(left: 24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              // Logo
-              Transform.translate(
-                offset: const Offset(-30.0, 0.0), // Negative left margin to compensate for SVG padding
-                child: SvgPicture.asset(
-                  'assets/logo.svg',
-                  width: 150,
-                  height: 150,
-                ),
-              ),
-              const SizedBox(height: 24),
-              // App title
-              Text(
-                kAppTitle,
-                style: TextStyle(
-                  color: kAccentColour,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Loading indicator
-              const CircularProgressIndicator(
-                color: kAccentColour,
-                strokeWidth: 3,
-              ),
-              const SizedBox(height: 16),
-              // Loading text
-              Text(
-                'Loading...',
-                style: TextStyle(
-                  color: kTextPrimaryColour,
-                  fontSize: kFontSizeBody,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindingObserver {
   Future<Map<String, dynamic>?>? futureChartData;
   Timer? _loadingMessageTimer;
@@ -471,30 +342,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   bool _isAppInitialized = false;
   bool _splashScreenMinTimeElapsed = false;
   Timer? _splashScreenTimer;
+  final Completer<void> _splashCompleter = Completer<void>();
   
   
-  // Add error tracking for different data types
-  bool _averageDataFailed = false;
-  bool _trendDataFailed = false;
-  bool _summaryDataFailed = false;
+  // Add error tracking for chart data
   bool _chartDataHasGaps = false;
-  
+
   // Rate limit tracking
-  bool _averageDataRateLimited = false;
-  bool _trendDataRateLimited = false;
-  bool _summaryDataRateLimited = false;
   bool _chartDataRateLimited = false; // Track if chart data fetching is rate limited
-  
-  // Add automatic retry timer
-  Timer? _autoRetryTimer;
-  
+
   // Store current data for updates
   Map<String, dynamic>? _currentData;
-  
-  // Track retry loading states
-  bool _isRetryingAverage = false;
-  bool _isRetryingTrend = false;
-  bool _isRetryingSummary = false;
   
   // Simulation state for testing
   bool _simulateAverageFailure = AppConfig.defaultSimulateAverageFailure;
@@ -637,7 +495,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _startAverageTrendDisplayTimer();
     
     // Start progressive loading in the background
-    _loadChartDataProgressive();
+    _loadChartDataProgressive().whenComplete(_prefetchPeriodData);
     
     // Start listening to location changes after initial setup is complete
     _startListeningToLocationChanges();
@@ -710,7 +568,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _startAverageTrendDisplayTimer();
     
     // Start progressive loading in the background
-    _loadChartDataProgressive();
+    _loadChartDataProgressive().whenComplete(_prefetchPeriodData);
     
     // Restart loading message timer
     _startLoadingMessageTimer();
@@ -738,34 +596,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _startAverageTrendDisplayTimer();
     
     // Start progressive loading in the background
-    _loadChartDataProgressive();
+    _loadChartDataProgressive().whenComplete(_prefetchPeriodData);
     
     // Restart loading message timer
     _startLoadingMessageTimer();
-  }
-
-  void _startAutoRetryTimer() {
-    // Cancel any existing timer
-    _autoRetryTimer?.cancel();
-    
-    // Start a new timer that will retry after 10 seconds
-    // But only retry endpoints that aren't rate limited
-    _autoRetryTimer = Timer(const Duration(seconds: 10), () {
-      if (mounted) {
-        final shouldRetryAverage = _averageDataFailed && !_averageDataRateLimited;
-        final shouldRetryTrend = _trendDataFailed && !_trendDataRateLimited;
-        final shouldRetrySummary = _summaryDataFailed && !_summaryDataRateLimited;
-        
-        if (shouldRetryAverage || shouldRetryTrend || shouldRetrySummary) {
-          _retryFailedData();
-        }
-      }
-    });
-  }
-
-  void _stopAutoRetryTimer() {
-    _autoRetryTimer?.cancel();
-    _autoRetryTimer = null;
   }
 
   void _startAverageTrendDisplayTimer() {
@@ -790,23 +624,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   void _resetErrorStates() {
     setState(() {
-      _averageDataFailed = false;
-      _trendDataFailed = false;
-      _summaryDataFailed = false;
       _chartDataHasGaps = false;
-      _isRetryingAverage = false;
-      _isRetryingTrend = false;
-      _isRetryingSummary = false;
       _isRetryingChartData = false;
       _chartDataRetryCount = 0;
-      
-      // Reset rate limit flags
-      _averageDataRateLimited = false;
-      _trendDataRateLimited = false;
-      _summaryDataRateLimited = false;
       _chartDataRateLimited = false;
-      
-      // Reset chart data failure tracking
       _chartDataFailed = false;
       _chartDataFailedDueToRateLimit = false;
       _failedYears.clear();
@@ -900,106 +721,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     return result;
   }
 
-  /// Cache temperature data for a specific year and location
-  Future<void> _cacheTemperatureData(int year, String location, String date, Map<String, dynamic> data) async {
-    await _safeSharedPreferencesOperation(() async {
-      final prefs = await SharedPreferences.getInstance();
-      final cacheKey = 'tempData_${location}_${year}_$date';
-      final cacheData = {
-        'data': data,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'year': year,
-        'location': location,
-        'date': date,
-      };
-      await prefs.setString(cacheKey, jsonEncode(cacheData));
-      DebugUtils.logLazy(() => '🌡️ Temperature data cached: $year for $location');
-    }, 'cache temperature data');
-  }
-
-  /// Load cached temperature data if still valid
-  Future<Map<String, dynamic>?> _loadCachedTemperatureData(int year, String location, String date) async {
-    final result = await _safeSharedPreferencesOperation<Map<String, dynamic>?>(() async {
-      final prefs = await SharedPreferences.getInstance();
-      final cacheKey = 'tempData_${location}_${year}_$date';
-      final cachedData = prefs.getString(cacheKey);
-      if (cachedData == null) return null;
-
-      final data = jsonDecode(cachedData) as Map<String, dynamic>;
-      final timestamp = DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int);
-      final age = DateTime.now().difference(timestamp);
-
-      // Determine expiration based on whether it's current year or historical
-      final isCurrentYear = year == DateTime.now().year;
-      final expiration = isCurrentYear ? _currentDateCacheExpiration : _historicalDataCacheExpiration;
-
-      if (age > expiration) {
-        DebugUtils.logLazy(() => '🌡️ Cached temperature data expired: $year (${age.inHours} hours old)');
-        await prefs.remove(cacheKey);
-        return null;
-      }
-
-      DebugUtils.logLazy(() => '🌡️ Using cached temperature data: $year (${age.inMinutes} minutes old)');
-      return data['data'] as Map<String, dynamic>;
-    }, 'load cached temperature data');
-    return result;
-  }
-
-  /// Cache API response data (average, trend, summary)
-  Future<void> _cacheApiResponse(String endpoint, String location, String date, Map<String, dynamic> data) async {
-    await _safeSharedPreferencesOperation(() async {
-      final prefs = await SharedPreferences.getInstance();
-      final cacheKey = 'api_${endpoint}_${location}_$date';
-      final cacheData = {
-        'data': data,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'endpoint': endpoint,
-        'location': location,
-        'date': date,
-      };
-      await prefs.setString(cacheKey, jsonEncode(cacheData));
-      DebugUtils.logLazy(() => '📊 API response cached: $endpoint for $location');
-    }, 'cache API response');
-  }
-
-  /// Load cached API response if still valid
-  Future<Map<String, dynamic>?> _loadCachedApiResponse(String endpoint, String location, String date) async {
-    final result = await _safeSharedPreferencesOperation<Map<String, dynamic>?>(() async {
-      final prefs = await SharedPreferences.getInstance();
-      final cacheKey = 'api_${endpoint}_${location}_$date';
-      final cachedData = prefs.getString(cacheKey);
-      if (cachedData == null) return null;
-
-      final data = jsonDecode(cachedData) as Map<String, dynamic>;
-      final timestamp = DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int);
-      final age = DateTime.now().difference(timestamp);
-
-      // Determine expiration based on endpoint type
-      Duration expiration;
-      switch (endpoint) {
-        case 'summary':
-          expiration = _summaryCacheExpiration;
-          break;
-        case 'average':
-        case 'trend':
-          expiration = _averageTrendCacheExpiration;
-          break;
-        default:
-          expiration = Duration(hours: 1); // Default to 1 hour
-      }
-
-      if (age > expiration) {
-        DebugUtils.logLazy(() => '📊 Cached API response expired: $endpoint (${age.inHours} hours old)');
-        await prefs.remove(cacheKey);
-        return null;
-      }
-
-      DebugUtils.logLazy(() => '📊 Using cached API response: $endpoint (${age.inMinutes} minutes old)');
-      return data['data'] as Map<String, dynamic>;
-    }, 'load cached API response');
-    return result;
-  }
-
   /// Clean up expired cache entries
   Future<void> _cleanupExpiredCache() async {
     await _safeSharedPreferencesOperation(() async {
@@ -1060,352 +781,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }, 'cleanup expired cache');
   }
 
-
-  Future<void> _retryFailedData() async {
-    if (!_averageDataFailed && !_trendDataFailed && !_summaryDataFailed) {
-      return; // Nothing to retry
-    }
-    
-    DebugUtils.logLazy(() => 'Retrying failed data fetches...');
-    
-    try {
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
-      final mmdd = dateInfo['mmdd']!;
-      final city = dateInfo['city']!;
-      
-      final service = TemperatureService();
-      
-      // Retry average data if it failed
-      if (_averageDataFailed) {
-        setState(() {
-          _isRetryingAverage = true;
-        });
-        
-        try {
-          final averageData = await _simulateEndpointFailure('average', () => 
-            service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-          );
-          final newAverage = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
-          
-          if (newAverage != null) {
-            setState(() {
-              _averageDataFailed = false;
-              _isRetryingAverage = false;
-            });
-            // Update the current data with new average
-            _rebuildDataWithNewAverage(newAverage);
-            // Stop auto-retry timer if no more failures
-            if (!_trendDataFailed && !_summaryDataFailed) {
-              _stopAutoRetryTimer();
-            }
-          } else {
-            setState(() {
-              _isRetryingAverage = false;
-            });
-          }
-        } catch (e) {
-          DebugUtils.logLazy(() => 'Retry of average data failed: $e');
-          
-          // Check if it's a network error and test actual connectivity
-          if (_isNetworkError(e.toString())) {
-            DebugUtils.logLazy(() => '🌐 Potential network error detected during average data retry, testing connectivity');
-            final isActuallyOffline = await _testConnectivity();
-            if (!isActuallyOffline) {
-              if (mounted) {
-                setState(() {
-                  _isOnline = false;
-                });
-              }
-              return; // Stop retrying if we're offline
-            }
-          }
-          
-          // Check if it's a rate limit error - don't retry these
-          if (e is RateLimitException) {
-            setState(() {
-              _isRetryingAverage = false;
-              _averageDataFailed = true;
-              _averageDataRateLimited = true; // New flag for rate limiting
-            });
-            // Stop auto-retry timer for rate limit errors
-            _stopAutoRetryTimer();
-          } else {
-            setState(() {
-              _isRetryingAverage = false;
-            });
-          }
-        }
-      }
-      
-      // Retry trend data if it failed
-      if (_trendDataFailed) {
-        setState(() {
-          _isRetryingTrend = true;
-        });
-        
-        try {
-          final trendData = await _simulateEndpointFailure('trend', () => 
-            service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-          );
-          final newSlope = trendData['slope'];
-          if (newSlope != null) {
-            setState(() {
-              _trendDataFailed = false;
-              _isRetryingTrend = false;
-            });
-            // Update the current data with new trend
-            _rebuildDataWithNewTrend((newSlope as num).toDouble());
-            // Stop auto-retry timer if no more failures
-            if (!_averageDataFailed && !_summaryDataFailed) {
-              _stopAutoRetryTimer();
-            }
-          } else {
-            setState(() {
-              _isRetryingTrend = false;
-            });
-          }
-        } catch (e) {
-          DebugUtils.logLazy(() => 'Retry of trend data failed: $e');
-          
-          // Check if it's a network error and test actual connectivity
-          if (_isNetworkError(e.toString())) {
-            DebugUtils.logLazy(() => '🌐 Potential network error detected during trend data retry, testing connectivity');
-            final isActuallyOffline = await _testConnectivity();
-            if (!isActuallyOffline) {
-              if (mounted) {
-                setState(() {
-                  _isOnline = false;
-                });
-              }
-              return; // Stop retrying if we're offline
-            }
-          }
-          
-          setState(() {
-            _isRetryingTrend = false;
-          });
-        }
-      }
-      
-      // Retry summary data if it failed
-      if (_summaryDataFailed) {
-        setState(() {
-          _isRetryingSummary = true;
-        });
-        
-        try {
-          final summaryData = await _simulateEndpointFailure('summary', () => 
-            service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-          );
-          final newSummary = summaryData['summary']?.toString();
-          if (newSummary != null && newSummary.isNotEmpty) {
-            setState(() {
-              _summaryDataFailed = false;
-              _isRetryingSummary = false;
-            });
-            // Update the current data with new summary
-            _rebuildDataWithNewSummary(newSummary);
-            // Stop auto-retry timer if no more failures
-            if (!_averageDataFailed && !_trendDataFailed) {
-              _stopAutoRetryTimer();
-            }
-          } else {
-            setState(() {
-              _isRetryingSummary = false;
-            });
-          }
-        } catch (e) {
-          DebugUtils.logLazy(() => 'Retry of summary data failed: $e');
-          
-          // Check if it's a network error and test actual connectivity
-          if (_isNetworkError(e.toString())) {
-            DebugUtils.logLazy(() => '🌐 Potential network error detected during summary data retry, testing connectivity');
-            final isActuallyOffline = await _testConnectivity();
-            if (!isActuallyOffline) {
-              if (mounted) {
-                setState(() {
-                  _isOnline = false;
-                });
-              }
-              return; // Stop retrying if we're offline
-            }
-          }
-          
-          setState(() {
-            _isRetryingSummary = false;
-          });
-        }
-      }
-    } catch (e) {
-      DebugUtils.logLazy(() => 'Error during retry: $e');
-    }
-  }
-
-  Future<void> _retryAverageData() async {
-    if (!_averageDataFailed) return;
-    
-    DebugUtils.logLazy(() => 'Retrying average data...');
-    
-    try {
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
-      final mmdd = dateInfo['mmdd']!;
-      final city = dateInfo['city']!;
-      
-      final service = TemperatureService();
-      
-      setState(() {
-        _isRetryingAverage = true;
-      });
-      
-      try {
-        final averageData = await _simulateEndpointFailure('average', () => 
-          service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-        );
-        final newAverage = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
-        
-        if (newAverage != null) {
-          setState(() {
-            _averageDataFailed = false;
-            _isRetryingAverage = false;
-          });
-          _rebuildDataWithNewAverage(newAverage);
-          // Stop auto-retry timer if no more failures
-          if (!_trendDataFailed && !_summaryDataFailed) {
-            _stopAutoRetryTimer();
-          }
-        } else {
-          setState(() {
-            _isRetryingAverage = false;
-          });
-        }
-      } catch (e) {
-        DebugUtils.logLazy(() => 'Retry of average data failed: $e');
-        
-        // Check if it's a network error and test actual connectivity
-        if (_isNetworkError(e.toString())) {
-          DebugUtils.logLazy(() => '🌐 Potential network error detected during average data retry, testing connectivity');
-          final isActuallyOffline = await _testConnectivity();
-          if (!isActuallyOffline) {
-            if (mounted) {
-              setState(() {
-                _isOnline = false;
-              });
-            }
-            return; // Stop retrying if we're offline
-          }
-        }
-        
-        setState(() {
-          _isRetryingAverage = false;
-        });
-      }
-    } catch (e) {
-      DebugUtils.logLazy(() => 'Error during average retry: $e');
-      setState(() {
-        _isRetryingAverage = false;
-      });
-    }
-  }
-
-  Future<void> _retryTrendData() async {
-    if (!_trendDataFailed) return;
-    
-    DebugUtils.logLazy(() => 'Retrying trend data...');
-    
-    try {
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
-      final mmdd = dateInfo['mmdd']!;
-      final city = dateInfo['city']!;
-      
-      final service = TemperatureService();
-      
-      setState(() {
-        _isRetryingTrend = true;
-      });
-      
-      try {
-        final trendData = await _simulateEndpointFailure('trend', () => 
-          service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-        );
-        final newSlope = trendData['slope'];
-        if (newSlope != null) {
-          setState(() {
-            _trendDataFailed = false;
-            _isRetryingTrend = false;
-          });
-          _rebuildDataWithNewTrend((newSlope as num).toDouble());
-          // Stop auto-retry timer if no more failures
-          if (!_averageDataFailed && !_summaryDataFailed) {
-            _stopAutoRetryTimer();
-          }
-        } else {
-          setState(() {
-            _isRetryingTrend = false;
-          });
-        }
-      } catch (e) {
-        DebugUtils.logLazy(() => 'Retry of trend data failed: $e');
-        setState(() {
-          _isRetryingTrend = false;
-        });
-      }
-    } catch (e) {
-      DebugUtils.logLazy(() => 'Error during trend retry: $e');
-      setState(() {
-        _isRetryingTrend = false;
-      });
-    }
-  }
-
-  Future<void> _retrySummaryData() async {
-    if (!_summaryDataFailed) return;
-    
-    DebugUtils.logLazy(() => 'Retrying summary data...');
-    
-    try {
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
-      final mmdd = dateInfo['mmdd']!;
-      final city = dateInfo['city']!;
-      
-      final service = TemperatureService();
-      
-      setState(() {
-        _isRetryingSummary = true;
-      });
-      
-      try {
-        final summaryData = await _simulateEndpointFailure('summary', () => 
-          service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-        );
-        final newSummary = summaryData['summary']?.toString();
-        if (newSummary != null && newSummary.isNotEmpty) {
-          setState(() {
-            _summaryDataFailed = false;
-            _isRetryingSummary = false;
-          });
-          _rebuildDataWithNewSummary(newSummary);
-          // Stop auto-retry timer if no more failures
-          if (!_averageDataFailed && !_trendDataFailed) {
-            _stopAutoRetryTimer();
-          }
-        } else {
-          setState(() {
-            _isRetryingSummary = false;
-          });
-        }
-      } catch (e) {
-        DebugUtils.logLazy(() => 'Retry of summary data failed: $e');
-        setState(() {
-          _isRetryingSummary = false;
-        });
-      }
-    } catch (e) {
-      DebugUtils.logLazy(() => 'Error during summary retry: $e');
-      setState(() {
-        _isRetryingSummary = false;
-      });
-    }
-  }
 
   Future<void> _retryChartData() async {
     if (_chartDataRetryCount >= _maxChartDataRetries) {
@@ -1551,31 +926,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }
   }
 
-  void _rebuildDataWithNewAverage(double newAverage) {
-    if (_currentData != null) {
-      setState(() {
-        _currentData!['averageTemperature'] = newAverage;
-      });
-    }
-  }
-
-  void _rebuildDataWithNewTrend(double newSlope) {
-    if (_currentData != null) {
-      setState(() {
-        _currentData!['trendSlope'] = newSlope;
-      });
-    }
-  }
-
-  void _rebuildDataWithNewSummary(String newSummary) {
-    if (_currentData != null) {
-      setState(() {
-        _currentData!['summary'] = newSummary;
-      });
-    }
-  }
-
-
   Future<void> _determineLocation() async {
     try {
       String city = kDefaultLocation;
@@ -1690,9 +1040,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       _loadingElapsedSeconds = 0;
       _updateLoadingMessage();
 
-      // Start preloading period data in the background (daily → week → month → year)
-      _prefetchPeriodData();
-      
     } catch (e) {
       DebugUtils.logLazy(() => '_determineLocation failed: $e');
       // Set default location if everything fails
@@ -1702,13 +1049,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         _isLocationDetermined = true;
         _locationDeterminedAt = DateTime.now(); // Record when location was determined
       });
-      
+
       // Reset loading message timer to start temperature-related messages
       _loadingElapsedSeconds = 0;
       _updateLoadingMessage();
-
-      // Start preloading period data in the background (daily → week → month → year)
-      _prefetchPeriodData();
     }
   }
 
@@ -1740,24 +1084,22 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Skip splash screen timer in test mode
     if (widget.testFuture != null) {
       _splashScreenMinTimeElapsed = true;
+      if (!_splashCompleter.isCompleted) _splashCompleter.complete();
       return;
     }
-    
+
     // Show splash screen for minimum 2 seconds to prevent white flash
     _splashScreenTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
           _splashScreenMinTimeElapsed = true;
         });
-        // If app is already initialized, we can proceed
-        if (_isAppInitialized) {
-          // App is ready, no additional action needed
-        }
+        if (!_splashCompleter.isCompleted) _splashCompleter.complete();
       }
     });
   }
 
-  void _waitForSplashScreenAndInitialize() {
+  Future<void> _waitForSplashScreenAndInitialize() async {
     // Skip in test mode
     if (widget.testFuture != null) {
       setState(() {
@@ -1765,16 +1107,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       });
       return;
     }
-    
-    // Wait for splash screen timer to complete, then initialize
-    Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      if (_splashScreenMinTimeElapsed && mounted) {
-        timer.cancel();
-        setState(() {
-          _isAppInitialized = true;
-        });
-      }
-    });
+
+    await _splashCompleter.future;
+    if (mounted) {
+      setState(() {
+        _isAppInitialized = true;
+      });
+    }
   }
 
   void _startLoadingMessageTimer() {
@@ -1983,137 +1322,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       _isLoadingOperationActive = false;
       _isDataLoading = false;
       _progressiveLoadingCompleted = true;
-      
-      // Start auto-retry timer if there are failed endpoints (after loading completes)
-      if (_averageDataFailed || _trendDataFailed || _summaryDataFailed) {
-        _startAutoRetryTimer();
-      }
     }
   }
 
-  /// Load average and trend data after chart data is complete
-  Future<void> _loadAverageAndTrendData(String city, String mmdd) async {
-    DebugUtils.logLazy(() => '📊 Loading average and trend data after chart completion');
-    
-    final service = TemperatureService();
-    
-    // Load average and trend data in parallel for better performance
-    final futures = <Future>[];
-    
-    // Load average data
-    futures.add(_loadAverageData(service, city, mmdd));
-    
-    // Load trend data  
-    futures.add(_loadTrendData(service, city, mmdd));
-    
-    // Wait for both to complete
-    await Future.wait(futures);
-    
-    DebugUtils.logLazy(() => '📊 Average and trend data loading completed');
-  }
-
-  /// Load average data
-  Future<void> _loadAverageData(TemperatureService service, String city, String mmdd) async {
-    try {
-      Map<String, dynamic> averageData;
-      
-      // Skip cache if simulation is enabled to ensure simulation always runs
-      if (_simulateAverageFailure) {
-        DebugUtils.logLazy(() => '📊 Simulation enabled - bypassing cache for average data');
-        averageData = await _simulateEndpointFailure('average', () => 
-          service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-        );
-      } else {
-        // Try to load from cache first
-        final cachedAverage = await _loadCachedApiResponse('average', city, mmdd);
-        
-        if (cachedAverage != null) {
-          DebugUtils.logLazy(() => '📊 Using cached average data');
-          averageData = cachedAverage;
-        } else {
-          DebugUtils.logLazy(() => '📊 Fetching fresh average data');
-          averageData = await _simulateEndpointFailure('average', () => 
-            service.fetchAverageData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-          );
-          // Cache the successful response
-          await _cacheApiResponse('average', city, mmdd, averageData);
-        }
-      }
-      
-      final averageTemperature = averageData['average'] != null ? (averageData['average'] as num).toDouble() : null;
-      DebugUtils.logLazy(() => '📊 Extracted average temperature: $averageTemperature');
-      
-      // Update the current data with average temperature
-      if (_currentData != null && averageTemperature != null) {
-        if (mounted) {
-          setState(() {
-            _currentData!['averageTemperature'] = averageTemperature;
-          });
-        }
-      }
-      
-    } catch (e) {
-      DebugUtils.logLazy(() => 'Failed to fetch average data: $e');
-      setState(() {
-        _averageDataFailed = true;
-        if (e is RateLimitException) {
-          _averageDataRateLimited = true;
-        }
-      });
-    }
-  }
-
-  /// Load trend data
-  Future<void> _loadTrendData(TemperatureService service, String city, String mmdd) async {
-    try {
-      Map<String, dynamic> trendData;
-      
-      // Skip cache if simulation is enabled to ensure simulation always runs
-      if (_simulateTrendFailure) {
-        DebugUtils.logLazy(() => '📊 Simulation enabled - bypassing cache for trend data');
-        trendData = await _simulateEndpointFailure('trend', () => 
-          service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-        );
-      } else {
-        // Try to load from cache first
-        final cachedTrend = await _loadCachedApiResponse('trend', city, mmdd);
-        
-        if (cachedTrend != null) {
-          DebugUtils.logLazy(() => '📊 Using cached trend data');
-          trendData = cachedTrend;
-        } else {
-          DebugUtils.logLazy(() => '📊 Fetching fresh trend data');
-          trendData = await _simulateEndpointFailure('trend', () => 
-            service.fetchTrendData(city, mmdd).timeout(const Duration(seconds: kApiTimeoutSeconds))
-          );
-          // Cache the successful response
-          await _cacheApiResponse('trend', city, mmdd, trendData);
-        }
-      }
-      
-      final slope = trendData['slope'];
-      final trendSlope = (slope is num) ? slope.toDouble() : null;
-      DebugUtils.logLazy(() => '📊 Extracted trend slope: $trendSlope');
-      
-      // Update the current data with trend slope
-      if (_currentData != null && trendSlope != null) {
-        if (mounted) {
-          setState(() {
-            _currentData!['trendSlope'] = trendSlope;
-          });
-        }
-      }
-      
-    } catch (e) {
-      DebugUtils.logLazy(() => 'Failed to fetch trend data: $e');
-      setState(() {
-        _trendDataFailed = true;
-        if (e is RateLimitException) {
-          _trendDataRateLimited = true;
-        }
-      });
-    }
-  }
 
   /// Handle retry when offline - intelligently decide what to retry
   Future<void> _handleOfflineRetry() async {
@@ -2185,16 +1396,14 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   Future<void> _handleRefresh() async {
     DebugUtils.logLazy(() => 'Pull-to-refresh triggered');
-    
-    // Cancel any existing background refresh to prevent race conditions
-    
-    // Stop any existing auto-retry timer
-    _stopAutoRetryTimer();
-    
+
     // Reset error states
     _resetErrorStates();
-    
-    // Clear cache in simulation mode to ensure fresh data loading
+
+    // Always clear the in-memory period cache so stale data is not served
+    TemperatureService.clearCache();
+
+    // Clear persistent cache in simulation mode to ensure simulation always runs
     if (AppConfig.enableEndpointFailureSimulation) {
       await _clearCache();
     }
@@ -2217,13 +1426,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   /// Force refresh without using cache (for debugging/testing)
   Future<void> _handleForceRefresh() async {
     DebugUtils.logLazy(() => 'Force refresh triggered - clearing all cache');
-    
+
     // Clear all cache to force fresh data loading
+    TemperatureService.clearCache();
     await _clearCache();
-    
-    // Cancel any existing background refresh to prevent race conditions
-    _stopAutoRetryTimer();
-    
+
     // Reset error states
     _resetErrorStates();
     
@@ -2245,10 +1452,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Clear only location cache
     await _clearLocationCache();
-    
-    // Cancel any existing background refresh to prevent race conditions
-    _stopAutoRetryTimer();
-    
+
     // Reset error states
     _resetErrorStates();
     
@@ -2383,7 +1587,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Show no chart data state with retry button (only if we have no data at all and not loading)
     // Only show this if progressive loading has completed - this prevents flash during loading transitions
     if (chartData.isEmpty && !_isDataLoading && _progressiveLoadingCompleted) {
-      final isRateLimited = _averageDataRateLimited || _trendDataRateLimited || _summaryDataRateLimited || _chartDataRateLimited;
+      final isRateLimited = _chartDataRateLimited;
       
       return _buildRetrySection(
         isRateLimited 
@@ -2541,26 +1745,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  Widget _buildLoadingDateSection() {
-    // Calculate the date that will be used (same logic as _loadChartData)
-    final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
-    final dateToUse = DateTime.parse(dateInfo['date']!);
-    final displayDate = _formatDayMonth(dateToUse);
-    
-    return Padding(
-      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Text(
-          displayDate,
-          style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-          textAlign: TextAlign.left,
-        ),
-    );
-  }
-
-  Widget _buildDeterminedLocationSection() {
-    return const SizedBox.shrink();
-  }
-
   Widget _buildLocationDeterminingSection() {
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
@@ -2669,7 +1853,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             headerText,
             style: TextStyle(
               color: kAccentColour,
-              fontSize: app_constants.kFontSizeLocation,
+              fontSize: kFontSizeLocation,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
             ),
@@ -3402,19 +2586,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  Widget _buildDateSection(String? displayDate) {
-    if (displayDate == null) return const SizedBox.shrink();
-    
-    return Padding(
-      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: Text(
-        displayDate,
-        style: const TextStyle(color: kTextPrimaryColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
-        textAlign: TextAlign.left,
-      ),
-    );
-  }
-
   Widget _buildCitySection(String? city) {
     return const SizedBox.shrink();
   }
@@ -3535,56 +2706,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               textAlign: TextAlign.left,
             ),
           ),
-        // Average data error message if it failed
-        if (_averageDataFailed)
-          Padding(
-            padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-            child: Row(
-              children: [
-                Icon(
-                  _isRetryingAverage ? Icons.hourglass_empty : 
-                  _averageDataRateLimited ? Icons.timer : Icons.error_outline,
-                  color: _isRetryingAverage ? kGreyLabelColour : 
-                         _averageDataRateLimited ? kGreyLabelColour : kAccentColour,
-                  size: kIconSize,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _isRetryingAverage 
-                      ? 'Retrying average temperature data...'
-                      : _averageDataRateLimited 
-                        ? 'Rate limit exceeded - please wait before retrying'
-                        : 'Failed to load average temperature data',
-                    style: TextStyle(
-                      color: _isRetryingAverage ? kGreyLabelColour : 
-                             _averageDataRateLimited ? kGreyLabelColour : kAccentColour, 
-                      fontSize: kFontSizeBody - 1, 
-                      fontWeight: FontWeight.w400
-                    ),
-                    textAlign: TextAlign.left,
-                  ),
-                ),
-                if (!_isRetryingAverage && !_averageDataRateLimited) ...[
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: _retryAverageData,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: kAccentColour.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'Retry',
-                        style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
         // Trend text below chart (only show after loading)
         if (trendSlope != null && !_isDataLoading)
           Padding(
@@ -3597,102 +2718,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                   : 'Trend: Falling at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
               style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
               textAlign: TextAlign.left,
-            ),
-          ),
-        // Trend data error message if it failed
-        if (_trendDataFailed)
-          Padding(
-            padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-            child: Row(
-              children: [
-                Icon(
-                  _isRetryingTrend ? Icons.hourglass_empty : Icons.error_outline,
-                  color: _isRetryingTrend ? kGreyLabelColour : kAccentColour,
-                  size: kIconSize,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _isRetryingTrend 
-                      ? 'Retrying trend data...'
-                      : _trendDataRateLimited 
-                        ? 'Rate limit exceeded - please wait before retrying'
-                        : 'Failed to load trend data',
-                    style: TextStyle(
-                      color: _isRetryingTrend ? kGreyLabelColour : 
-                             _trendDataRateLimited ? kGreyLabelColour : kAccentColour, 
-                      fontSize: kFontSizeBody - 1, 
-                      fontWeight: FontWeight.w400
-                    ),
-                    textAlign: TextAlign.left,
-                  ),
-                ),
-                if (!_isRetryingTrend && !_trendDataRateLimited) ...[
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: _retryTrendData,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: kAccentColour.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'Retry',
-                        style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        // Summary error message if it failed
-        if (_summaryDataFailed)
-          Padding(
-            padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-            child: Row(
-              children: [
-                Icon(
-                  _isRetryingSummary ? Icons.hourglass_empty : Icons.error_outline,
-                  color: _isRetryingSummary ? kGreyLabelColour : kAccentColour,
-                  size: kIconSize,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _isRetryingSummary 
-                      ? 'Retrying summary data...'
-                      : _summaryDataRateLimited 
-                        ? 'Rate limit exceeded - please wait before retrying'
-                        : 'Failed to load summary data',
-                    style: TextStyle(
-                      color: _isRetryingSummary ? kGreyLabelColour : 
-                             _summaryDataRateLimited ? kGreyLabelColour : kAccentColour, 
-                      fontSize: kFontSizeBody - 1, 
-                      fontWeight: FontWeight.w400
-                    ),
-                    textAlign: TextAlign.left,
-                  ),
-                ),
-                if (!_isRetryingSummary && !_summaryDataRateLimited) ...[
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: _retrySummaryData,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: kAccentColour.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'Retry',
-                        style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
             ),
           ),
         // Data completeness indicator
@@ -4062,12 +3087,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   /// Handle network restoration
   void _handleNetworkRestored() {
-    // If we have no data or failed data, try to refresh
-    if (_currentData == null || 
-        _averageDataFailed || 
-        _trendDataFailed || 
-        _summaryDataFailed ||
-        _chartDataFailed) {
+    // If we have no data or failed chart data, try to refresh
+    if (_currentData == null || _chartDataFailed) {
       DebugUtils.logLazy(() => '🔄 Network restored, refreshing failed data');
       _handleRefresh();
     } else if (_currentData != null && _progressiveLoadingCompleted) {
@@ -4348,34 +3369,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  /// Simulate endpoint failures for testing purposes
-  Future<T> _simulateEndpointFailure<T>(String endpointName, Future<T> Function() apiCall) async {
-    if (!AppConfig.enableEndpointFailureSimulation) {
-      return await apiCall();
-    }
-    
-    // Simulate different failure scenarios based on state
-    if (endpointName == 'average' && _simulateAverageFailure) {
-      DebugUtils.logLazy(() => 'Simulating average endpoint failure');
-      await Future.delayed(const Duration(seconds: 2)); // Simulate delay
-      throw Exception('Simulated average endpoint failure for testing');
-    }
-    
-    if (endpointName == 'trend' && _simulateTrendFailure) {
-      DebugUtils.logLazy(() => 'Simulating trend endpoint failure');
-      await Future.delayed(const Duration(seconds: 2)); // Simulate delay
-      throw Exception('Simulated trend endpoint failure for testing');
-    }
-    
-    if (endpointName == 'summary' && _simulateSummaryFailure) {
-      DebugUtils.logLazy(() => 'Simulating summary endpoint failure');
-      await Future.delayed(const Duration(seconds: 2)); // Simulate delay
-      throw Exception('Simulated summary endpoint failure for testing');
-    }
-    
-    // If no failure is simulated, proceed with normal call
-    return await apiCall();
-  }
 }
 
 String _formatDayMonth(DateTime date) {

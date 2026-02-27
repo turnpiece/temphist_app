@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 
+import '../constants/app_constants.dart';
+
 // Re-export so existing code can import from here
 class TemperatureChartData {
   final String year;
@@ -17,22 +19,6 @@ class TemperatureChartData {
   });
 }
 
-// App color constants duplicated here to keep widget self-contained.
-// These match the values in main.dart.
-const _kBarCurrentYearColour = Color(0xFF51CF66);
-const _kBarOtherYearColour = Color(0xFFFF6B6B);
-const _kAverageColour = Color(0xFF4DABF7);
-const _kTrendColour = Color(0xFFAAAA00);
-const _kAxisLabelColour = Color(0xFFECECEC);
-const _kAxisGridColour = Color(0xFFECECEC);
-const _kGreyLabelColour = Color(0xFFB0B0B0);
-
-const double _kFontSizeBody = 17.0;
-const double _kFontSizeAxisLabel = 17.0; // Changed to match body font size
-const double _kChartHorizontalMargin = 0.0;
-const double _kChartRightMargin = 20.0;
-const double _kScreenPadding = 12.0;
-const double _kContentHorizontalMargin = 8.0;
 
 /// A reusable horizontal bar chart showing temperature data across years.
 ///
@@ -68,13 +54,13 @@ class TemperatureBarChart extends StatelessWidget {
               height: 32,
               child: CircularProgressIndicator(
                 strokeWidth: 3,
-                color: _kGreyLabelColour,
+                color: kGreyLabelColour,
               ),
             ),
             SizedBox(height: 16),
             Text(
               'Loading temperature data...',
-              style: TextStyle(color: _kGreyLabelColour, fontSize: _kFontSizeBody),
+              style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
             ),
           ],
         ),
@@ -102,21 +88,21 @@ class TemperatureBarChart extends StatelessWidget {
           final screenWidth = MediaQuery.of(context).size.width;
           final isTablet = screenWidth >= 768;
           final availableWidth = isTablet ? 600.0 : screenWidth;
-          final contentPadding = _kScreenPadding + _kContentHorizontalMargin;
-          final chartWidth = availableWidth - _kChartRightMargin - (contentPadding * 2);
+          final contentPadding = kScreenPadding + kContentHorizontalMargin;
+          final chartWidth = availableWidth - kChartRightMargin - (contentPadding * 2);
 
           final chart = SfCartesianChart(
             isTransposed: true,
             margin: const EdgeInsets.only(
-              left: _kChartHorizontalMargin,
-              right: _kChartRightMargin,
+              left: kChartHorizontalMargin,
+              right: kChartRightMargin,
             ),
             tooltipBehavior: TooltipBehavior(
               enable: true,
               format: 'point.x: point.y°C',
               canShowMarker: false,
               header: '',
-              textStyle: const TextStyle(fontSize: _kFontSizeBody),
+              textStyle: const TextStyle(fontSize: kFontSizeBody),
               builder: (data, point, series, pointIndex, seriesIndex) {
                 final d = data as TemperatureChartData;
                 return Container(
@@ -127,34 +113,34 @@ class TemperatureBarChart extends StatelessWidget {
                   ),
                   child: Text(
                     '${d.year}: ${d.temperature.toStringAsFixed(1)}°C',
-                    style: const TextStyle(color: Colors.white, fontSize: _kFontSizeBody - 4),
+                    style: const TextStyle(color: Colors.white, fontSize: kFontSizeBody - 4),
                   ),
                 );
               },
             ),
             series: _buildSeries(yAxisMin),
             primaryXAxis: NumericAxis(
-              labelStyle: const TextStyle(fontSize: _kFontSizeAxisLabel, color: _kGreyLabelColour),
-              majorGridLines: MajorGridLines(width: 0.5, color: _kAxisGridColour.withValues(alpha: 0.3)),
+              labelStyle: const TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
+              majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
               labelIntersectAction: AxisLabelIntersectAction.hide,
               minimum: 1975.0,
               maximum: DateTime.now().year.toDouble(),
               interval: 5,
               labelFormat: '{value}',
               plotOffset: 20,
-              axisLine: const AxisLine(width: 1, color: _kAxisLabelColour),
+              axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
             ),
             primaryYAxis: NumericAxis(
               labelFormat: '{value}°C',
               numberFormat: NumberFormat('0'),
               minimum: yAxisMin,
               maximum: yAxisMax,
-              majorGridLines: MajorGridLines(width: 0.5, color: _kAxisGridColour.withValues(alpha: 0.3)),
-              labelStyle: const TextStyle(fontSize: _kFontSizeAxisLabel, color: _kGreyLabelColour),
+              majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
+              labelStyle: const TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
               plotOffset: 0,
               desiredIntervals: 5,
               labelPosition: ChartDataLabelPosition.outside,
-              axisLine: const AxisLine(width: 1, color: _kAxisLabelColour),
+              axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
             ),
             plotAreaBorderWidth: 0,
             enableAxisAnimation: false,
@@ -178,7 +164,7 @@ class TemperatureBarChart extends StatelessWidget {
         lowValueMapper: (TemperatureChartData data, _) => baseline,
         highValueMapper: (TemperatureChartData data, _) => data.temperature,
         pointColorMapper: (TemperatureChartData data, _) =>
-            data.isCurrentYear ? _kBarCurrentYearColour : _kBarOtherYearColour,
+            data.isCurrentYear ? kBarCurrentYearColour : kBarOtherYearColour,
         width: 0.8,
         animationDuration: 0,
         name: 'Temperature',
@@ -191,7 +177,7 @@ class TemperatureBarChart extends StatelessWidget {
           dataSource: generateAverageData(chartData, averageTemperature!),
           xValueMapper: (TemperatureChartData data, _) => int.parse(data.year),
           yValueMapper: (TemperatureChartData data, _) => data.temperature,
-          color: _kAverageColour,
+          color: kAverageColour,
           width: 2,
           animationDuration: 0,
           name: 'Average Temperature',
@@ -203,7 +189,7 @@ class TemperatureBarChart extends StatelessWidget {
           dataSource: generateTrendData(chartData, trendSlope!),
           xValueMapper: (TemperatureChartData data, _) => int.parse(data.year),
           yValueMapper: (TemperatureChartData data, _) => data.temperature,
-          color: _kTrendColour,
+          color: kTrendColour,
           width: 2,
           animationDuration: 0,
           name: 'Trend',

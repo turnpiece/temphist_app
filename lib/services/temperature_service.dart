@@ -36,6 +36,11 @@ class TemperatureService {
   static final Map<String, PeriodTemperatureData> _periodCache = {};
   final String apiBaseUrl;
 
+  /// Clears all cached period data. Call on refresh so stale data is not served.
+  static void clearCache() {
+    _periodCache.clear();
+  }
+
   TemperatureService({
     String? apiBaseUrl,
   }) : apiBaseUrl = apiBaseUrl ?? AppConfig.apiBaseUrl;
