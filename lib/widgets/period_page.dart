@@ -247,7 +247,7 @@ class PeriodPageState extends State<PeriodPage>
           const SizedBox(height: 16),
           Text(
             _loadingMessage,
-            style: const TextStyle(color: _kGreyLabelColour, fontSize: _kFontSizeBody - 2),
+            style: const TextStyle(color: _kGreyLabelColour, fontSize: _kFontSizeBody),
           ),
         ],
       ),
@@ -267,7 +267,7 @@ class PeriodPageState extends State<PeriodPage>
               Expanded(
                 child: Text(
                   _error!,
-                  style: const TextStyle(color: _kAccentColour, fontSize: _kFontSizeBody - 1),
+                  style: const TextStyle(color: _kAccentColour, fontSize: _kFontSizeBody),
                 ),
               ),
             ],
@@ -283,7 +283,7 @@ class PeriodPageState extends State<PeriodPage>
               ),
               child: const Text(
                 'Retry',
-                style: TextStyle(color: _kAccentColour, fontSize: _kFontSizeBody - 2, fontWeight: FontWeight.w500),
+                style: TextStyle(color: _kAccentColour, fontSize: _kFontSizeBody, fontWeight: FontWeight.w500),
               ),
             ),
           ),
@@ -321,15 +321,18 @@ class PeriodPageState extends State<PeriodPage>
           child: Container(
             alignment: Alignment.topLeft,
             constraints: BoxConstraints(
-              minHeight: (_kFontSizeBody - 2) * 1.2 * 3 + 2,
+              minHeight: _kFontSizeBody * 1.2 * 3 + 2,
             ),
             child: Text(
               data.summary,
               style: const TextStyle(
                 color: _kSummaryColour,
-                fontSize: _kFontSizeBody - 2,
+                fontSize: _kFontSizeBody,
                 height: 1.2,
+                overflow: TextOverflow.visible,
               ),
+              softWrap: true,
+              maxLines: null,
             ),
           ),
         ),
@@ -364,7 +367,7 @@ class PeriodPageState extends State<PeriodPage>
           padding: const EdgeInsets.only(bottom: _kSectionBottomPadding),
           child: Text(
             'Data completeness: ${data.metadata!.completeness.toStringAsFixed(0)}%',
-            style: const TextStyle(color: _kGreyLabelColour, fontSize: _kFontSizeBody - 2),
+            style: const TextStyle(color: _kGreyLabelColour, fontSize: _kFontSizeBody),
           ),
         ),
     ];

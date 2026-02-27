@@ -1,6 +1,6 @@
 // Debug configuration - only included in debug builds
 class DebugConfig {
-  static const bool enableDebugLogging = false;
+  static const bool enableDebugLogging = true;
   static const bool enableEndpointFailureSimulation = false;
   static const bool enableDebugUI = false;
   

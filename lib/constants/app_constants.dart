@@ -44,10 +44,11 @@ const String kAppTitle = 'TempHist';
 
 /// Font size constants - control text sizing throughout the app
 const double kFontSizeTitle = 26.0;
-const double kFontSizeBody = 17.0;
-const double kFontSizeAxisLabel = 16.0;
+const double kFontSizeLocation = 18.0; // Slightly larger for location
+const double kFontSizeBody = 17.0; // Standard body text, summary, average, trend
+const double kFontSizeAxisLabel = 17.0; // Same as body for consistency
 const double kIconSize = 17.0;
-const double kSummaryFontSize = kFontSizeBody - 2;
+const double kSummaryFontSize = kFontSizeBody; // Changed from -2 for consistency
 const double kSummaryLineHeight = 1.2;
 const double kSummaryMinLines = 4;
 

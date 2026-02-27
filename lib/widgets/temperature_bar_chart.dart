@@ -28,7 +28,7 @@ const _kAxisGridColour = Color(0xFFECECEC);
 const _kGreyLabelColour = Color(0xFFB0B0B0);
 
 const double _kFontSizeBody = 17.0;
-const double _kFontSizeAxisLabel = 16.0;
+const double _kFontSizeAxisLabel = 17.0; // Changed to match body font size
 const double _kChartHorizontalMargin = 0.0;
 const double _kChartRightMargin = 20.0;
 const double _kScreenPadding = 12.0;

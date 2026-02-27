@@ -22,6 +22,7 @@ import 'utils/debug_utils.dart';
 import 'widgets/temperature_bar_chart.dart';
 import 'widgets/period_page.dart';
 import 'models/period_temperature_data.dart';
+import 'constants/app_constants.dart' as app_constants;
 
 // App color constants
 // Note: These are no longer constants because they depend on runtime configuration
@@ -69,9 +70,9 @@ const String kAppTitle = 'TempHist'; // Application title
 // Font size constants - control text sizing throughout the app
 const double kFontSizeTitle = 26.0; // Main title text (e.g., "TempHist")
 const double kFontSizeBody = 17.0; // Body text (date, location, summary, etc.)
-const double kFontSizeAxisLabel = 16.0; // Chart axis labels (years and temperatures)
+const double kFontSizeAxisLabel = 17.0; // Chart axis labels (changed from 16.0 to match body)
 const double kIconSize = 17.0; // Standard icon size for UI elements
-const double kSummaryFontSize = kFontSizeBody - 2;
+const double kSummaryFontSize = kFontSizeBody; // Changed from kFontSizeBody - 2 for consistency
 const double kSummaryLineHeight = 1.2;
 const double kSummaryMinLines = 4;
 
@@ -1836,13 +1837,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       } else if (_loadingElapsedSeconds < 45) {
         // Use the display location if available
         final locationText = _displayLocation.isNotEmpty ? _displayLocation : 'your area';
-        newMessage = 'Is today warmer than average in $locationText?';
+        newMessage = 'Analyzing temperature patterns in $locationText...';
       } else if (_loadingElapsedSeconds < 60) {
-        newMessage = 'Once we have the data we\'ll know.';
+        newMessage = 'Calculating averages and trends...';
       } else if (_loadingElapsedSeconds < 80) {
-        newMessage = 'Please be patient. It shouldn\'t be much longer.';
+        newMessage = 'Almost there...';
       } else {
-        newMessage = 'The server is taking a while to respond.';
+        newMessage = 'The server is taking longer than usual. Please wait...';
       }
     }
     
@@ -2668,11 +2669,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             headerText,
             style: TextStyle(
               color: kAccentColour,
-              fontSize: kFontSizeBody,
+              fontSize: app_constants.kFontSizeLocation,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
             ),
             overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
         ),
       ],
@@ -3233,7 +3235,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 _buildPeriodHeaderLabel(pageIndex),
                 style: const TextStyle(
                   color: kTextPrimaryColour,
-                  fontSize: kFontSizeBody - 3,
+                  fontSize: kFontSizeBody,
                   fontWeight: FontWeight.w600,
                 ),
                 softWrap: true,
@@ -4016,23 +4018,39 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   /// Start monitoring network connectivity
   void _startConnectivityMonitoring() {
+    // Check initial connectivity status asynchronously without blocking
+    Connectivity().checkConnectivity().then((initialResults) {
+      if (mounted) {
+        _isOnline = initialResults.any((result) =>
+          result == ConnectivityResult.mobile ||
+          result == ConnectivityResult.wifi ||
+          result == ConnectivityResult.ethernet
+        );
+        DebugUtils.logLazy(() => '🌐 Initial connectivity status: ${_isOnline ? "online" : "offline"}');
+      }
+    }).catchError((e) {
+      DebugUtils.logLazy(() => '⚠️ Failed to check initial connectivity: $e');
+      // Default to online if check fails (already set to true by default)
+    });
+
+    // Start listening for changes immediately
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
       (List<ConnectivityResult> results) {
         final wasOnline = _isOnline;
-        _isOnline = results.any((result) => 
-          result == ConnectivityResult.mobile || 
-          result == ConnectivityResult.wifi || 
+        _isOnline = results.any((result) =>
+          result == ConnectivityResult.mobile ||
+          result == ConnectivityResult.wifi ||
           result == ConnectivityResult.ethernet
         );
-        
+
         DebugUtils.logLazy(() => '🌐 Network connectivity changed: ${_isOnline ? "online" : "offline"}');
-        
+
         // If we just came back online and were offline, try to refresh data
         if (!wasOnline && _isOnline) {
           DebugUtils.logLazy(() => '🔄 Network restored, attempting to refresh data');
           _handleNetworkRestored();
         }
-        
+
         // Update UI to reflect connectivity state (_isOnline was updated above)
         if (mounted) {
           DebugUtils.logLazy(() => '🌐 Updating UI for connectivity state: ${_isOnline ? "online" : "offline"}');
