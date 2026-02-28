@@ -155,7 +155,7 @@ create_release() {
     local current_version=$(get_current_version)
     local current_build=$(get_current_build)
     local new_version
-    local new_build=$((current_build + 1))
+    local new_build=$(date +%Y%m%d%H%M)
     
     # Calculate new version
     case $version_type in
