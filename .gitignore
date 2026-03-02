@@ -63,8 +63,12 @@ ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme
 # Generated files
 *.lock
 !ios/Podfile.lock
+!pubspec.lock
 *.generated.*
 *.g.dart
+
+# Claude Code local settings
+.claude/settings.local.json
 
 # Firebase configuration files
 firebase_options_escaped.txt
