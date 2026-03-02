@@ -109,10 +109,6 @@ jobs:
           xcode-select -p
           xcodebuild -version
 
-      - name: Install iOS 18.2 platform
-        run: |
-          sudo xcodebuild -downloadPlatform iOS
-
       - name: 🛠️ Install Fastlane
         working-directory: ios
         run: bundle install
