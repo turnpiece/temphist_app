@@ -44,24 +44,40 @@ platform :ios do
     # Build with Flutter
     sh("cd .. && bundle exec flutter build ios --release --no-codesign")
 
-    # Fix missing MinimumOSVersion in App.framework Info.plist (Flutter bug)
-    sh("plutil -replace MinimumOSVersion -string '15.0' '../../build/ios/iphoneos/Runner.app/Frameworks/App.framework/Info.plist'")
-
     profile_specifier =
     lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING][ENV['APP_IDENTIFIER']]
-  
+
     # bump build number to current UTC timestamp YYYYMMDDHHMM
     increment_build_number(
       xcodeproj: "Runner.xcodeproj",
       build_number: Time.now.utc.strftime("%Y%m%d%H%M")
     )
 
+    # Archive only — skip IPA export so we can patch App.framework first
     build_app(
-      scheme:        "Runner",
-      configuration: "Release",
-      export_method: "app-store",
-      destination:   "generic/platform=iOS",
+      scheme:           "Runner",
+      configuration:    "Release",
+      destination:      "generic/platform=iOS",
+      skip_package_ipa: true,
       xcargs: "CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=#{ENV.fetch('APPLE_TEAM_ID', '77X2NFV437')} CODE_SIGN_IDENTITY='Apple Distribution' PROVISIONING_PROFILE_SPECIFIER='match AppStore #{ENV.fetch('IOS_BUNDLE_ID', 'com.turnpiece.temphist')}'"
+    )
+
+    # Fix missing MinimumOSVersion in App.framework inside the xcarchive (Flutter bug)
+    archive_path = lane_context[SharedValues::XCODEBUILD_ARCHIVE]
+    sh("plutil -replace MinimumOSVersion -string '15.0' \"#{archive_path}/Products/Applications/Runner.app/Frameworks/App.framework/Info.plist\"")
+
+    # Export IPA from the patched archive (re-signing happens here)
+    build_app(
+      skip_build_archive: true,
+      archive_path:       archive_path,
+      export_method:      "app-store",
+      export_options: {
+        signingStyle:         "manual",
+        teamID:               ENV.fetch('APPLE_TEAM_ID', '77X2NFV437'),
+        provisioningProfiles: {
+          ENV.fetch('IOS_BUNDLE_ID', 'com.turnpiece.temphist') => "match AppStore #{ENV.fetch('IOS_BUNDLE_ID', 'com.turnpiece.temphist')}"
+        }
+      }
     )
 
     upload_to_testflight(api_key: api_key)
