@@ -44,6 +44,9 @@ platform :ios do
     # Build with Flutter
     sh("cd .. && bundle exec flutter build ios --release --no-codesign")
 
+    # Fix missing MinimumOSVersion in App.framework Info.plist (Flutter bug)
+    sh("plutil -replace MinimumOSVersion -string '15.0' '../build/ios/iphoneos/Runner.app/Frameworks/App.framework/Info.plist'")
+
     profile_specifier =
     lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING][ENV['APP_IDENTIFIER']]
   
