@@ -376,6 +376,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   // Track chart data loading failures
   bool _chartDataFailed = false;
   bool _chartDataFailedDueToRateLimit = false;
+  bool _chartDataTimedOut = false;
   final List<int> _failedYears = []; // Track which years failed to load
 
   // Network connectivity state
@@ -576,17 +577,24 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   Future<void> _refreshLocationAndData() async {
     DebugUtils.logLazy(() => 'Refreshing location and data...');
-    
-    // Reset location state
+
+    // Remember the current location so period pages don't flash to an empty state
+    // while we're re-determining. We only clear it if the location actually changes.
+    final previousLocation = _determinedLocation;
+
     setState(() {
       _isLocationDetermined = false;
-      _determinedLocation = '';
-      _displayLocation = '';
       _locationDeterminedAt = null;
+      // Do NOT clear _determinedLocation / _displayLocation here — period pages
+      // keep their cached data as long as the location string stays the same.
     });
-    
+
     // Determine new location
     await _determineLocation();
+
+    // If the location didn't change, period pages will skip their refetch
+    // (their _lastFetchKey still matches). Only the daily view reloads.
+    DebugUtils.logLazy(() => 'Location refresh: $previousLocation → $_determinedLocation');
     
     // Reload data with new location using progressive loading
     _isDataLoading = true;
@@ -630,6 +638,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       _chartDataRateLimited = false;
       _chartDataFailed = false;
       _chartDataFailedDueToRateLimit = false;
+      _chartDataTimedOut = false;
       _failedYears.clear();
     });
   }
@@ -1231,15 +1240,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       final currentYear = dateToUse.year;
       final identifier = formattedDate.substring(5);
 
-      // Use v1 daily endpoint to fetch all years in one call, with a hard timeout.
-      final periodData = await service
-          .fetchPeriodData('daily', city, identifier)
-          .timeout(const Duration(seconds: 45), onTimeout: () {
-        throw TimeoutException(
-          'Daily data request timed out',
-          const Duration(seconds: 45),
-        );
-      });
+      // Use v1 daily endpoint to fetch all years in one call.
+      // fetchPeriodData manages its own internal timeouts (async job + sync fallback),
+      // so no outer timeout is needed here — the same as the period pages.
+      final periodData = await service.fetchPeriodData('daily', city, identifier);
 
       final chartData = periodData.values
           .map((value) => TemperatureChartData(
@@ -1288,25 +1292,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     } catch (e) {
       DebugUtils.logLazy(() => '_loadChartDataProgressive failed: $e');
 
-      if (e is RateLimitException) {
-        _chartDataFailedDueToRateLimit = true;
-      }
-      _chartDataFailed = true;
-      
       // Stop loading message timer on error
       _stopLoadingMessageTimer();
-      _stopAverageTrendDisplayTimer(); // Stop the timer on error too
-      _isDataLoading = false;
-      _progressiveLoadingCompleted = true;
-      
-      // Ensure we still have some data structure even on error
+      _stopAverageTrendDisplayTimer();
+
+      // Build minimal data structure to show error state
+      Map<String, dynamic>? minimalData;
       if (_currentData == null) {
-        // Create minimal data structure to show error state
         final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
         final dateToUse = DateTime.parse(dateInfo['date']!);
         final city = dateInfo['city']!;
-        
-        _currentData = _createResultMap(
+        minimalData = _createResultMap(
           chartData: <TemperatureChartData>[],
           averageTemperature: null,
           trendSlope: null,
@@ -1315,7 +1311,21 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           city: city,
         );
       }
-      
+
+      if (mounted) {
+        setState(() {
+          if (e is RateLimitException) {
+            _chartDataFailedDueToRateLimit = true;
+          } else if (e is TimeoutException) {
+            _chartDataTimedOut = true;
+          }
+          _chartDataFailed = true;
+          _isDataLoading = false;
+          _progressiveLoadingCompleted = true;
+          if (minimalData != null) _currentData = minimalData;
+        });
+      }
+
       return;
     } finally {
       // Always reset the loading operation flag and ensure loading is marked as completed
@@ -1588,11 +1598,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Only show this if progressive loading has completed - this prevents flash during loading transitions
     if (chartData.isEmpty && !_isDataLoading && _progressiveLoadingCompleted) {
       final isRateLimited = _chartDataRateLimited;
-      
+      final String message;
+      if (isRateLimited) {
+        message = 'API rate limit exceeded. Please wait a few minutes before trying again.';
+      } else if (_chartDataTimedOut) {
+        message = 'Loading timed out. Please check your connection and try again.';
+      } else {
+        message = 'No temperature data available. Please check your internet connection and try again.';
+      }
+
       return _buildRetrySection(
-        isRateLimited 
-          ? 'API rate limit exceeded. Please wait a few minutes before trying again.'
-          : 'No temperature data available. Please check your internet connection and try again.',
+        message,
         isRateLimited ? null : () {
           DebugUtils.logLazy(() => 'Retry button pressed after no data');
           _handleRefresh();
@@ -1838,7 +1854,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     return Row(
       children: [
         Transform.translate(
-          offset: const Offset(-11.0, 0.0), // Shift logo left to compensate for SVG's internal margin
+          offset: const Offset(-9.0, 0.0), // Shift logo left to compensate for SVG's internal margin
           child: Padding(
             padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
             child: SvgPicture.asset(
@@ -2596,25 +2612,24 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
     return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-      child: SizedBox(
-        height: kSummaryFontSize * kSummaryLineHeight * kSummaryMinLines + 8,
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Text(
-            summaryText!,
-            style: TextStyle(
-              color: kSummaryColour,
-              fontSize: kSummaryFontSize,
-              fontWeight: FontWeight.w400,
-              height: kSummaryLineHeight,
-            ),
-            strutStyle: const StrutStyle(
-              fontSize: kSummaryFontSize,
-              height: kSummaryLineHeight,
-              forceStrutHeight: true,
-            ),
-            textAlign: TextAlign.left,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: kSummaryFontSize * kSummaryLineHeight * kSummaryMinLines + 8,
+        ),
+        child: Text(
+          summaryText!,
+          style: const TextStyle(
+            color: kSummaryColour,
+            fontSize: kSummaryFontSize,
+            fontWeight: FontWeight.w400,
+            height: kSummaryLineHeight,
           ),
+          strutStyle: const StrutStyle(
+            fontSize: kSummaryFontSize,
+            height: kSummaryLineHeight,
+            forceStrutHeight: true,
+          ),
+          textAlign: TextAlign.left,
         ),
       ),
     );

@@ -304,8 +304,8 @@ class PeriodPageState extends State<PeriodPage>
           padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
           child: Container(
             alignment: Alignment.topLeft,
-            constraints: BoxConstraints(
-              minHeight: kFontSizeBody * 1.2 * 3 + 2,
+            constraints: const BoxConstraints(
+              minHeight: kSummaryFontSize * kSummaryLineHeight * kSummaryMinLines + 8,
             ),
             child: Text(
               data.summary,
