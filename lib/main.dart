@@ -394,6 +394,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   final _monthPageKey = GlobalKey<PeriodPageState>();
   final _yearPageKey = GlobalKey<PeriodPageState>();
 
+  // Swipe coachmark
+  bool _showSwipeCoachmark = false;
+  bool _coachmarkFadingOut = false;
+
   @override
   void initState() {
     super.initState();
@@ -421,6 +425,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Initialize with location determination first, then load data
     _initializeApp();
+
+    // Check whether to show the one-time swipe coachmark
+    _checkSwipeCoachmark();
   }
 
   @override
@@ -788,6 +795,47 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         DebugUtils.logLazy(() => '🧹 Cleaned up $cleanedCount expired cache entries');
       }
     }, 'cleanup expired cache');
+  }
+
+  /// Check whether the swipe coachmark should be shown (first launch only).
+  Future<void> _checkSwipeCoachmark() async {
+    // In debug builds, reset so the coachmark is always visible for testing.
+    if (kDebugMode) {
+      await _safeSharedPreferencesOperation(() async {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('swipeCoachmarkShown');
+      }, 'reset swipe coachmark flag');
+    }
+
+    final shown = await _safeSharedPreferencesOperation<bool>(() async {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('swipeCoachmarkShown') ?? false;
+    }, 'load swipe coachmark flag');
+
+    if (shown == true) return;
+
+    if (mounted) {
+      setState(() {
+        _showSwipeCoachmark = true;
+        _coachmarkFadingOut = false;
+      });
+      // Auto-dismiss after 8 seconds
+      Future.delayed(const Duration(seconds: 8), _dismissCoachmark);
+    }
+  }
+
+  /// Fade out and permanently dismiss the swipe coachmark.
+  void _dismissCoachmark() {
+    if (!_showSwipeCoachmark || _coachmarkFadingOut) return;
+    if (mounted) {
+      setState(() {
+        _coachmarkFadingOut = true;
+      });
+    }
+    _safeSharedPreferencesOperation(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('swipeCoachmarkShown', true);
+    }, 'save swipe coachmark shown');
   }
 
 
@@ -2362,6 +2410,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 controller: _pageController,
                 onPageChanged: (index) {
                   _pageIndexNotifier.value = index;
+                  _dismissCoachmark();
                 },
                 children: [
                   // Page 0: Daily (existing view)
@@ -2431,14 +2480,38 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                _buildPeriodHeaderLabel(pageIndex),
-                style: const TextStyle(
-                  color: kTextPrimaryColour,
-                  fontSize: kFontSizeBody,
-                  fontWeight: FontWeight.w600,
-                ),
-                softWrap: true,
+              Row(
+                children: [
+                  Text(
+                    _buildPeriodHeaderLabel(pageIndex),
+                    style: const TextStyle(
+                      color: kTextPrimaryColour,
+                      fontSize: kFontSizeBody,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (_showSwipeCoachmark) ...[
+                    const Spacer(),
+                    AnimatedOpacity(
+                      opacity: _coachmarkFadingOut ? 0.0 : 1.0,
+                      duration: const Duration(milliseconds: 600),
+                      onEnd: () {
+                        if (_coachmarkFadingOut && mounted) {
+                          setState(() {
+                            _showSwipeCoachmark = false;
+                          });
+                        }
+                      },
+                      child: const Text(
+                        '← swipe to explore →',
+                        style: TextStyle(
+                          color: kGreyLabelColour,
+                          fontSize: 13.0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           );
