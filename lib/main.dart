@@ -395,6 +395,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   final _yearPageKey = GlobalKey<PeriodPageState>();
 
   // Swipe coachmark
+  bool _coachmarkPending = false;
   bool _showSwipeCoachmark = false;
   bool _coachmarkFadingOut = false;
 
@@ -814,12 +815,20 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
     if (shown == true) return;
 
+    // Mark as pending — will be shown once the chart finishes loading.
+    if (mounted) _coachmarkPending = true;
+  }
+
+  /// Show the coachmark now and start the auto-dismiss timer.
+  /// Called from the chart loading finally block.
+  void _startCoachmarkIfPending() {
+    if (!_coachmarkPending) return;
+    _coachmarkPending = false;
     if (mounted) {
       setState(() {
         _showSwipeCoachmark = true;
         _coachmarkFadingOut = false;
       });
-      // Auto-dismiss after 8 seconds
       Future.delayed(const Duration(seconds: 8), _dismissCoachmark);
     }
   }
@@ -1380,6 +1389,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       _isLoadingOperationActive = false;
       _isDataLoading = false;
       _progressiveLoadingCompleted = true;
+      _startCoachmarkIfPending();
     }
   }
 
@@ -2506,7 +2516,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                         '← swipe to explore →',
                         style: TextStyle(
                           color: kGreyLabelColour,
-                          fontSize: 13.0,
+                          fontSize: 15.0,
                         ),
                       ),
                     ),
