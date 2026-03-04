@@ -22,6 +22,7 @@ import 'utils/debug_utils.dart';
 import 'widgets/temperature_bar_chart.dart';
 import 'widgets/period_page.dart';
 import 'widgets/splash_screen.dart';
+import 'widgets/onboarding/onboarding_screen.dart';
 import 'constants/app_constants.dart';
 
 /// Helper function to get current date and location for API calls
@@ -394,6 +395,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   final _monthPageKey = GlobalKey<PeriodPageState>();
   final _yearPageKey = GlobalKey<PeriodPageState>();
 
+  // Onboarding
+  bool _hasSeenOnboarding = true; // default true to avoid flash during async check
+
   // Swipe coachmark
   bool _coachmarkPending = false;
   bool _showSwipeCoachmark = false;
@@ -426,6 +430,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Initialize with location determination first, then load data
     _initializeApp();
+
+    // Check whether to show the one-time onboarding flow
+    _checkOnboarding();
 
     // Check whether to show the one-time swipe coachmark
     _checkSwipeCoachmark();
@@ -796,6 +803,35 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         DebugUtils.logLazy(() => '🧹 Cleaned up $cleanedCount expired cache entries');
       }
     }, 'cleanup expired cache');
+  }
+
+  /// Check whether the onboarding flow should be shown (first launch only).
+  Future<void> _checkOnboarding() async {
+    if (kDebugMode) {
+      await _safeSharedPreferencesOperation(() async {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('has_seen_onboarding');
+      }, 'reset onboarding flag');
+    }
+
+    final seen = await _safeSharedPreferencesOperation<bool>(() async {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('has_seen_onboarding') ?? false;
+    }, 'load onboarding flag');
+
+    if (seen == true) return;
+
+    if (mounted) setState(() => _hasSeenOnboarding = false);
+  }
+
+  /// Mark onboarding as complete and return to the main screen.
+  Future<void> _completeOnboarding() async {
+    await _safeSharedPreferencesOperation(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('has_seen_onboarding', true);
+    }, 'save onboarding flag');
+
+    if (mounted) setState(() => _hasSeenOnboarding = true);
   }
 
   /// Check whether the swipe coachmark should be shown (first launch only).
@@ -3436,7 +3472,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     if (widget.testFuture == null && (!_isAppInitialized || !_splashScreenMinTimeElapsed)) {
       return const SplashScreen();
     }
-    
+
+    if (!_hasSeenOnboarding) {
+      return OnboardingScreen(onComplete: _completeOnboarding);
+    }
+
     final double chartHeight = 800;
 
     Widget appContent = Scaffold(
