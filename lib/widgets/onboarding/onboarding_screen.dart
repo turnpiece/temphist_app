@@ -140,11 +140,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.symmetric(horizontal: 4),
-          width: active ? 20 : 8,
-          height: 8,
+          width: active ? 10 : 8,
+          height: active ? 10 : 8,
           decoration: BoxDecoration(
-            color: active ? kAccentColour : kGreyLabelColour,
-            borderRadius: BorderRadius.circular(4),
+            color: active ? kBarCurrentYearColour : kGreyLabelColour,
+            shape: BoxShape.circle,
           ),
         );
       }),

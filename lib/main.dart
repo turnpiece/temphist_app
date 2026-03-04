@@ -2530,7 +2530,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: i == pageIndex
-                              ? kAccentColour
+                              ? kBarCurrentYearColour
                               : kGreyLabelColour.withValues(alpha: 0.4),
                         ),
                       ),
