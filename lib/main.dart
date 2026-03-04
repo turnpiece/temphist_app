@@ -836,7 +836,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       await prefs.setBool('has_seen_onboarding', true);
     }, 'save onboarding flag');
 
-    if (mounted) setState(() => _hasSeenOnboarding = true);
+    if (mounted) {
+      setState(() => _hasSeenOnboarding = true);
+      // Now that the main screen is visible, start the coachmark if it was
+      // held back because data loaded while onboarding was still showing.
+      _startCoachmarkIfPending();
+    }
   }
 
   /// Check whether the swipe coachmark should be shown (first launch only).
@@ -861,9 +866,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   /// Show the coachmark now and start the auto-dismiss timer.
-  /// Called from the chart loading finally block.
+  /// Called from the chart loading finally block and from [_completeOnboarding].
+  /// Does nothing if the user is still in the onboarding flow — the coachmark
+  /// stays pending and is started once onboarding completes.
   void _startCoachmarkIfPending() {
     if (!_coachmarkPending) return;
+    if (!_hasSeenOnboarding) return; // wait until the main screen is visible
     _coachmarkPending = false;
     if (mounted) {
       setState(() {
