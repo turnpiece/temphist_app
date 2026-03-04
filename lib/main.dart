@@ -77,7 +77,12 @@ Future<bool> _checkStorageSpace() async {
       
       try {
         await testFile.writeAsString('test');
-        await testFile.delete();
+        // Write succeeded — storage is available.
+        // Delete is best-effort; ignore errors (the OS may have already removed
+        // the file, e.g. on the iOS simulator).
+        try {
+          await testFile.delete();
+        } catch (_) {}
         return true;
       } catch (e) {
         DebugUtils.logLazy(() => 'Storage test failed: $e');
