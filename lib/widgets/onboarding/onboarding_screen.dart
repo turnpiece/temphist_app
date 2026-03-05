@@ -5,6 +5,7 @@ import 'pages/onboarding_average_trend_page.dart';
 import 'pages/onboarding_day_page.dart';
 import 'pages/onboarding_location_page.dart';
 import 'pages/onboarding_swipe_page.dart';
+import 'pages/onboarding_tap_page.dart';
 import 'pages/onboarding_welcome_page.dart';
 
 /// Full-screen onboarding flow shown on first launch.
@@ -22,10 +23,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late final PageController _controller;
   int _currentPage = 0;
 
-  static const int _pageCount = 5;
+  static const int _pageCount = 6;
   static const List<Widget> _pages = [
     OnboardingWelcomePage(),
     OnboardingDayPage(),
+    OnboardingTapPage(),
     OnboardingAverageTrendPage(),
     OnboardingSwipePage(),
     OnboardingLocationPage(),
