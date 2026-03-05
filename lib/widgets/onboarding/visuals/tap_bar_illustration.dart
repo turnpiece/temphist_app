@@ -50,7 +50,7 @@ class TapBarIllustration extends StatelessWidget {
               // is at y = tappedBarTop, so the triangle tip touches the bar.
               Positioned(
                 left: _yearLabelWidth + _labelBarGap + 20,
-                bottom: totalHeight - tappedBarTop,
+                bottom: totalHeight - tappedBarTop - 4,
                 child: const _TooltipMockup(),
               ),
             ],
@@ -156,7 +156,7 @@ class _DownTrianglePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white
+      ..color = Colors.black87
       ..style = PaintingStyle.fill;
     final path = Path()
       ..moveTo(0, 0)
