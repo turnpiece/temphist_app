@@ -99,6 +99,7 @@ class TemperatureBarChart extends StatelessWidget {
             ),
             tooltipBehavior: TooltipBehavior(
               enable: true,
+              color: Colors.black87,
               format: 'point.x: point.y°C',
               canShowMarker: false,
               header: '',
@@ -113,7 +114,8 @@ class TemperatureBarChart extends StatelessWidget {
                   ),
                   child: Text(
                     '${d.year}: ${d.temperature.toStringAsFixed(1)}°C',
-                    style: const TextStyle(color: Colors.white, fontSize: kFontSizeBody - 4),
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: kFontSizeBody - 4),
                   ),
                 );
               },
