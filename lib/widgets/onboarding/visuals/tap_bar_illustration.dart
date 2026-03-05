@@ -2,82 +2,120 @@ import 'package:flutter/material.dart';
 
 import '../../../constants/app_constants.dart';
 
-/// Illustration for the "tap a bar" onboarding page.
-/// Shows a small horizontal bar chart with a tooltip floating above one
-/// of the bars to demonstrate the tap-to-inspect interaction.
+// Layout constants shared between the widget and painter
+const double _barHeight = 10.0;
+const double _barGap = 4.0;
+const double _rowHeight = _barHeight + _barGap;
+const double _yearLabelWidth = 32.0;
+const double _labelBarGap = 8.0;
+const int _startYear = 2026;
+const int _barCount = 10; // 2026 → 2017
+const int _tappedIndex = 7; // 2019 — near the bottom, not a multiple of 5
+
+const List<double> _barWidths = [
+  0.88, 0.72, 0.61, 0.79, 0.53,
+  0.68, 0.75, 0.48, 0.63, 0.57,
+];
+
+/// Bar chart illustration for the "tap a bar" onboarding page.
+/// Shows ~10 bars with a floating tooltip overlaid on one of them,
+/// demonstrating the tap-to-inspect interaction.
 class TapBarIllustration extends StatelessWidget {
   const TapBarIllustration({super.key});
 
-  static const List<String> _years = ['2026', '2025', '2024', '2023', '2022'];
-  static const List<double> _widths = [0.85, 0.65, 0.50, 0.78, 0.42];
-  static const int _tappedIndex = 2; // 2024
-
   @override
   Widget build(BuildContext context) {
+    const double totalHeight = _barCount * _rowHeight;
+    // Top of the tapped bar — the tooltip's bottom (triangle tip) sits here.
+    const double tappedBarTop = _tappedIndex * _rowHeight;
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        const double yearLabelWidth = 36.0;
-        const double gap = 8.0;
-        const double barHeight = 15.0;
-        const double barVerticalPadding = 3.0;
-        final double maxBarWidth = constraints.maxWidth - yearLabelWidth - gap;
+        final double maxBarWidth =
+            constraints.maxWidth - _yearLabelWidth - _labelBarGap;
 
-        final List<Widget> rows = [];
-
-        for (int i = 0; i < _years.length; i++) {
-          final bool isCurrent = i == 0;
-          final bool isTapped = i == _tappedIndex;
-
-          if (isTapped) {
-            // Insert tooltip directly above this bar
-            rows.add(
-              Padding(
-                padding: const EdgeInsets.only(left: yearLabelWidth + gap),
+        return SizedBox(
+          height: totalHeight,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // All bars drawn via CustomPaint — no gaps in the flow
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _BarsPainter(maxBarWidth: maxBarWidth),
+                ),
+              ),
+              // Tooltip overlaid on top of the bars.
+              // bottom: totalHeight - tappedBarTop  →  bottom of tooltip widget
+              // is at y = tappedBarTop, so the triangle tip touches the bar.
+              Positioned(
+                left: _yearLabelWidth + _labelBarGap,
+                bottom: totalHeight - tappedBarTop,
                 child: const _TooltipMockup(),
               ),
-            );
-          }
-
-          rows.add(
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: barVerticalPadding),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: yearLabelWidth,
-                    child: Text(
-                      _years[i],
-                      style: const TextStyle(
-                        color: kGreyLabelColour,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: gap),
-                  Container(
-                    width: _widths[i] * maxBarWidth,
-                    height: barHeight,
-                    decoration: BoxDecoration(
-                      color: isCurrent
-                          ? kBarCurrentYearColour.withOpacity(0.9)
-                          : kBarOtherYearColour.withOpacity(isTapped ? 1.0 : 0.85),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: rows,
+            ],
+          ),
         );
       },
     );
   }
+}
+
+class _BarsPainter extends CustomPainter {
+  final double maxBarWidth;
+  const _BarsPainter({required this.maxBarWidth});
+
+  static const _labelStyle = TextStyle(
+    color: kGreyLabelColour,
+    fontSize: 10,
+  );
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paintOther = Paint()
+      ..color = kBarOtherYearColour.withOpacity(0.85)
+      ..style = PaintingStyle.fill;
+    final paintCurrent = Paint()
+      ..color = kBarCurrentYearColour.withOpacity(0.9)
+      ..style = PaintingStyle.fill;
+    // Tapped bar at full opacity so it reads as "selected"
+    final paintTapped = Paint()
+      ..color = kBarOtherYearColour
+      ..style = PaintingStyle.fill;
+
+    for (int i = 0; i < _barCount; i++) {
+      final int year = _startYear - i;
+      final double y = i * _rowHeight;
+      final bool isCurrent = i == 0;
+      final bool isTapped = i == _tappedIndex;
+
+      // Year label — only for multiples of 5, matching the real app
+      if (year % 5 == 0) {
+        final tp = TextPainter(
+          text: TextSpan(text: year.toString(), style: _labelStyle),
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: _yearLabelWidth);
+        tp.paint(canvas, Offset(0, y + (_barHeight - tp.height) / 2));
+      }
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            _yearLabelWidth + _labelBarGap,
+            y,
+            _barWidths[i] * maxBarWidth,
+            _barHeight,
+          ),
+          const Radius.circular(3),
+        ),
+        isCurrent ? paintCurrent : (isTapped ? paintTapped : paintOther),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BarsPainter oldDelegate) =>
+      oldDelegate.maxBarWidth != maxBarWidth;
 }
 
 class _TooltipMockup extends StatelessWidget {
@@ -97,7 +135,7 @@ class _TooltipMockup extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text(
-              '2024: 7.1°C',
+              '2019: 5.8°C',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 15,
