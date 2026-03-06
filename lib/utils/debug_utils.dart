@@ -5,16 +5,6 @@ import '../constants/app_constants.dart';
 /// Centralized debug utility functions that are only active in debug mode
 /// Uses kDebugMode for zero-cost production builds
 class DebugUtils {
-  /// Legacy: keep this if you still want to pass a string.
-  /// Note: String building still happens even in production builds.
-  @Deprecated('Use DebugUtils.logLazy(() => ...) instead for zero-cost when disabled.')
-  static void log(String message) {
-    if (kDebugMode && AppConfig.isDebugMode) {
-      // ignore: avoid_print
-      print('DEBUG: $message');
-    }
-  }
-
   /// Main debug logging method - pass a closure so expensive string building only runs if enabled.
   /// This is zero-cost in production builds - the closure is never called.
   /// Use this for all new debug logging.
@@ -25,15 +15,6 @@ class DebugUtils {
     }
   }
 
-  /// Convenience method for simple string messages
-  /// Use logLazy() for better performance with complex string building
-  static void logSimple(String message) {
-    if (kDebugMode && AppConfig.isDebugMode) {
-      // ignore: avoid_print
-      print('DEBUG: $message');
-    }
-  }
-  
   /// Print debug message with timestamp
   static void logWithTimestamp(String message) {
     if (kDebugMode && AppConfig.isDebugMode) {

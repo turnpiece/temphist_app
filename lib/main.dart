@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:geocoding/geocoding.dart';
@@ -26,47 +25,15 @@ import 'widgets/period_page.dart';
 import 'widgets/splash_screen.dart';
 import 'widgets/onboarding/onboarding_screen.dart';
 import 'constants/app_constants.dart';
+import 'utils/location_utils.dart' as location_utils;
+import 'utils/date_utils.dart' as date_utils;
 
-/// Helper function to get current date and location for API calls
-/// Returns a map with 'date', 'mmdd', and 'city' keys
-Map<String, String> _getCurrentDateAndLocation(String determinedLocation) {
-  final now = DateTime.now();
-  final useYesterday = now.hour < kUseYesterdayHourThreshold;
-  final dateToUse = useYesterday ? now.subtract(Duration(days: 1)) : now;
-  final mmdd = DateFormat('MM-dd').format(dateToUse);
-  final city = determinedLocation.isNotEmpty ? determinedLocation : kDefaultLocation;
-  
-  return {
-    'date': DateFormat('yyyy-MM-dd').format(dateToUse),
-    'mmdd': mmdd,
-    'city': city,
-  };
-}
+// Delegate to shared utility functions
+Map<String, String> _getCurrentDateAndLocation(String determinedLocation) =>
+    date_utils.getCurrentDateAndLocation(determinedLocation);
 
-/// Clean up and validate location strings for better API compatibility
-String _cleanupLocationString(String location) {
-  if (location.isEmpty) return kDefaultLocation;
-  
-  // Remove extra whitespace and normalize commas
-  String cleaned = location.trim();
-  
-  // Replace multiple spaces with single space
-  cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ');
-  
-  // Normalize comma spacing (ensure space after comma)
-  cleaned = cleaned.replaceAll(RegExp(r',\s*'), ', ');
-  
-  // Remove trailing comma if present
-  cleaned = cleaned.replaceAll(RegExp(r',\s*$'), '');
-  
-  // Ensure we have at least a city and country
-  if (!cleaned.contains(',')) {
-    // If no comma, assume it's just a city, add default country
-    cleaned = '$cleaned, UK';
-  }
-  
-  return cleaned;
-}
+String _cleanupLocationString(String location) =>
+    location_utils.cleanupLocationString(location);
 
 /// Check available storage space and return true if sufficient space is available
 Future<bool> _checkStorageSpace() async {
@@ -184,24 +151,8 @@ Future<void> _emergencyCacheCleanup() async {
   }
 }
 
-/// Detect suspicious or obviously incorrect location strings
-/// This is very conservative since location data comes from device GPS/geocoding
-bool _isLocationSuspicious(String location) {
-  if (location.isEmpty) return true;
-  
-  // Check for very short or very long location strings (indicates API issues)
-  if (location.length < 2 || location.length > 200) {
-    return true;
-  }
-  
-  // Check for pure numeric strings (postal codes without city names)
-  if (RegExp(r'^\d+$').hasMatch(location.trim())) {
-    return true;
-  }
-  
-  return false;
-}
-
+bool _isLocationSuspicious(String location) =>
+    location_utils.isLocationSuspicious(location);
 
 
 
@@ -325,9 +276,8 @@ class TempHist extends StatelessWidget {
 
 class TemperatureScreen extends StatefulWidget {
   final Future<Map<String, dynamic>?>? testFuture;
-  final AsyncSnapshot<Map<String, dynamic>?>? testSnapshot;
 
-  const TemperatureScreen({super.key, this.testFuture, this.testSnapshot});
+  const TemperatureScreen({super.key, this.testFuture});
 
   @override
   TemperatureScreenState createState() => TemperatureScreenState();
@@ -374,7 +324,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   // Track chart data retry attempts
   bool _isRetryingChartData = false;
   int _chartDataRetryCount = 0;
-  static const int _maxChartDataRetries = 3;
+  static const int _maxChartDataRetries = kMaxChartDataRetries;
   
   // Track if progressive loading has completed to prevent flash of "no data" message
   bool _progressiveLoadingCompleted = false;
@@ -391,6 +341,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   // Network connectivity state
   bool _isOnline = true;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+
+  // Location determination guard
+  bool _isLocating = false;
 
   // Memory management
   int _memoryCleanupCount = 0;
@@ -451,9 +404,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     _positionStreamSubscription?.cancel();
+    _positionStreamSubscription = null;
     _connectivitySubscription?.cancel();
+    _connectivitySubscription = null;
     _stopAverageTrendDisplayTimer();
+    _stopLoadingMessageTimer();
     _splashScreenTimer?.cancel();
+    _splashScreenTimer = null;
     _pageIndexNotifier.dispose();
     _loadingDotsTick.dispose();
     super.dispose();
@@ -639,6 +596,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     // Start a timer that will show average/trend lines after the configured delay
     _averageTrendDisplayTimer = Timer(const Duration(seconds: kAverageTrendDisplayDelaySeconds), () {
+      if (!mounted) return;
       DebugUtils.logLazy(() => 'Average/trend display timer triggered - showing lines after timeout');
       setState(() {
         // Force show average and trend lines by setting _isDataLoading to false
@@ -654,6 +612,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
 
   void _resetErrorStates() {
+    if (!mounted) return;
     setState(() {
       _chartDataHasGaps = false;
       _isRetryingChartData = false;
@@ -1045,9 +1004,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Future<void> _determineLocation() async {
+    if (_isLocating) return;
+    _isLocating = true;
     try {
       String city = kDefaultLocation;
-      
+
       // Try to load cached location first
       final cachedLocation = await _loadCachedLocation();
       if (cachedLocation != null) {
@@ -1077,7 +1038,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 locationSettings: const geo.LocationSettings(
                   accuracy: geo.LocationAccuracy.low,
                 ),
-              ).timeout(const Duration(seconds: 10));
+              ).timeout(const Duration(seconds: kLocationTimeoutSeconds));
               
               DebugUtils.logLazy(() => '_determineLocation: Position obtained - lat: ${position.latitude}, lon: ${position.longitude}');
               _lastPosition = position;
@@ -1085,41 +1046,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               List<Placemark> placemarks = await placemarkFromCoordinates(
                 position.latitude, 
                 position.longitude
-              ).timeout(const Duration(seconds: 10));
+              ).timeout(const Duration(seconds: kLocationTimeoutSeconds));
               
               if (placemarks.isNotEmpty) {
-                final placemark = placemarks.first;
-                if (placemark.locality != null && placemark.locality!.isNotEmpty) {
-                  final locality = placemark.locality!;
-                  final country = placemark.country;
-                  final administrativeArea = placemark.administrativeArea;
-                  
-                  // Build a more specific location string to avoid ambiguity
-                  if (country != null && country.isNotEmpty) {
-                    if (administrativeArea != null && administrativeArea.isNotEmpty) {
-                      city = '$locality, $administrativeArea, $country';
-                    } else {
-                      city = '$locality, $country';
-                    }
-                  } else if (administrativeArea != null && administrativeArea.isNotEmpty) {
-                    city = '$locality, $administrativeArea';
-                  } else {
-                    city = locality;
-                  }
-                  
-                  DebugUtils.logLazy(() => 'Geolocation result - Locality: $locality, Admin: $administrativeArea, Country: $country, Final: $city');
-                } else {
-                  // If no locality, try to use administrative area + country
-                  if (placemark.administrativeArea != null && placemark.administrativeArea!.isNotEmpty) {
-                    if (placemark.country != null && placemark.country!.isNotEmpty) {
-                      city = '${placemark.administrativeArea}, ${placemark.country}';
-                    } else {
-                      city = placemark.administrativeArea!;
-                    }
-                  } else if (placemark.country != null && placemark.country!.isNotEmpty) {
-                    city = placemark.country!;
-                  }
-                }
+                city = location_utils.buildLocationFromPlacemark(placemarks.first);
+                DebugUtils.logLazy(() => 'Geolocation result: $city');
               }
             } catch (e) {
               DebugUtils.logLazy(() => 'Geolocation timeout or error: $e');
@@ -1172,6 +1103,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Reset loading message timer to start temperature-related messages
       _loadingElapsedSeconds = 0;
       _updateLoadingMessage();
+    } finally {
+      _isLocating = false;
     }
   }
 
@@ -1502,7 +1435,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         final mmdd = dateInfo['mmdd']!;
         
         // Make a quick test request to see if we're actually online
-        await service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: 5));
+        await service.fetchSummaryData(city, mmdd).timeout(const Duration(seconds: kConnectivityTestTimeoutSeconds));
         
         // If we get here, we're actually online
         DebugUtils.logLazy(() => '🌐 Connectivity test successful, network is online');
@@ -1556,16 +1489,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }
     
     // Reset location determination state
+    if (!mounted) return;
     setState(() {
       _isLocationDetermined = false;
       _determinedLocation = '';
       _displayLocation = '';
       _locationDeterminedAt = null;
     });
-    
+
     // Reinitialize the app (determine location then load data)
     await _initializeApp();
-    
+
     // Don't await the future here - let the FutureBuilder handle it
     // This allows the RefreshIndicator to complete its animation
   }
@@ -1580,15 +1514,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
     // Reset error states
     _resetErrorStates();
-    
+
     // Reset location determination state
+    if (!mounted) return;
     setState(() {
       _isLocationDetermined = false;
       _determinedLocation = '';
       _displayLocation = '';
       _locationDeterminedAt = null;
     });
-    
+
     // Reinitialize the app (determine location then load data)
     await _initializeApp();
   }
@@ -1596,14 +1531,15 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   /// Clear only location cache (for testing different locations in Simulator)
   Future<void> _handleLocationRefresh() async {
     DebugUtils.logLazy(() => 'Location refresh triggered - clearing location cache only');
-    
+
     // Clear only location cache
     await _clearLocationCache();
 
     // Reset error states
     _resetErrorStates();
-    
+
     // Reset location determination state
+    if (!mounted) return;
     setState(() {
       _isLocationDetermined = false;
       _determinedLocation = '';
@@ -2174,7 +2110,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       final response = await http.get(
         Uri.parse('https://www.google.com'),
         headers: {'User-Agent': 'Mozilla/5.0'},
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: kConnectivityTestTimeoutSeconds));
       return response.statusCode == 200;
     } catch (e) {
       DebugUtils.logLazy(() => '🌐 Connectivity test failed: $e');
@@ -2914,7 +2850,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       return const SizedBox.shrink();
     }
     
-    final missingYears = chartData.where((data) => !data.hasData).map((data) => int.parse(data.year)).toList();
+    final missingYears = chartData.where((data) => !data.hasData).map((data) => int.tryParse(data.year) ?? 0).where((y) => y > 0).toList();
     final hasGaps = missingYears.isNotEmpty || _chartDataHasGaps || _chartDataFailed;
     
     DebugUtils.logLazy(() => '📊 Data completeness check - missing years: $missingYears, hasGaps: $hasGaps, chartDataFailed: $_chartDataFailed, progressiveLoadingCompleted: $_progressiveLoadingCompleted');
@@ -2922,9 +2858,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Check for missing recent years (2022-2025) - but only if we actually attempted to load them
     final currentYear = DateTime.now().year;
     final recentYears = List.generate(currentYear - 2021, (index) => 2022 + index);
-    final missingRecentYears = recentYears.where((year) => 
-      !chartData.any((data) => int.parse(data.year) == year && data.hasData)
-    ).toList();
+    final loadedYears = { for (final d in chartData) if (d.hasData) int.tryParse(d.year) };
+    final missingRecentYears = recentYears.where((year) => !loadedYears.contains(year)).toList();
     
     // Also check if we have very few data points (less than 10 years of data)
     final successfulYears = chartData.where((data) => data.hasData).length;
@@ -3261,7 +3196,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         // Update UI to reflect connectivity state (_isOnline was updated above)
         if (mounted) {
           DebugUtils.logLazy(() => '🌐 Updating UI for connectivity state: ${_isOnline ? "online" : "offline"}');
-          setState(() {}); // Triggers rebuild for _isOnline change
+          setState(() {
+            // _isOnline was already updated above — this triggers a rebuild.
+          });
         }
       },
     );
@@ -3360,9 +3297,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       }
       
     } finally {
-      setState(() {
-        _isDataLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isDataLoading = false;
+        });
+      }
     }
   }
 
@@ -3437,11 +3376,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       _positionStreamSubscription = geo.Geolocator.getPositionStream(
       locationSettings: geo.LocationSettings(
         accuracy: geo.LocationAccuracy.low,
-        distanceFilter: 500, // meters, adjust as needed
+        distanceFilter: kLocationDistanceFilterMeters,
       ),
     ).listen((geo.Position position) async {
       if (_lastPosition == null ||
-          _distanceBetween(_lastPosition!, position) > 1000) { // 1km threshold
+          _distanceBetween(_lastPosition!, position) > kLocationSignificantChangeMeters) {
         _lastPosition = position;
         
         // Don't start new data loading if we're already loading or if location hasn't been determined yet
@@ -3457,31 +3396,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           List<Placemark> placemarks = await placemarkFromCoordinates(
             position.latitude, 
             position.longitude
-          ).timeout(const Duration(seconds: 5));
+          ).timeout(const Duration(seconds: kConnectivityTestTimeoutSeconds));
           
           if (placemarks.isNotEmpty) {
-            final placemark = placemarks.first;
-            String newCity = kDefaultLocation; // Default fallback
-            
-            if (placemark.locality != null && placemark.locality!.isNotEmpty) {
-              final locality = placemark.locality!;
-              final country = placemark.country;
-              final administrativeArea = placemark.administrativeArea;
-              
-              // Build location string same way as _determineLocation
-              if (country != null && country.isNotEmpty) {
-                if (administrativeArea != null && administrativeArea.isNotEmpty) {
-                  newCity = '$locality, $administrativeArea, $country';
-                } else {
-                  newCity = '$locality, $country';
-                }
-              } else if (administrativeArea != null && administrativeArea.isNotEmpty) {
-                newCity = '$locality, $administrativeArea';
-              } else {
-                newCity = locality;
-              }
-            }
-            
+            String newCity = location_utils.buildLocationFromPlacemark(placemarks.first);
             newCity = _cleanupLocationString(newCity);
             
             // Only reload if the city has actually changed
@@ -3525,7 +3443,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       return OnboardingScreen(onComplete: _completeOnboarding);
     }
 
-    final double chartHeight = 800;
+    final double chartHeight = kChartHeight;
 
     Widget appContent = Scaffold(
       body: Stack(
@@ -3557,29 +3475,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
 }
 
-String _formatDayMonth(DateTime date) {
-  final day = date.day;
-  final month = DateFormat('MMMM').format(date);
-  String suffix;
-  if (day >= 11 && day <= 13) {
-    suffix = 'th';
-  } else {
-    switch (day % 10) {
-      case 1:
-        suffix = 'st';
-        break;
-      case 2:
-        suffix = 'nd';
-        break;
-      case 3:
-        suffix = 'rd';
-        break;
-      default:
-        suffix = 'th';
-    }
-  }
-  return '$day$suffix $month';
-}
+String _formatDayMonth(DateTime date) => date_utils.formatDateWithOrdinal(date);
 
 Map<String, dynamic> _createResultMap({
   required List<TemperatureChartData> chartData,
@@ -3599,20 +3495,3 @@ Map<String, dynamic> _createResultMap({
   };
 }
 
-// Sign up
-Future<UserCredential> signUp(String email, String password) async {
-  return await FirebaseAuth.instance.createUserWithEmailAndPassword(
-    email: email,
-    password: password,
-  );
-}
-
-// Sign in
-Future<UserCredential> signIn(String email, String password) async {
-  return await FirebaseAuth.instance.signInAnonymously();
-}
-
-// Sign out
-Future<void> signOut() async {
-  await FirebaseAuth.instance.signOut();
-}

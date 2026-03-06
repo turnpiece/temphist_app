@@ -6,6 +6,7 @@ import '../models/period_temperature_data.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../config/app_config.dart';
 import '../utils/debug_utils.dart';
+import '../constants/app_constants.dart';
 
 /// Extension to capitalize the first letter of a string
 extension StringExtension on String {
@@ -26,12 +27,6 @@ class RateLimitException implements Exception {
   String toString() => message;
 }
 
-// Debug logging function that can be controlled globally
-// @deprecated Use DebugUtils.logLazy() or DebugUtils.logSimple() directly for better performance
-void debugLog(String message) {
-  DebugUtils.logLazy(() => message);
-}
-
 class TemperatureService {
   static final Map<String, PeriodTemperatureData> _periodCache = {};
   final String apiBaseUrl;
@@ -50,7 +45,7 @@ class TemperatureService {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        debugLog('⚠️ No Firebase user found, attempting to sign in...');
+        DebugUtils.logLazy(() => '⚠️ No Firebase user found, attempting to sign in...');
         // Try to sign in if no user is found
         await _signInWithRetry();
         final newUser = FirebaseAuth.instance.currentUser;
@@ -66,7 +61,7 @@ class TemperatureService {
       if (token == null) throw Exception('Failed to get Firebase ID token');
       return token;
     } catch (e) {
-      debugLog('❌ Firebase authentication failed: $e');
+      DebugUtils.logLazy(() => '❌ Firebase authentication failed: $e');
       // If Firebase auth fails completely, we could implement a fallback
       // For now, we'll rethrow the error to be handled by the calling code
       throw Exception('Firebase authentication failed: $e');
@@ -80,20 +75,20 @@ class TemperatureService {
     while (attempts < maxRetries) {
       try {
         attempts++;
-        debugLog('🔐 Service-level Firebase auth attempt $attempts/$maxRetries');
+        DebugUtils.logLazy(() => '🔐 Service-level Firebase auth attempt $attempts/$maxRetries');
         
         await FirebaseAuth.instance.signInAnonymously().timeout(
-          const Duration(seconds: 15),
+          const Duration(seconds: kFirebaseAuthTimeoutSeconds),
           onTimeout: () {
-            throw TimeoutException('Firebase authentication timed out', const Duration(seconds: 15));
+            throw TimeoutException('Firebase authentication timed out', const Duration(seconds: kFirebaseAuthTimeoutSeconds));
           },
         );
         
-        debugLog('✅ Service-level Firebase authentication successful');
+        DebugUtils.logLazy(() => '✅ Service-level Firebase authentication successful');
         return;
         
       } catch (e) {
-        debugLog('❌ Service-level Firebase auth attempt $attempts failed: $e');
+        DebugUtils.logLazy(() => '❌ Service-level Firebase auth attempt $attempts failed: $e');
         
         if (attempts >= maxRetries) {
           throw Exception('All Firebase auth attempts failed: $e');
@@ -111,7 +106,7 @@ class TemperatureService {
 
   Future<TemperatureData> fetchCompleteData(String city, String date) async {
     // Extract month-day from the date (e.g., "2025-06-18" -> "06-18")
-    final monthDay = date.substring(5); // Get "06-18" from "2025-06-18"
+    final monthDay = date.length >= 10 ? date.substring(5) : date;
     final json = await _fetchV1Records('daily', city, monthDay);
     return TemperatureData.fromJson(json);
   }
@@ -163,7 +158,7 @@ class TemperatureService {
     final token = await getAuthToken();
     final url = Uri.parse('$apiBaseUrl/$normalizedEndpoint/$city/$date');
 
-    debugLog('Fetching /$normalizedEndpoint/ for city=$city, date=$date');
+    DebugUtils.logLazy(() => 'Fetching /$normalizedEndpoint/ for city=$city, date=$date');
 
     final response = await http.get(
       url,
@@ -174,8 +169,8 @@ class TemperatureService {
 
     if (response.statusCode == 200) {
       final responseBody = response.body;
-      debugLog(
-        '${normalizedEndpoint.capitalize()} API Response for $city/$date: $responseBody',
+      DebugUtils.logLazy(
+        () => '${normalizedEndpoint.capitalize()} API Response for $city/$date: $responseBody',
       );
       
       if (responseBody.isEmpty) {
@@ -189,8 +184,8 @@ class TemperatureService {
       
       return json;
     } else {
-      debugLog(
-        '${normalizedEndpoint.capitalize()} API Error Response: ${response.statusCode} - ${response.body}',
+      DebugUtils.logLazy(
+        () => '${normalizedEndpoint.capitalize()} API Error Response: ${response.statusCode} - ${response.body}',
       );
       
       // Check if it's a rate limit error
@@ -223,7 +218,7 @@ class TemperatureService {
       '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier',
     );
 
-    debugLog('Fetching v1 records: $url');
+    DebugUtils.logLazy(() => 'Fetching v1 records: $url');
 
     final response = await http.get(
       url,
@@ -258,7 +253,7 @@ class TemperatureService {
       '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier/$subresource',
     );
 
-    debugLog('Fetching v1 subresource ($subresource): $url');
+    DebugUtils.logLazy(() => 'Fetching v1 subresource ($subresource): $url');
 
     final response = await http.get(
       url,
@@ -365,10 +360,10 @@ class TemperatureService {
     }
 
     try {
-      debugLog('Attempting async fetch for $period data...');
+      DebugUtils.logLazy(() => 'Attempting async fetch for $period data...');
       final jobId = await _createAsyncJob(period, location, identifier);
       final result = await _pollJobStatus(jobId, onProgress: onProgress);
-      debugLog('Async fetch successful for $period data');
+      DebugUtils.logLazy(() => 'Async fetch successful for $period data');
       _periodCache[cacheKey] = result.data;
       return result.data;
     } catch (e) {
@@ -377,11 +372,11 @@ class TemperatureService {
       if (msg.contains('timed out') ||
           msg.contains('polling failed') ||
           msg.contains('Job failed')) {
-        debugLog('Async job failed ($msg), falling back to sync API...');
+        DebugUtils.logLazy(() => 'Async job failed ($msg), falling back to sync API...');
         try {
           final fallback =
               await _fetchPeriodDataSync(period, location, identifier);
-          debugLog('Synchronous fallback successful for $period data');
+          DebugUtils.logLazy(() => 'Synchronous fallback successful for $period data');
           _periodCache[cacheKey] = fallback;
           return fallback;
         } catch (fallbackError) {
@@ -408,7 +403,7 @@ class TemperatureService {
       '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier/async',
     );
 
-    debugLog('Creating async job: $url');
+    DebugUtils.logLazy(() => 'Creating async job: $url');
 
     final response = await http.post(
       url,
@@ -417,7 +412,7 @@ class TemperatureService {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-    ).timeout(const Duration(seconds: 35));
+    ).timeout(const Duration(seconds: kApiTimeoutSeconds));
 
     if (response.statusCode == 429) {
       throw RateLimitException('Rate limit exceeded creating async job');
@@ -454,7 +449,7 @@ class TemperatureService {
             'Authorization': 'Bearer $token',
             'Accept': 'application/json',
           },
-        ).timeout(const Duration(seconds: 15));
+        ).timeout(const Duration(seconds: kFirebaseAuthTimeoutSeconds));
 
         if (response.statusCode == 429) {
           throw RateLimitException('Rate limit exceeded polling job');
@@ -508,7 +503,7 @@ class TemperatureService {
       '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier',
     );
 
-    debugLog('Sync fallback: $url');
+    DebugUtils.logLazy(() => 'Sync fallback: $url');
 
     final response = await http.get(
       url,

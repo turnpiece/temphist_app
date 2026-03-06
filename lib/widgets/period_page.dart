@@ -81,7 +81,7 @@ class PeriodPageState extends State<PeriodPage>
 
   String get _identifier {
     final now = DateTime.now();
-    final useYesterday = now.hour < 3;
+    final useYesterday = now.hour < kUseYesterdayHourThreshold;
     final dateToUse = useYesterday ? now.subtract(const Duration(days: 1)) : now;
 
     // Handle leap day

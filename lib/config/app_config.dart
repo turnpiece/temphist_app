@@ -26,7 +26,6 @@ class AppConfig {
   static bool get defaultSimulateSummaryFailure => _isDebugBuild ? debug_config.DebugConfig.defaultSimulateSummaryFailure : production_config.ProductionConfig.defaultSimulateSummaryFailure;
   
   // Utility methods
-  static bool get isProductionMode => !isDebugMode;
   static bool get shouldShowDebugFeatures => isDebugMode && enableDebugUI;
   
   // Version information

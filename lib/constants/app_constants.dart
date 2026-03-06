@@ -60,6 +60,20 @@ const bool verboseLogs = bool.fromEnvironment('VERBOSE_LOGS', defaultValue: fals
 const int kUseYesterdayHourThreshold = 3;
 const int kAverageTrendDisplayDelaySeconds = 35;
 const int kApiTimeoutSeconds = 35;
+const int kFirebaseAuthTimeoutSeconds = 15;
+const int kLocationTimeoutSeconds = 10;
+const int kConnectivityTestTimeoutSeconds = 5;
+
+/// Chart constants
+const double kTabletBreakpointWidth = 768.0;
+const double kTabletMaxContentWidth = 600.0;
+const double kChartHeight = 800.0;
+const int kChartStartYear = 1975;
+
+/// Location constants
+const int kLocationDistanceFilterMeters = 500;
+const int kLocationSignificantChangeMeters = 1000;
+const int kMaxChartDataRetries = 3;
 
 /// Default location constant
 const String kDefaultLocation = 'London, UK';
