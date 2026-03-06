@@ -25,10 +25,11 @@ class OnboardingPage extends StatelessWidget {
           return SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   Center(child: visual),
                   const SizedBox(height: 40),
                   Text(
@@ -52,6 +53,7 @@ class OnboardingPage extends StatelessWidget {
                     ),
                   ],
                 ],
+                ),
               ),
             ),
           );

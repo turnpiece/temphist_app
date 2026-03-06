@@ -20,27 +20,38 @@ class OnboardingSwipePage extends StatelessWidget {
     final date = _dateLabel();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Swipe to see more',
-            style: TextStyle(
-              color: kAccentColour,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.3,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Swipe to see more',
+                      style: TextStyle(
+                        color: kAccentColour,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    const SwipeGestureIndicator(),
+                    const SizedBox(height: 32),
+                    _buildRow(Icons.today_outlined, 'Day', '$date in each year'),
+                    _buildRow(Icons.date_range_outlined, 'Week', 'The week ending $date in each year'),
+                    _buildRow(Icons.calendar_month_outlined, 'Month', 'The month ending $date in each year'),
+                    _buildRow(Icons.calendar_today_outlined, 'Year', 'The year ending $date in each year'),
+                  ],
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 32),
-          const SwipeGestureIndicator(),
-          const SizedBox(height: 32),
-          _buildRow(Icons.today_outlined, 'Day', '$date in each year'),
-          _buildRow(Icons.date_range_outlined, 'Week', 'The week ending $date in each year'),
-          _buildRow(Icons.calendar_month_outlined, 'Month', 'The month ending $date in each year'),
-          _buildRow(Icons.calendar_today_outlined, 'Year', 'The year ending $date in each year'),
-        ],
+          );
+        },
       ),
     );
   }
