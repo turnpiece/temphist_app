@@ -20,33 +20,42 @@ class OnboardingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(child: visual),
-          const SizedBox(height: 40),
-          Text(
-            title,
-            style: const TextStyle(
-              color: kAccentColour,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.3,
-            ),
-          ),
-          if (body.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Text(
-              body,
-              style: const TextStyle(
-                color: kTextPrimaryColour,
-                fontSize: kFontSizeBody,
-                height: 1.5,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(child: visual),
+                  const SizedBox(height: 40),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: kAccentColour,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  if (body.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      body,
+                      style: const TextStyle(
+                        color: kTextPrimaryColour,
+                        fontSize: kFontSizeBody,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-          ],
-        ],
+          );
+        },
       ),
     );
   }
