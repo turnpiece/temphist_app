@@ -2571,12 +2571,15 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Text(
-                    _buildPeriodHeaderLabel(pageIndex),
-                    style: const TextStyle(
-                      color: kTextPrimaryColour,
-                      fontSize: kFontSizeBody,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      _buildPeriodHeaderLabel(pageIndex),
+                      style: const TextStyle(
+                        color: kTextPrimaryColour,
+                        fontSize: kFontSizeBody,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (_showSwipeCoachmark) ...[
