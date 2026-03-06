@@ -57,6 +57,7 @@ dependencies:
 
   # For caching
   shared_preferences: ^2.2.2
+  hive_flutter: ^1.1.0
 
   # For network connectivity detection
   connectivity_plus: ^7.0.0

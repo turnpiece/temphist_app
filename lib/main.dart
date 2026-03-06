@@ -17,6 +17,8 @@ import 'dart:async'; // Added for StreamSubscription and StreamController
 import 'dart:convert'; // Added for jsonEncode/jsonDecode
 
 import 'services/temperature_service.dart';
+import 'services/period_cache_service.dart';
+import 'models/period_temperature_data.dart';
 import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
 import 'widgets/temperature_bar_chart.dart';
@@ -214,6 +216,7 @@ void main() async {
   );
   // Ensure user is signed in (anonymous)
   await _ensureSignedIn();
+  await PeriodCacheService.init();
   runApp(TempHist());
 }
 
@@ -1077,7 +1080,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               ).timeout(const Duration(seconds: 10));
               
               DebugUtils.logLazy(() => '_determineLocation: Position obtained - lat: ${position.latitude}, lon: ${position.longitude}');
-              
+              _lastPosition = position;
+
               List<Placemark> placemarks = await placemarkFromCoordinates(
                 position.latitude, 
                 position.longitude
@@ -1183,11 +1187,19 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Fetch all periods in parallel for better performance
     DebugUtils.logLazy(() => 'Prefetching period data in parallel for $location ($identifier)');
 
+    final lat = _lastPosition?.latitude;
+    final lon = _lastPosition?.longitude;
+
     await Future.wait(
       periods.map((period) async {
         try {
           DebugUtils.logLazy(() => 'Prefetching $period data');
-          await service.fetchPeriodData(period, location, identifier);
+          final data = await service.fetchPeriodData(period, location, identifier);
+          // Write period views to Hive so they survive hot restart / relaunch.
+          // (daily is already handled by _loadChartDataProgressive.)
+          if (period != 'daily' && lat != null && lon != null) {
+            await PeriodCacheService.put(period, lat, lon, identifier, data);
+          }
         } catch (e) {
           DebugUtils.logLazy(() => 'Prefetch $period failed: $e');
         }
@@ -1349,7 +1361,25 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Use v1 daily endpoint to fetch all years in one call.
       // fetchPeriodData manages its own internal timeouts (async job + sync fallback),
       // so no outer timeout is needed here — the same as the period pages.
-      final periodData = await service.fetchPeriodData('daily', city, identifier);
+      //
+      // Cache-first: serve from Hive when available (keyed by rounded GPS
+      // coordinates + date); fall through to network on miss and write-through.
+      final lat = _lastPosition?.latitude;
+      final lon = _lastPosition?.longitude;
+      PeriodTemperatureData periodData;
+      final cached =
+          (lat != null && lon != null)
+              ? await PeriodCacheService.get('daily', lat, lon, formattedDate)
+              : null;
+      if (cached != null) {
+        periodData = cached;
+        DebugUtils.logLazy(() => '_loadChartDataProgressive: served from Hive cache');
+      } else {
+        periodData = await service.fetchPeriodData('daily', city, identifier);
+        if (lat != null && lon != null) {
+          await PeriodCacheService.put('daily', lat, lon, formattedDate, periodData);
+        }
+      }
 
       final chartData = periodData.values
           .map((value) => TemperatureChartData(
@@ -2672,6 +2702,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       periodLabel: periodLabel,
       location: _determinedLocation,
       displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
+      latitude: _lastPosition?.latitude,
+      longitude: _lastPosition?.longitude,
       useInternalScroll: false,
     );
 
