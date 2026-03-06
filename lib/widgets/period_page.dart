@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../constants/app_constants.dart';
 import '../models/period_temperature_data.dart';
 import '../services/temperature_service.dart';
+import '../services/period_cache_service.dart';
 import '../utils/debug_utils.dart';
 import 'temperature_bar_chart.dart';
 
@@ -25,6 +26,11 @@ class PeriodPage extends StatefulWidget {
   /// Callback invoked when pull-to-refresh is triggered.
   final Future<void> Function()? onRefresh;
 
+  /// GPS coordinates used for Hive cache key. Optional — cache is skipped
+  /// if not provided (e.g. when using default location).
+  final double? latitude;
+  final double? longitude;
+
   /// Whether this widget wraps its own scroll/refresh UI.
   final bool useInternalScroll;
 
@@ -34,6 +40,8 @@ class PeriodPage extends StatefulWidget {
     required this.periodLabel,
     required this.location,
     this.displayLocation,
+    this.latitude,
+    this.longitude,
     this.onRefresh,
     this.useInternalScroll = true,
   });
@@ -101,21 +109,45 @@ class PeriodPageState extends State<PeriodPage>
     });
 
     try {
-      final service = TemperatureService();
-      final data = await service.fetchPeriodData(
-        widget.periodKey,
-        widget.location,
-        _identifier,
-        onProgress: (status) {
-          if (mounted) {
-            setState(() {
-              _loadingMessage = status.isPending
-                  ? 'Processing ${widget.periodLabel.toLowerCase()} data...'
-                  : 'Almost there...';
-            });
-          }
-        },
-      );
+      final lat = widget.latitude;
+      final lon = widget.longitude;
+
+      // Cache-first: serve from Hive when available, fall through on miss.
+      PeriodTemperatureData? data;
+      if (lat != null && lon != null) {
+        data = await PeriodCacheService.get(
+          widget.periodKey, lat, lon, _identifier,
+        );
+        if (data != null) {
+          DebugUtils.logLazy(
+            () => 'PeriodPage(${widget.periodKey}): served from Hive cache',
+          );
+        }
+      }
+
+      if (data == null) {
+        final service = TemperatureService();
+        data = await service.fetchPeriodData(
+          widget.periodKey,
+          widget.location,
+          _identifier,
+          onProgress: (status) {
+            if (mounted) {
+              setState(() {
+                _loadingMessage = status.isPending
+                    ? 'Processing ${widget.periodLabel.toLowerCase()} data...'
+                    : 'Almost there...';
+              });
+            }
+          },
+        );
+
+        if (lat != null && lon != null) {
+          await PeriodCacheService.put(
+            widget.periodKey, lat, lon, _identifier, data,
+          );
+        }
+      }
 
       if (mounted) {
         setState(() {
