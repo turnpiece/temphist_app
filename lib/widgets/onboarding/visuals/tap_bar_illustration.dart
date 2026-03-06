@@ -50,7 +50,7 @@ class TapBarIllustration extends StatelessWidget {
               // is at y = tappedBarTop, so the triangle tip touches the bar.
               Positioned(
                 left: _yearLabelWidth + _labelBarGap + 20,
-                bottom: totalHeight - tappedBarTop - 4,
+                bottom: totalHeight - tappedBarTop,
                 child: const _TooltipMockup(),
               ),
             ],
