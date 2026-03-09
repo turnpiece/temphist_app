@@ -8,6 +8,14 @@ class OnboardingTapPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return OrientationBuilder(
+      builder: (context, orientation) => orientation == Orientation.landscape
+          ? _buildLandscape()
+          : _buildPortrait(),
+    );
+  }
+
+  Widget _buildPortrait() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32.0),
       child: LayoutBuilder(
@@ -22,24 +30,7 @@ class OnboardingTapPage extends StatelessWidget {
                   children: [
                     const TapBarIllustration(),
                     const SizedBox(height: 32),
-                    const Text(
-                      'Tap for details',
-                      style: TextStyle(
-                        color: kAccentColour,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Tap any bar to see the exact temperature recorded for that year.',
-                      style: TextStyle(
-                        color: kTextPrimaryColour,
-                        fontSize: kFontSizeBody,
-                        height: 1.5,
-                      ),
-                    ),
+                    ..._textContent(),
                   ],
                 ),
               ),
@@ -49,4 +40,51 @@ class OnboardingTapPage extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildLandscape() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Expanded(
+            flex: 2,
+            child: TapBarIllustration(),
+          ),
+          const SizedBox(width: 24),
+          Expanded(
+            flex: 3,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _textContent(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _textContent() => [
+        const Text(
+          'Tap for details',
+          style: TextStyle(
+            color: kAccentColour,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Tap any bar to see the exact temperature recorded for that year.',
+          style: TextStyle(
+            color: kTextPrimaryColour,
+            fontSize: kFontSizeBody,
+            height: 1.5,
+          ),
+        ),
+      ];
 }

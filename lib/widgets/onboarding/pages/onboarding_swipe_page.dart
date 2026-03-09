@@ -18,6 +18,15 @@ class OnboardingSwipePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final date = _dateLabel();
+    return OrientationBuilder(
+      builder: (context, orientation) =>
+          orientation == Orientation.landscape
+              ? _buildLandscape(date)
+              : _buildPortrait(date),
+    );
+  }
+
+  Widget _buildPortrait(String date) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32.0),
       child: LayoutBuilder(
@@ -30,22 +39,11 @@ class OnboardingSwipePage extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Swipe to see more',
-                      style: TextStyle(
-                        color: kAccentColour,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
+                    _titleWidget(),
                     const SizedBox(height: 32),
                     const SwipeGestureIndicator(),
                     const SizedBox(height: 32),
-                    _buildRow(Icons.today_outlined, 'Day', '$date in each year'),
-                    _buildRow(Icons.date_range_outlined, 'Week', 'The week ending $date in each year'),
-                    _buildRow(Icons.calendar_month_outlined, 'Month', 'The month ending $date in each year'),
-                    _buildRow(Icons.calendar_today_outlined, 'Year', 'The year ending $date in each year'),
+                    ..._rowWidgets(date),
                   ],
                 ),
               ),
@@ -55,6 +53,59 @@ class OnboardingSwipePage extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildLandscape(String date) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 2,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _titleWidget(),
+                  const SizedBox(height: 20),
+                  const SwipeGestureIndicator(),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 24),
+          Expanded(
+            flex: 3,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _rowWidgets(date),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _titleWidget() => const Text(
+        'Swipe to see more',
+        style: TextStyle(
+          color: kAccentColour,
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.3,
+        ),
+      );
+
+  List<Widget> _rowWidgets(String date) => [
+        _buildRow(Icons.today_outlined, 'Day', '$date in each year'),
+        _buildRow(Icons.date_range_outlined, 'Week', 'The week ending $date in each year'),
+        _buildRow(Icons.calendar_month_outlined, 'Month', 'The month ending $date in each year'),
+        _buildRow(Icons.calendar_today_outlined, 'Year', 'The year ending $date in each year'),
+      ];
 
   Widget _buildRow(IconData icon, String label, String description) {
     return Padding(

@@ -68,65 +68,74 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
         ),
         child: SafeArea(
-          child: Column(
+          child: Stack(
             children: [
-              // Skip row
-              SizedBox(
-                height: 48,
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: _currentPage < _pageCount - 1
-                      ? TextButton(
-                          onPressed: widget.onComplete,
-                          child: const Text(
-                            'Skip',
-                            style: TextStyle(
-                              color: kGreyLabelColour,
-                              fontSize: kFontSizeBody,
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-              ),
-              // Pages
-              Expanded(
-                child: PageView(
-                  controller: _controller,
-                  onPageChanged: (i) => setState(() => _currentPage = i),
-                  children: _pages,
-                ),
-              ),
-              const SizedBox(height: 24),
-              // Dot indicators
-              _buildDots(),
-              const SizedBox(height: 24),
-              // Next / Get Started button
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _next,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kAccentColour,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+              // Full-height layout: pages + dots + button
+              Column(
+                children: [
+                  Expanded(
+                    child: Padding(
+                      // In landscape, pull back the right edge so content
+                      // doesn't slide under the floating Skip button.
+                      padding: MediaQuery.of(context).orientation ==
+                              Orientation.landscape
+                          ? const EdgeInsets.only(right: 72)
+                          : EdgeInsets.zero,
+                      child: PageView(
+                        controller: _controller,
+                        onPageChanged: (i) => setState(() => _currentPage = i),
+                        children: _pages,
                       ),
                     ),
-                    child: Text(
-                      _currentPage < _pageCount - 1 ? 'Next' : 'Get Started',
-                      style: const TextStyle(
+                  ),
+                  const SizedBox(height: 24),
+                  // Dot indicators
+                  _buildDots(),
+                  const SizedBox(height: 24),
+                  // Next / Get Started button
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _next,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kAccentColour,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          _currentPage < _pageCount - 1 ? 'Next' : 'Get Started',
+                          style: const TextStyle(
+                            fontSize: kFontSizeBody,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                ],
+              ),
+              // Skip button floats over content in top-right corner
+              if (_currentPage < _pageCount - 1)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: TextButton(
+                    onPressed: widget.onComplete,
+                    child: const Text(
+                      'Skip',
+                      style: TextStyle(
+                        color: Colors.red,
                         fontSize: kFontSizeBody,
-                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 40),
             ],
           ),
         ),
