@@ -1364,13 +1364,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }
     
     // Reset location determination state
-    if (!mounted) return;
-    setState(() {
-      _isLocationDetermined = false;
-      _determinedLocation = '';
-      _displayLocation = '';
-      _locationDeterminedAt = null;
-    });
+    _locationService.reset();
 
     // Reinitialize the app (determine location then load data)
     await _initializeApp();
@@ -1391,13 +1385,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _resetErrorStates();
 
     // Reset location determination state
-    if (!mounted) return;
-    setState(() {
-      _isLocationDetermined = false;
-      _determinedLocation = '';
-      _displayLocation = '';
-      _locationDeterminedAt = null;
-    });
+    _locationService.reset();
 
     // Reinitialize the app (determine location then load data)
     await _initializeApp();
@@ -1414,14 +1402,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _resetErrorStates();
 
     // Reset location determination state
-    if (!mounted) return;
-    setState(() {
-      _isLocationDetermined = false;
-      _determinedLocation = '';
-      _displayLocation = '';
-      _locationDeterminedAt = null;
-    });
-    
+    _locationService.reset();
+
     // Reinitialize the app (determine location then load data)
     await _initializeApp();
   }

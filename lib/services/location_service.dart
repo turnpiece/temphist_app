@@ -238,6 +238,15 @@ class LocationService extends ChangeNotifier {
     _notify();
   }
 
+  /// Fully reset all location state (used before a forced re-determination).
+  void reset() {
+    _isLocationDetermined = false;
+    _determinedLocation = '';
+    _displayLocation = '';
+    _locationDeterminedAt = null;
+    _notify();
+  }
+
   /// Stop continuous GPS monitoring and release resources.
   void stopListening() {
     _positionStreamSubscription?.cancel();
