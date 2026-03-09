@@ -16,6 +16,7 @@ import 'dart:async'; // Added for StreamSubscription and StreamController
 import 'dart:convert'; // Added for jsonEncode/jsonDecode
 
 import 'services/temperature_service.dart';
+import 'services/location_service.dart';
 import 'services/period_cache_service.dart';
 import 'models/period_temperature_data.dart';
 import 'config/app_config.dart';
@@ -289,10 +290,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   int _loadingElapsedSeconds = 0;
   final ValueNotifier<int> _loadingDotsTick = ValueNotifier<int>(0);
   String _currentLoadingMessage = '';
-  String _determinedLocation = ''; // Full location for API
-  String _displayLocation = ''; // Short location for display
-  bool _isLocationDetermined = false;
-  DateTime? _locationDeterminedAt; // Timestamp when location was last determined
+  // Location is managed by the LocationService; these getters provide
+  // backward-compatible access throughout the class.
+  final LocationService _locationService = LocationService();
+  String get _determinedLocation => _locationService.determinedLocation;
+  String get _displayLocation => _locationService.displayLocation;
+  bool get _isLocationDetermined => _locationService.isLocationDetermined;
+  DateTime? get _locationDeterminedAt => _locationService.locationDeterminedAt;
   DateTime? _currentDataDate; // The date for which data is currently loaded
   bool _isDataLoading = false;
   Timer? _averageTrendDisplayTimer;
@@ -318,8 +322,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   bool _simulateTrendFailure = AppConfig.defaultSimulateTrendFailure;
   bool _simulateSummaryFailure = AppConfig.defaultSimulateSummaryFailure;
 
-  geo.Position? _lastPosition;
-  StreamSubscription<geo.Position>? _positionStreamSubscription;
+  geo.Position? get _lastPosition => _locationService.lastPosition;
 
   // Track chart data retry attempts
   bool _isRetryingChartData = false;
@@ -342,9 +345,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   bool _isOnline = true;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
-  // Location determination guard
-  bool _isLocating = false;
-
   // Memory management
   int _memoryCleanupCount = 0;
 
@@ -364,6 +364,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   bool _showSwipeCoachmark = false;
   bool _coachmarkFadingOut = false;
 
+  /// Called whenever [_locationService] notifies listeners.
+  void _onLocationChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
@@ -377,6 +382,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     DebugUtils.logLazy(() => '  - AppConfig.enableDebugUI: ${AppConfig.enableDebugUI}');
     DebugUtils.logLazy(() => '  - AppConfig.shouldShowDebugFeatures: ${AppConfig.shouldShowDebugFeatures}');
     
+    // Listen to location changes to trigger UI rebuilds
+    _locationService.addListener(_onLocationChanged);
+    _locationService.onSignificantLocationChange = _refreshLocationAndData;
+
     // Start network connectivity monitoring
     _startConnectivityMonitoring();
 
@@ -403,8 +412,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
-    _positionStreamSubscription?.cancel();
-    _positionStreamSubscription = null;
+    _locationService.removeListener(_onLocationChanged);
+    _locationService.dispose();
     _connectivitySubscription?.cancel();
     _connectivitySubscription = null;
     _stopAverageTrendDisplayTimer();
@@ -485,20 +494,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Future<void> _checkAndRefreshLocationIfNeeded() async {
-    // If no location has been determined yet, don't refresh
-    if (!_isLocationDetermined || _locationDeterminedAt == null) {
-      return;
-    }
-    
-    final now = DateTime.now();
-    final timeSinceLastLocation = now.difference(_locationDeterminedAt!);
-    
-    // Refresh location if it's been more than 1 hour
-    if (timeSinceLastLocation.inHours >= 1) {
-      DebugUtils.logLazy(() => 'Location is ${timeSinceLastLocation.inHours} hours old, refreshing...');
+    if (_locationService.isLocationStale()) {
       await _refreshLocationAndData();
-    } else {
-      DebugUtils.logLazy(() => 'Location is only ${timeSinceLastLocation.inMinutes} minutes old, keeping cached location');
     }
   }
 
@@ -558,35 +555,22 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<void> _refreshLocationAndData() async {
     DebugUtils.logLazy(() => 'Refreshing location and data...');
 
-    // Remember the current location so period pages don't flash to an empty state
-    // while we're re-determining. We only clear it if the location actually changes.
     final previousLocation = _determinedLocation;
 
-    setState(() {
-      _isLocationDetermined = false;
-      _locationDeterminedAt = null;
-      // Do NOT clear _determinedLocation / _displayLocation here — period pages
-      // keep their cached data as long as the location string stays the same.
-    });
+    // Mark refreshing but keep location string so period pages don't flash empty
+    _locationService.markRefreshing();
 
     // Determine new location
     await _determineLocation();
 
-    // If the location didn't change, period pages will skip their refetch
-    // (their _lastFetchKey still matches). Only the daily view reloads.
     DebugUtils.logLazy(() => 'Location refresh: $previousLocation → $_determinedLocation');
-    
+
     // Reload data with new location using progressive loading
     _isDataLoading = true;
     _progressiveLoadingCompleted = false;
-    
-    // Start the average/trend display timer
+
     _startAverageTrendDisplayTimer();
-    
-    // Start progressive loading in the background
     _loadChartDataProgressive().whenComplete(_prefetchPeriodData);
-    
-    // Restart loading message timer
     _startLoadingMessageTimer();
   }
 
@@ -1004,108 +988,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Future<void> _determineLocation() async {
-    if (_isLocating) return;
-    _isLocating = true;
-    try {
-      String city = kDefaultLocation;
-
-      // Try to load cached location first
-      final cachedLocation = await _loadCachedLocation();
-      if (cachedLocation != null) {
-        DebugUtils.logLazy(() => 'Using cached location: ${cachedLocation['location']}');
-        setState(() {
-          _determinedLocation = cachedLocation['location']!;
-          _displayLocation = cachedLocation['displayLocation']!;
-          _isLocationDetermined = true;
-          _locationDeterminedAt = DateTime.now();
-        });
-        return;
-      }
-      
-      // Try to get user's city via geolocation
-      try {
-        DebugUtils.logLazy(() => '_determineLocation: Starting geolocation');
-        
-        bool serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
-        if (serviceEnabled) {
-          geo.LocationPermission permission = await geo.Geolocator.checkPermission();
-          if (permission == geo.LocationPermission.denied) {
-            permission = await geo.Geolocator.requestPermission();
-          }
-          if (permission == geo.LocationPermission.whileInUse || permission == geo.LocationPermission.always) {
-            try {
-              geo.Position position = await geo.Geolocator.getCurrentPosition(
-                locationSettings: const geo.LocationSettings(
-                  accuracy: geo.LocationAccuracy.low,
-                ),
-              ).timeout(const Duration(seconds: kLocationTimeoutSeconds));
-              
-              DebugUtils.logLazy(() => '_determineLocation: Position obtained - lat: ${position.latitude}, lon: ${position.longitude}');
-              _lastPosition = position;
-
-              List<Placemark> placemarks = await placemarkFromCoordinates(
-                position.latitude, 
-                position.longitude
-              ).timeout(const Duration(seconds: kLocationTimeoutSeconds));
-              
-              if (placemarks.isNotEmpty) {
-                city = location_utils.buildLocationFromPlacemark(placemarks.first);
-                DebugUtils.logLazy(() => 'Geolocation result: $city');
-              }
-            } catch (e) {
-              DebugUtils.logLazy(() => 'Geolocation timeout or error: $e');
-            }
-          }
-        }
-      } catch (e) {
-        DebugUtils.logLazy(() => 'Geolocation failed, falling back to $city: $e');
-      }
-      
-      // Validate and clean up the city string
-      city = _cleanupLocationString(city);
-      
-      // Additional validation to catch obviously wrong locations
-      if (_isLocationSuspicious(city)) {
-        DebugUtils.logLazy(() => 'Suspicious location detected: $city, falling back to default');
-        city = kDefaultLocation;
-      }
-      
-      DebugUtils.logLazy(() => '_determineLocation: Final city: $city');
-      
-      // Verbose logging for location determination
-      DebugUtils.verboseWithContextLazy('Location', () => 'Determined location: $city (display: ${_extractDisplayLocation(city)})');
-      
-      // Update the UI with the determined location
-      setState(() {
-        _determinedLocation = city; // Full location for API
-        _displayLocation = _extractDisplayLocation(city); // Short location for display
-        _isLocationDetermined = true;
-        _locationDeterminedAt = DateTime.now(); // Record when location was determined
-      });
-      
-      // Cache the location
-      await _cacheLocation(city, _extractDisplayLocation(city));
-      
-      // Reset loading message timer to start temperature-related messages
-      _loadingElapsedSeconds = 0;
-      _updateLoadingMessage();
-
-    } catch (e) {
-      DebugUtils.logLazy(() => '_determineLocation failed: $e');
-      // Set default location if everything fails
-      setState(() {
-        _determinedLocation = kDefaultLocation;
-        _displayLocation = _extractDisplayLocation(kDefaultLocation);
-        _isLocationDetermined = true;
-        _locationDeterminedAt = DateTime.now(); // Record when location was determined
-      });
-
-      // Reset loading message timer to start temperature-related messages
-      _loadingElapsedSeconds = 0;
-      _updateLoadingMessage();
-    } finally {
-      _isLocating = false;
-    }
+    await _locationService.determineLocation();
+    // Reset loading message timer to start temperature-related messages
+    _loadingElapsedSeconds = 0;
+    _updateLoadingMessage();
   }
 
   Future<void> _prefetchPeriodData() async {
@@ -1194,17 +1080,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
 
-  String _extractDisplayLocation(String fullLocation) {
-    if (fullLocation.isEmpty) return '';
-    
-    // Split by comma and take the first part (city)
-    final parts = fullLocation.split(',');
-    if (parts.isNotEmpty) {
-      return parts.first.trim();
-    }
-    
-    return fullLocation;
-  }
 
 
   void _updateLoadingMessage() {
@@ -3161,19 +3036,22 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   /// Start monitoring network connectivity
   void _startConnectivityMonitoring() {
     // Check initial connectivity status asynchronously without blocking
-    Connectivity().checkConnectivity().then((initialResults) {
-      if (mounted) {
-        _isOnline = initialResults.any((result) =>
-          result == ConnectivityResult.mobile ||
-          result == ConnectivityResult.wifi ||
-          result == ConnectivityResult.ethernet
-        );
-        DebugUtils.logLazy(() => '🌐 Initial connectivity status: ${_isOnline ? "online" : "offline"}');
+    () async {
+      try {
+        final initialResults = await Connectivity().checkConnectivity();
+        if (mounted) {
+          _isOnline = initialResults.any((result) =>
+            result == ConnectivityResult.mobile ||
+            result == ConnectivityResult.wifi ||
+            result == ConnectivityResult.ethernet
+          );
+          DebugUtils.logLazy(() => '🌐 Initial connectivity status: ${_isOnline ? "online" : "offline"}');
+        }
+      } catch (e) {
+        DebugUtils.logLazy(() => '⚠️ Failed to check initial connectivity: $e');
+        // Default to online if check fails (already set to true by default)
       }
-    }).catchError((e) {
-      DebugUtils.logLazy(() => '⚠️ Failed to check initial connectivity: $e');
-      // Default to online if check fails (already set to true by default)
-    });
+    }();
 
     // Start listening for changes immediately
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
@@ -3373,58 +3251,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   void _startListeningToLocationChanges() {
-      _positionStreamSubscription = geo.Geolocator.getPositionStream(
-      locationSettings: geo.LocationSettings(
-        accuracy: geo.LocationAccuracy.low,
-        distanceFilter: kLocationDistanceFilterMeters,
-      ),
-    ).listen((geo.Position position) async {
-      if (_lastPosition == null ||
-          _distanceBetween(_lastPosition!, position) > kLocationSignificantChangeMeters) {
-        _lastPosition = position;
-        
-        // Don't start new data loading if we're already loading or if location hasn't been determined yet
-        if (_isDataLoading || _isLoadingOperationActive || !_isLocationDetermined) {
-          DebugUtils.logLazy(() => 'Skipping location change - already loading: $_isDataLoading, operation active: $_isLoadingOperationActive, location determined: $_isLocationDetermined');
-          return;
-        }
-        
-        DebugUtils.logLazy(() => 'Significant location change detected, refreshing data...');
-        
-        // Check if the city has actually changed before reloading data
-        try {
-          List<Placemark> placemarks = await placemarkFromCoordinates(
-            position.latitude, 
-            position.longitude
-          ).timeout(const Duration(seconds: kConnectivityTestTimeoutSeconds));
-          
-          if (placemarks.isNotEmpty) {
-            String newCity = location_utils.buildLocationFromPlacemark(placemarks.first);
-            newCity = _cleanupLocationString(newCity);
-            
-            // Only reload if the city has actually changed
-            if (newCity != _determinedLocation) {
-              DebugUtils.logLazy(() => 'City changed from $_determinedLocation to $newCity, refreshing data');
-              await _refreshLocationAndData();
-            } else {
-              DebugUtils.logLazy(() => 'Location change detected but city is the same, no refresh needed');
-            }
-          }
-        } catch (e) {
-          DebugUtils.logLazy(() => 'Error checking location change: $e');
-        }
-      }
-    }, onError: (error) {
-      DebugUtils.logLazy(() => 'Location stream error: $error');
-      // Stop listening if permissions are denied or stream fails.
-      _positionStreamSubscription?.cancel();
-      _positionStreamSubscription = null;
-    });
-  }
-
-  double _distanceBetween(geo.Position a, geo.Position b) {
-    return geo.Geolocator.distanceBetween(
-      a.latitude, a.longitude, b.latitude, b.longitude,
+    _locationService.startListeningToLocationChanges(
+      isLoadingGuard: () => _isDataLoading || _isLoadingOperationActive,
     );
   }
 

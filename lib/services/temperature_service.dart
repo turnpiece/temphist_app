@@ -7,6 +7,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../config/app_config.dart';
 import '../utils/debug_utils.dart';
 import '../constants/app_constants.dart';
+import '../models/app_exceptions.dart';
+export '../models/app_exceptions.dart';
 
 /// Extension to capitalize the first letter of a string
 extension StringExtension on String {
@@ -14,17 +16,6 @@ extension StringExtension on String {
     if (isEmpty) return this;
     return this[0].toUpperCase() + substring(1);
   }
-}
-
-/// Custom exception for rate limit errors
-class RateLimitException implements Exception {
-  final String detail;
-  final String message;
-  
-  RateLimitException(this.detail) : message = 'Rate limit exceeded: $detail';
-  
-  @override
-  String toString() => message;
 }
 
 class TemperatureService {
@@ -46,25 +37,24 @@ class TemperatureService {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         DebugUtils.logLazy(() => '⚠️ No Firebase user found, attempting to sign in...');
-        // Try to sign in if no user is found
         await _signInWithRetry();
         final newUser = FirebaseAuth.instance.currentUser;
         if (newUser == null) {
-          throw Exception('Unable to authenticate with Firebase');
+          throw const AuthException('no user after sign-in');
         }
         final token = await newUser.getIdToken();
-        if (token == null) throw Exception('Failed to get Firebase ID token');
+        if (token == null) throw const AuthException('null ID token');
         return token;
       }
-      
+
       final token = await user.getIdToken();
-      if (token == null) throw Exception('Failed to get Firebase ID token');
+      if (token == null) throw const AuthException('null ID token');
       return token;
+    } on AuthException {
+      rethrow;
     } catch (e) {
       DebugUtils.logLazy(() => '❌ Firebase authentication failed: $e');
-      // If Firebase auth fails completely, we could implement a fallback
-      // For now, we'll rethrow the error to be handled by the calling code
-      throw Exception('Firebase authentication failed: $e');
+      throw AuthException('Firebase auth failed', e);
     }
   }
 
@@ -89,11 +79,11 @@ class TemperatureService {
         
       } catch (e) {
         DebugUtils.logLazy(() => '❌ Service-level Firebase auth attempt $attempts failed: $e');
-        
+
         if (attempts >= maxRetries) {
-          throw Exception('All Firebase auth attempts failed: $e');
+          throw AuthException('all $maxRetries auth attempts failed', e);
         }
-        
+
         // Wait before retrying
         await Future.delayed(Duration(seconds: attempts));
       }
@@ -174,12 +164,12 @@ class TemperatureService {
       );
       
       if (responseBody.isEmpty) {
-        throw Exception('Empty response from API');
+        throw ApiResponseException('empty response', normalizedEndpoint);
       }
-      
+
       final json = jsonDecode(responseBody);
       if (json == null) {
-        throw Exception('API returned null response');
+        throw ApiResponseException('null response body', normalizedEndpoint);
       }
       
       return json;
@@ -199,9 +189,7 @@ class TemperatureService {
         }
       }
       
-      throw Exception(
-        'Failed to fetch $normalizedEndpoint data: ${response.statusCode}',
-      );
+      throw ApiException(response.statusCode, normalizedEndpoint);
     }
   }
 
@@ -233,7 +221,7 @@ class TemperatureService {
     }
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to fetch v1 records: ${response.statusCode}');
+      throw ApiException(response.statusCode, 'v1/records/$apiPeriod');
     }
 
     return jsonDecode(response.body) as Map<String, dynamic>;
@@ -268,7 +256,7 @@ class TemperatureService {
     }
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to fetch $subresource: ${response.statusCode}');
+      throw ApiException(response.statusCode, 'v1/records/$subresource');
     }
 
     return jsonDecode(response.body) as Map<String, dynamic>;
@@ -367,12 +355,12 @@ class TemperatureService {
       _periodCache[cacheKey] = result.data;
       return result.data;
     } catch (e) {
-      final msg = e.toString();
       // Fall back to synchronous endpoint on timeout or job failure
-      if (msg.contains('timed out') ||
-          msg.contains('polling failed') ||
-          msg.contains('Job failed')) {
-        DebugUtils.logLazy(() => 'Async job failed ($msg), falling back to sync API...');
+      final shouldFallback = e is JobPollingException ||
+          e is ApiTimeoutException ||
+          e is TimeoutException;
+      if (shouldFallback) {
+        DebugUtils.logLazy(() => 'Async job failed ($e), falling back to sync API...');
         try {
           final fallback =
               await _fetchPeriodDataSync(period, location, identifier);
@@ -380,10 +368,7 @@ class TemperatureService {
           _periodCache[cacheKey] = fallback;
           return fallback;
         } catch (fallbackError) {
-          throw Exception(
-            'Period data fetch failed: $msg. '
-            'Sync fallback also failed: $fallbackError',
-          );
+          throw ApiException(0, '$period (async + sync fallback both failed)', fallbackError);
         }
       }
       rethrow;
@@ -419,13 +404,13 @@ class TemperatureService {
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to create async job: ${response.statusCode}');
+      throw ApiException(response.statusCode, 'async job creation');
     }
 
     final json = jsonDecode(response.body);
     final jobId = json['job_id'];
     if (jobId == null || (jobId as String).isEmpty) {
-      throw Exception('Invalid job response: missing job_id');
+      throw const ApiResponseException('missing job_id in async job response');
     }
     return jobId;
   }
@@ -456,7 +441,7 @@ class TemperatureService {
         }
 
         if (response.statusCode != 200) {
-          throw Exception('Job status check failed: ${response.statusCode}');
+          throw ApiException(response.statusCode, 'job status ($jobId)');
         }
 
         final status = AsyncJobStatus.fromJson(jsonDecode(response.body));
@@ -464,7 +449,7 @@ class TemperatureService {
         if (status.isReady) {
           return status.result!;
         } else if (status.isError) {
-          throw Exception('Job failed: ${status.error ?? "Unknown error"}');
+          throw JobPollingException(status.error ?? 'unknown error');
         }
 
         // Still processing — notify caller and wait
@@ -474,20 +459,16 @@ class TemperatureService {
         await Future.delayed(pollInterval);
         pollCount++;
       } catch (e) {
-        if (e is RateLimitException) rethrow;
+        if (e is RateLimitException || e is JobPollingException) rethrow;
         if (pollCount > 10) {
-          throw Exception(
-            'Job polling failed after $pollCount attempts: $e',
-          );
+          throw JobPollingException('failed after $pollCount attempts', e);
         }
         await Future.delayed(pollInterval);
         pollCount++;
       }
     }
 
-    throw Exception(
-      'Job polling timed out after $maxPolls attempts',
-    );
+    throw JobPollingException('timed out after $maxPolls attempts');
   }
 
   /// Synchronous fallback: GET the period data directly.
@@ -518,7 +499,7 @@ class TemperatureService {
     }
 
     if (response.statusCode != 200) {
-      throw Exception('Sync API failed: ${response.statusCode}');
+      throw ApiException(response.statusCode, 'v1/records sync fallback');
     }
 
     final json = jsonDecode(response.body);
