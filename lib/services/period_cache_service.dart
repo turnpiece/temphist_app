@@ -49,12 +49,17 @@ class PeriodCacheService {
     double lon,
     String identifier,
   ) {
-    final raw = _box?.get(_key(period, lat, lon, identifier));
-    if (raw == null) return false;
-    final map = Map<String, dynamic>.from(raw as Map);
-    final cachedAt =
-        DateTime.fromMillisecondsSinceEpoch(map['_cachedAt'] as int);
-    return DateTime.now().difference(cachedAt) <= _ttl;
+    try {
+      final raw = _box?.get(_key(period, lat, lon, identifier));
+      if (raw == null || raw is! Map) return false;
+      final map = Map<String, dynamic>.from(raw);
+      final cachedAtValue = map['_cachedAt'];
+      if (cachedAtValue is! int) return false;
+      final cachedAt = DateTime.fromMillisecondsSinceEpoch(cachedAtValue);
+      return DateTime.now().difference(cachedAt) <= _ttl;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Returns cached data, or `null` on miss or expiry.
@@ -69,23 +74,39 @@ class PeriodCacheService {
     if (box == null) return null;
 
     final key = _key(period, lat, lon, identifier);
-    final raw = box.get(key);
-    if (raw == null) return null;
+    try {
+      final raw = box.get(key);
+      if (raw == null || raw is! Map) return null;
 
-    final map = Map<String, dynamic>.from(raw as Map);
-    final cachedAt =
-        DateTime.fromMillisecondsSinceEpoch(map['_cachedAt'] as int);
+      final map = Map<String, dynamic>.from(raw);
+      final cachedAtValue = map['_cachedAt'];
+      if (cachedAtValue is! int) {
+        await box.delete(key);
+        return null;
+      }
+      final cachedAt = DateTime.fromMillisecondsSinceEpoch(cachedAtValue);
 
-    if (DateTime.now().difference(cachedAt) > _ttl) {
+      if (DateTime.now().difference(cachedAt) > _ttl) {
+        await box.delete(key);
+        DebugUtils.logLazy(() => 'PeriodCacheService: expired → deleted ($key)');
+        return null;
+      }
+
+      final dataStr = map['data'];
+      if (dataStr is! String) {
+        await box.delete(key);
+        return null;
+      }
+
+      DebugUtils.logLazy(() => 'PeriodCacheService: hit ($key)');
+      return PeriodTemperatureData.fromJson(
+        jsonDecode(dataStr) as Map<String, dynamic>,
+      );
+    } catch (e) {
+      DebugUtils.logLazy(() => 'PeriodCacheService: corrupted entry ($key), deleting: $e');
       await box.delete(key);
-      DebugUtils.logLazy(() => 'PeriodCacheService: expired → deleted ($key)');
       return null;
     }
-
-    DebugUtils.logLazy(() => 'PeriodCacheService: hit ($key)');
-    return PeriodTemperatureData.fromJson(
-      jsonDecode(map['data'] as String) as Map<String, dynamic>,
-    );
   }
 
   /// Write [data] to the cache. Existing entries for the same key are

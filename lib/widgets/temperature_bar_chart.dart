@@ -86,8 +86,8 @@ class TemperatureBarChart extends StatelessWidget {
       child: Builder(
         builder: (context) {
           final screenWidth = MediaQuery.of(context).size.width;
-          final isTablet = screenWidth >= 768;
-          final availableWidth = isTablet ? 600.0 : screenWidth;
+          final isTablet = screenWidth >= kTabletBreakpointWidth;
+          final availableWidth = isTablet ? kTabletMaxContentWidth : screenWidth;
           final contentPadding = kScreenPadding + kContentHorizontalMargin;
           final chartWidth = availableWidth - kChartRightMargin - (contentPadding * 2);
 
@@ -125,7 +125,7 @@ class TemperatureBarChart extends StatelessWidget {
               labelStyle: const TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
               majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
               labelIntersectAction: AxisLabelIntersectAction.hide,
-              minimum: 1975.0,
+              minimum: kChartStartYear.toDouble(),
               maximum: DateTime.now().year.toDouble(),
               interval: 5,
               labelFormat: '{value}',
@@ -162,7 +162,7 @@ class TemperatureBarChart extends StatelessWidget {
     return [
       RangeColumnSeries<TemperatureChartData, int>(
         dataSource: chartData,
-        xValueMapper: (TemperatureChartData data, _) => int.parse(data.year),
+        xValueMapper: (TemperatureChartData data, _) => int.tryParse(data.year) ?? 0,
         lowValueMapper: (TemperatureChartData data, _) => baseline,
         highValueMapper: (TemperatureChartData data, _) => data.temperature,
         pointColorMapper: (TemperatureChartData data, _) =>
@@ -177,7 +177,7 @@ class TemperatureBarChart extends StatelessWidget {
       if (averageTemperature != null && !isLoading)
         LineSeries<TemperatureChartData, int>(
           dataSource: generateAverageData(chartData, averageTemperature!),
-          xValueMapper: (TemperatureChartData data, _) => int.parse(data.year),
+          xValueMapper: (TemperatureChartData data, _) => int.tryParse(data.year) ?? 0,
           yValueMapper: (TemperatureChartData data, _) => data.temperature,
           color: kAverageColour,
           width: 2,
@@ -189,7 +189,7 @@ class TemperatureBarChart extends StatelessWidget {
       if (trendSlope != null && !isLoading)
         LineSeries<TemperatureChartData, int>(
           dataSource: generateTrendData(chartData, trendSlope!),
-          xValueMapper: (TemperatureChartData data, _) => int.parse(data.year),
+          xValueMapper: (TemperatureChartData data, _) => int.tryParse(data.year) ?? 0,
           yValueMapper: (TemperatureChartData data, _) => data.temperature,
           color: kTrendColour,
           width: 2,

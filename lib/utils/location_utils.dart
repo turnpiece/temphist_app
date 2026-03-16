@@ -1,4 +1,12 @@
+import 'package:geocoding/geocoding.dart';
+
 import '../constants/app_constants.dart';
+
+// Pre-compiled RegExps for performance
+final _multipleSpaces = RegExp(r'\s+');
+final _commaSpacing = RegExp(r',\s*');
+final _trailingComma = RegExp(r',\s*$');
+final _pureNumeric = RegExp(r'^\d+$');
 
 /// Clean up and validate location strings for better API compatibility
 String cleanupLocationString(String location) {
@@ -8,13 +16,13 @@ String cleanupLocationString(String location) {
   String cleaned = location.trim();
 
   // Replace multiple spaces with single space
-  cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ');
+  cleaned = cleaned.replaceAll(_multipleSpaces, ' ');
 
   // Normalize comma spacing (ensure space after comma)
-  cleaned = cleaned.replaceAll(RegExp(r',\s*'), ', ');
+  cleaned = cleaned.replaceAll(_commaSpacing, ', ');
 
   // Remove trailing comma if present
-  cleaned = cleaned.replaceAll(RegExp(r',\s*$'), '');
+  cleaned = cleaned.replaceAll(_trailingComma, '');
 
   // Ensure we have at least a city and country
   if (!cleaned.contains(',')) {
@@ -36,9 +44,45 @@ bool isLocationSuspicious(String location) {
   }
 
   // Check for pure numeric strings (postal codes without city names)
-  if (RegExp(r'^\d+$').hasMatch(location.trim())) {
+  if (_pureNumeric.hasMatch(location.trim())) {
     return true;
   }
 
   return false;
+}
+
+/// Build a location string from a [Placemark], combining locality,
+/// administrative area, and country as available.
+///
+/// Returns [kDefaultLocation] if the placemark has no usable fields.
+String buildLocationFromPlacemark(Placemark placemark) {
+  final locality = placemark.locality;
+  final country = placemark.country;
+  final admin = placemark.administrativeArea;
+
+  if (locality != null && locality.isNotEmpty) {
+    if (country != null && country.isNotEmpty) {
+      if (admin != null && admin.isNotEmpty) {
+        return '$locality, $admin, $country';
+      }
+      return '$locality, $country';
+    }
+    if (admin != null && admin.isNotEmpty) {
+      return '$locality, $admin';
+    }
+    return locality;
+  }
+
+  // No locality — try administrative area + country
+  if (admin != null && admin.isNotEmpty) {
+    if (country != null && country.isNotEmpty) {
+      return '$admin, $country';
+    }
+    return admin;
+  }
+  if (country != null && country.isNotEmpty) {
+    return country;
+  }
+
+  return kDefaultLocation;
 }

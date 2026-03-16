@@ -25,7 +25,8 @@ class TemperatureData {
     if (json.containsKey('days') && json['days'] is List) {
       final days = json['days'] as List;
       if (days.isNotEmpty && days[0] is Map && days[0]['temp'] != null) {
-        return TemperatureData.simple(days[0]['temp'].toDouble());
+        final temp = days[0]['temp'];
+        return TemperatureData.simple(temp is num ? temp.toDouble() : 0.0);
       }
     }
     
@@ -45,7 +46,7 @@ class Average {
   final String unit;
   final int dataPoints;
   final YearRange yearRange;
-  final List<dynamic> missingYears;
+  final List<int> missingYears;
   final double? completeness;
 
   Average({
@@ -65,7 +66,9 @@ class Average {
       unit: json['unit'] ?? '',
       dataPoints: json['data_points'] ?? 0,
       yearRange: json['year_range'] != null ? YearRange.fromJson(json['year_range']) : YearRange(start: 0, end: 0),
-      missingYears: json['missing_years'] ?? [],
+      missingYears: (json['missing_years'] as List?)
+          ?.map((y) => y is int ? y : (y is num ? y.toInt() : 0))
+          .toList() ?? [],
       completeness: completeness != null ? (completeness as num).toDouble() : null,
     );
   }
@@ -79,8 +82,8 @@ class YearRange {
 
   factory YearRange.fromJson(Map<String, dynamic> json) {
     return YearRange(
-      start: json['start'],
-      end: json['end'],
+      start: json['start'] ?? 0,
+      end: json['end'] ?? 0,
     );
   }
 }
@@ -108,10 +111,11 @@ class Series {
 
   factory Series.fromJson(Map<String, dynamic> json) {
     return Series(
-      data: (json['data'] as List)
+      data: (json['data'] as List? ?? [])
+          .whereType<Map<String, dynamic>>()
           .map((point) => DataPoint.fromJson(point))
           .toList(),
-      metadata: Metadata.fromJson(json['metadata']),
+      metadata: Metadata.fromJson(json['metadata'] ?? {}),
     );
   }
 }
@@ -142,8 +146,8 @@ class Metadata {
 
   factory Metadata.fromJson(Map<String, dynamic> json) {
     return Metadata(
-      totalYears: json['total_years'],
-      availableYears: json['available_years'],
+      totalYears: json['total_years'] ?? 0,
+      availableYears: json['available_years'] ?? 0,
     );
   }
 } 
