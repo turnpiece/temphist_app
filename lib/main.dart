@@ -327,6 +327,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   
   // Track current loading operation to prevent race conditions
   bool _isLoadingOperationActive = false;
+
+  // Incremented whenever the location changes so in-flight prefetch polls
+  // for the old location can detect they are stale and bail out early.
+  int _prefetchGeneration = 0;
   
   // Track chart data loading failures
   bool _chartDataFailed = false;
@@ -946,7 +950,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     final service = TemperatureService();
     const periods = ['daily', 'week', 'month', 'year'];
 
-    // Fetch all periods in parallel for better performance
+    // Capture the generation at the start of this prefetch so we can bail
+    // out between polls if the location changes while we are running.
+    final generation = _prefetchGeneration;
+    bool isCancelled() => _prefetchGeneration != generation;
+
     DebugUtils.logLazy(() => 'Prefetching period data in parallel for $location ($identifier)');
 
     final lat = _lastPosition?.latitude;
@@ -954,12 +962,18 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
     await Future.wait(
       periods.map((period) async {
+        if (isCancelled()) return;
         try {
           DebugUtils.logLazy(() => 'Prefetching $period data');
-          final data = await service.fetchPeriodData(period, location, identifier);
+          final data = await service.fetchPeriodData(
+            period,
+            location,
+            identifier,
+            isCancelled: isCancelled,
+          );
           // Write period views to Hive so they survive hot restart / relaunch.
           // (daily is already handled by _loadChartDataProgressive.)
-          if (period != 'daily' && lat != null && lon != null) {
+          if (!isCancelled() && period != 'daily' && lat != null && lon != null) {
             await PeriodCacheService.put(period, lat, lon, identifier, data);
           }
         } catch (e) {
@@ -1366,12 +1380,15 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
     if (!mounted) return;
     setState(() {
+      _prefetchGeneration++; // cancels any in-flight prefetch for the old location
       _currentData = null;
       _isDataLoading = true;
       _progressiveLoadingCompleted = false;
       _chartDataFailed = false;
       _chartDataFailedDueToRateLimit = false;
       _chartDataTimedOut = false;
+      _chartDataRetryCount = 0;
+      _isRetryingChartData = false;
       _failedYears.clear();
     });
 
@@ -2702,9 +2719,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     DebugUtils.logLazy(() => '📊 Data completeness check - missing years: $missingYears, hasGaps: $hasGaps, chartDataFailed: $_chartDataFailed, progressiveLoadingCompleted: $_progressiveLoadingCompleted');
     
-    // Check for missing recent years (2022-2025) - but only if we actually attempted to load them
+    // Check for missing recent years (2022 up to but not including the current year).
+    // The current year is always excluded — it's expected to be absent or incomplete.
     final currentYear = DateTime.now().year;
-    final recentYears = List.generate(currentYear - 2021, (index) => 2022 + index);
+    final recentYears = List.generate(currentYear - 1 - 2021, (index) => 2022 + index);
     final loadedYears = { for (final d in chartData) if (d.hasData) int.tryParse(d.year) };
     final missingRecentYears = recentYears.where((year) => !loadedYears.contains(year)).toList();
     
@@ -2803,9 +2821,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       }
       
       if (missingText.isNotEmpty) {
-        missingText += '. Recent data ($recentText) is not yet available';
+        missingText += '. Recent data ($recentText) could not be loaded';
       } else {
-        missingText = 'Recent data ($recentText) is not yet available';
+        missingText = 'Recent data ($recentText) could not be loaded';
       }
     }
     

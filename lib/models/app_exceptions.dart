@@ -52,3 +52,8 @@ class JobPollingException extends AppException {
   const JobPollingException(String detail, [Object? cause])
       : super('Job polling failed: $detail', cause);
 }
+
+/// Thrown when an operation is cancelled (e.g. location changed mid-fetch).
+class CancelledOperationException extends AppException {
+  const CancelledOperationException() : super('Operation cancelled');
+}

@@ -398,6 +398,7 @@ class TemperatureService {
     String location,
     String identifier, {
     void Function(AsyncJobStatus)? onProgress,
+    bool Function()? isCancelled,
   }) async {
     final cacheKey = '${_apiPeriodPath(period)}|$location|$identifier';
     final cached = _periodCache[cacheKey];
@@ -408,16 +409,27 @@ class TemperatureService {
     try {
       DebugUtils.logLazy(() => 'Attempting async fetch for $period data...');
       final jobId = await _createAsyncJob(period, location, identifier);
-      final result = await _pollJobStatus(jobId, onProgress: onProgress);
+      final result = await _pollJobStatus(
+        jobId,
+        onProgress: onProgress,
+        isCancelled: isCancelled,
+      );
       DebugUtils.logLazy(() => 'Async fetch successful for $period data');
       _periodCache[cacheKey] = result.data;
       return result.data;
     } catch (e) {
+      // Propagate cancellation without falling back to sync
+      if (e is CancelledOperationException) rethrow;
+
       // Fall back to synchronous endpoint on timeout or job failure
       final shouldFallback = e is JobPollingException ||
           e is ApiTimeoutException ||
           e is TimeoutException;
       if (shouldFallback) {
+        // Check cancellation before starting the sync fallback
+        if (isCancelled != null && isCancelled()) {
+          throw const CancelledOperationException();
+        }
         DebugUtils.logLazy(() => 'Async job failed ($e), falling back to sync API...');
         try {
           final fallback =
@@ -477,12 +489,17 @@ class TemperatureService {
   Future<JobResult> _pollJobStatus(
     String jobId, {
     void Function(AsyncJobStatus)? onProgress,
+    bool Function()? isCancelled,
     int maxPolls = 100,
     Duration pollInterval = const Duration(seconds: 3),
   }) async {
     int pollCount = 0;
 
     while (pollCount < maxPolls) {
+      if (isCancelled != null && isCancelled()) {
+        DebugUtils.logLazy(() => 'Job $jobId cancelled at poll #$pollCount');
+        throw const CancelledOperationException();
+      }
       try {
         final token = await getAuthToken();
         final url = Uri.parse('$apiBaseUrl/v1/jobs/$jobId');
