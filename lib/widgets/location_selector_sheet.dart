@@ -17,12 +17,17 @@ class _SheetData {
 
 /// Full-screen location selector pushed from below like a sheet.
 ///
-/// Shows the current location, recent GPS-visited locations, and a full list
-/// of popular pre-approved locations (5 shown initially, expandable).
-/// Popular locations are never added to the recent history.
+/// "Current location" always shows the physical GPS location ([gpsLocation]).
+/// [selectedLocation] is the location currently used for data — it may be a
+/// manually chosen city that appears highlighted in recent or popular lists.
 class LocationSelectorSheet extends StatefulWidget {
-  /// The currently active API location string (e.g. "London, UK").
-  final String currentLocation;
+  /// The physical GPS-detected location string (e.g. "London, United Kingdom").
+  /// Shown in the "Current location" section. Empty string hides the section.
+  final String gpsLocation;
+
+  /// The location currently selected for data fetching — may differ from
+  /// [gpsLocation] when the user has manually chosen a city.
+  final String selectedLocation;
 
   /// Called with the chosen API location string when the user picks one.
   /// The screen dismisses itself before invoking this.
@@ -30,14 +35,16 @@ class LocationSelectorSheet extends StatefulWidget {
 
   const LocationSelectorSheet({
     super.key,
-    required this.currentLocation,
+    required this.gpsLocation,
+    required this.selectedLocation,
     required this.onLocationSelected,
   });
 
   /// Push this selector as a full-screen modal that slides up from the bottom.
   static Future<void> show(
     BuildContext context, {
-    required String currentLocation,
+    required String gpsLocation,
+    required String selectedLocation,
     required void Function(String) onLocationSelected,
   }) {
     return Navigator.of(context).push(
@@ -46,7 +53,8 @@ class LocationSelectorSheet extends StatefulWidget {
         barrierColor: Colors.black54,
         barrierDismissible: true,
         pageBuilder: (_, __, ___) => LocationSelectorSheet(
-          currentLocation: currentLocation,
+          gpsLocation: gpsLocation,
+          selectedLocation: selectedLocation,
           onLocationSelected: onLocationSelected,
         ),
         transitionsBuilder: (_, animation, __, child) => SlideTransition(
@@ -79,25 +87,40 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
 
   Future<_SheetData> _loadData() async {
     final history = await LocationHistoryService.getAll();
-    // Exclude current location from recent list — it appears in "Current" section
-    final recent = history.where((l) => l != widget.currentLocation).toList();
+
+    // Build a set of excluded city names (first comma-segment, lower-cased) so
+    // that format differences between GPS results ("London, Greater London, UK")
+    // and API results ("London, United Kingdom") don't cause duplicates.
+    String cityName(String loc) => loc.split(',').first.trim().toLowerCase();
+    final excludedCities = {
+      cityName(widget.gpsLocation),
+    };
+    bool isExcluded(String loc) =>
+        loc.isEmpty || excludedCities.contains(cityName(loc));
+
+    // Recent list: GPS history minus the GPS location itself.
+    // The selected location (if manually chosen) stays in the list so it can
+    // be shown as selected.
+    final recent = history.where((l) => !isExcluded(l)).toList();
 
     // Fetch pre-approved locations from API; fall back to the bundled list if
     // the request fails (e.g. offline) or returns an unexpected format.
+    // Exclude GPS history city names to avoid duplicates with recent list.
+    final recentCities = {for (final h in history) cityName(h)};
+    bool isExcludedFromPopular(String loc) =>
+        isExcluded(loc) || recentCities.contains(cityName(loc));
+
     List<String> popular;
     try {
       final allPreapproved =
           await TemperatureService().fetchPreapprovedLocations();
-      final excluded = {widget.currentLocation, ...history};
       popular = allPreapproved
-          .where((l) => l.isNotEmpty && !excluded.contains(l))
+          .where((l) => !isExcludedFromPopular(l))
           .toList()
         ..shuffle();
     } catch (_) {
-      // Fall back to bundled list
-      final excluded = {widget.currentLocation, ...history};
       popular = kPopularLocations
-          .where((l) => !excluded.contains(l))
+          .where((l) => !isExcludedFromPopular(l))
           .toList()
         ..shuffle();
     }
@@ -107,8 +130,6 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // Gradient covers the full screen (including safe-area gutters); the
-    // Column content is then inset by SafeArea so nothing hides under notches.
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
@@ -194,19 +215,24 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
-        _SectionHeader('Current location'),
-        _LocationRow(
-          apiLocation: widget.currentLocation,
-          isSelected: true,
-          onTap: null,
-        ),
+        // "Current location" shows the physical GPS location, if known.
+        if (widget.gpsLocation.isNotEmpty) ...[
+          _SectionHeader('Current location'),
+          _LocationRow(
+            apiLocation: widget.gpsLocation,
+            isSelected: widget.selectedLocation == widget.gpsLocation,
+            onTap: widget.selectedLocation == widget.gpsLocation
+                ? null
+                : () => _select(widget.gpsLocation),
+          ),
+        ],
         if (data.recentLocations.isNotEmpty) ...[
           _SectionHeader('Recent locations'),
           for (final loc in visibleRecent)
             _LocationRow(
               apiLocation: loc,
-              isSelected: false,
-              onTap: () => _select(loc),
+              isSelected: _isSelected(loc),
+              onTap: _isSelected(loc) ? null : () => _select(loc),
             ),
           if (data.recentLocations.length > _initialCount && !_showAllRecent)
             _ShowMoreButton(
@@ -218,8 +244,8 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
           for (final loc in visiblePopular)
             _LocationRow(
               apiLocation: loc,
-              isSelected: false,
-              onTap: () => _select(loc),
+              isSelected: _isSelected(loc),
+              onTap: _isSelected(loc) ? null : () => _select(loc),
             ),
           if (data.popularLocations.length > _initialCount && !_showAllPopular)
             _ShowMoreButton(
@@ -228,6 +254,12 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
         ],
       ],
     );
+  }
+
+  /// True when [loc] is the currently active selected location.
+  bool _isSelected(String loc) {
+    String city(String l) => l.split(',').first.trim().toLowerCase();
+    return city(loc) == city(widget.selectedLocation);
   }
 
   void _select(String apiLocation) {

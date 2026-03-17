@@ -320,7 +320,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   // Track chart data retry attempts
   bool _isRetryingChartData = false;
   int _chartDataRetryCount = 0;
-  static const int _maxChartDataRetries = kMaxChartDataRetries;
   
   // Track if progressive loading has completed to prevent flash of "no data" message
   bool _progressiveLoadingCompleted = false;
@@ -791,12 +790,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
 
   Future<void> _retryChartData() async {
-    if (_chartDataRetryCount >= _maxChartDataRetries) {
-      DebugUtils.logLazy(() => '🛑 Max chart data retries reached ($_chartDataRetryCount/$_maxChartDataRetries), not retrying further');
-      return;
-    }
-    
-    DebugUtils.logLazy(() => '🔄 Retrying chart data... (attempt ${_chartDataRetryCount + 1}/$_maxChartDataRetries)');
+    DebugUtils.logLazy(() => '🔄 Retrying chart data... (attempt ${_chartDataRetryCount + 1})');
     DebugUtils.logLazy(() => '📋 Failed years to retry: $_failedYears');
     
     // Store the failed years before clearing them
@@ -1367,7 +1361,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   void _showLocationSelector() {
     LocationSelectorSheet.show(
       context,
-      currentLocation: _determinedLocation,
+      gpsLocation: _locationService.gpsLocation,
+      selectedLocation: _determinedLocation,
       onLocationSelected: _onLocationSelected,
     );
   }
@@ -2887,11 +2882,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Widget _buildDataRetrySection() {
-    if (_chartDataRetryCount >= _maxChartDataRetries) {
-      return const SizedBox.shrink();
-    }
-    
     // Only show the general retry section if there's no specific chart data failure
+    // (_buildChartDataFailureMessage handles the retry button in that case).
     if (_chartDataFailed) {
       return const SizedBox.shrink();
     }
@@ -2949,7 +2941,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         children: [
           const SizedBox(height: 4),
           Text(
-            'Retry attempts: $_chartDataRetryCount/$_maxChartDataRetries',
+            'Retry attempts: $_chartDataRetryCount',
             style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 3, fontWeight: FontWeight.w400),
             textAlign: TextAlign.left,
           ),

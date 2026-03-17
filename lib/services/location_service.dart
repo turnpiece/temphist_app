@@ -25,6 +25,11 @@ class LocationService extends ChangeNotifier {
   String get determinedLocation => _determinedLocation;
   String _determinedLocation = '';
 
+  /// The physical GPS-detected location, unaffected by manual selection.
+  /// Empty until GPS has resolved at least once.
+  String get gpsLocation => _gpsLocation;
+  String _gpsLocation = '';
+
   /// Short location for display (e.g. "London").
   String get displayLocation => _displayLocation;
   String _displayLocation = '';
@@ -142,6 +147,7 @@ class LocationService extends ChangeNotifier {
       );
 
       _determinedLocation = city;
+      _gpsLocation = city;
       _displayLocation = _extractDisplayLocation(city);
       _isLocationDetermined = true;
       _locationDeterminedAt = DateTime.now();
@@ -153,6 +159,7 @@ class LocationService extends ChangeNotifier {
     } catch (e) {
       DebugUtils.logLazy(() => 'LocationService.determineLocation failed: $e');
       _determinedLocation = kDefaultLocation;
+      _gpsLocation = kDefaultLocation;
       _displayLocation = _extractDisplayLocation(kDefaultLocation);
       _isLocationDetermined = true;
       _locationDeterminedAt = DateTime.now();
@@ -245,6 +252,7 @@ class LocationService extends ChangeNotifier {
   void reset() {
     _isLocationDetermined = false;
     _determinedLocation = '';
+    _gpsLocation = '';
     _displayLocation = '';
     _locationDeterminedAt = null;
     _notify();
