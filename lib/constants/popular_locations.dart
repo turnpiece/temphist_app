@@ -1,0 +1,26 @@
+/// The 20 pre-approved locations the API supports for cache pre-warming.
+/// Format matches the API location string: "City, Country".
+const List<String> kPopularLocations = [
+  'New York, US',
+  'Los Angeles, US',
+  'Chicago, US',
+  'Toronto, Canada',
+  'São Paulo, Brazil',
+  'Mexico City, Mexico',
+  'London, UK',
+  'Paris, France',
+  'Berlin, Germany',
+  'Madrid, Spain',
+  'Amsterdam, Netherlands',
+  'Stockholm, Sweden',
+  'Istanbul, Turkey',
+  'Cairo, Egypt',
+  'Johannesburg, South Africa',
+  'Dubai, United Arab Emirates',
+  'Mumbai, India',
+  'Bangkok, Thailand',
+  'Singapore, Singapore',
+  'Tokyo, Japan',
+  'Seoul, South Korea',
+  'Sydney, Australia',
+];

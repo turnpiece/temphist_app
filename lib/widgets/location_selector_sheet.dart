@@ -1,0 +1,340 @@
+import 'package:flutter/material.dart';
+
+import '../constants/app_constants.dart';
+import '../constants/popular_locations.dart';
+import '../services/location_history_service.dart';
+import '../services/temperature_service.dart';
+
+class _SheetData {
+  final List<String> recentLocations;
+  final List<String> popularLocations;
+
+  const _SheetData({
+    required this.recentLocations,
+    required this.popularLocations,
+  });
+}
+
+/// Full-screen location selector pushed from below like a sheet.
+///
+/// Shows the current location, recent GPS-visited locations, and a full list
+/// of popular pre-approved locations (5 shown initially, expandable).
+/// Popular locations are never added to the recent history.
+class LocationSelectorSheet extends StatefulWidget {
+  /// The currently active API location string (e.g. "London, UK").
+  final String currentLocation;
+
+  /// Called with the chosen API location string when the user picks one.
+  /// The screen dismisses itself before invoking this.
+  final void Function(String apiLocation) onLocationSelected;
+
+  const LocationSelectorSheet({
+    super.key,
+    required this.currentLocation,
+    required this.onLocationSelected,
+  });
+
+  /// Push this selector as a full-screen modal that slides up from the bottom.
+  static Future<void> show(
+    BuildContext context, {
+    required String currentLocation,
+    required void Function(String) onLocationSelected,
+  }) {
+    return Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: Colors.black54,
+        barrierDismissible: true,
+        pageBuilder: (_, __, ___) => LocationSelectorSheet(
+          currentLocation: currentLocation,
+          onLocationSelected: onLocationSelected,
+        ),
+        transitionsBuilder: (_, animation, __, child) => SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 1),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  @override
+  State<LocationSelectorSheet> createState() => _LocationSelectorSheetState();
+}
+
+class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
+  late final Future<_SheetData> _dataFuture;
+  bool _showAllRecent = false;
+  bool _showAllPopular = false;
+
+  static const int _initialCount = 5;
+
+  @override
+  void initState() {
+    super.initState();
+    _dataFuture = _loadData();
+  }
+
+  Future<_SheetData> _loadData() async {
+    final history = await LocationHistoryService.getAll();
+    // Exclude current location from recent list — it appears in "Current" section
+    final recent = history.where((l) => l != widget.currentLocation).toList();
+
+    // Fetch pre-approved locations from API; fall back to the bundled list if
+    // the request fails (e.g. offline) or returns an unexpected format.
+    List<String> popular;
+    try {
+      final allPreapproved =
+          await TemperatureService().fetchPreapprovedLocations();
+      final excluded = {widget.currentLocation, ...history};
+      popular = allPreapproved
+          .where((l) => l.isNotEmpty && !excluded.contains(l))
+          .toList()
+        ..shuffle();
+    } catch (_) {
+      // Fall back to bundled list
+      final excluded = {widget.currentLocation, ...history};
+      popular = kPopularLocations
+          .where((l) => !excluded.contains(l))
+          .toList()
+        ..shuffle();
+    }
+
+    return _SheetData(recentLocations: recent, popularLocations: popular);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Gradient covers the full screen (including safe-area gutters); the
+    // Column content is then inset by SafeArea so nothing hides under notches.
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [kBackgroundColour, kBackgroundColourDark],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Header row with title and close button
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+                child: Row(
+                  children: [
+                    Text(
+                      'Choose location',
+                      style: TextStyle(
+                        color: kTextPrimaryColour,
+                        fontSize: kFontSizeBody,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: Icon(
+                        Icons.close,
+                        color: kGreyLabelColour,
+                        size: kIconSize + 2,
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(
+                color: kGreyLabelColour.withValues(alpha: 0.3),
+                height: 1,
+              ),
+              // Scrollable content
+              Expanded(
+                child: FutureBuilder<_SheetData>(
+                  future: _dataFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: kAccentColour),
+                      );
+                    }
+                    if (snapshot.hasError || !snapshot.hasData) {
+                      return Center(
+                        child: Text(
+                          'Could not load locations',
+                          style: TextStyle(
+                            color: kGreyLabelColour,
+                            fontSize: kFontSizeBody,
+                          ),
+                        ),
+                      );
+                    }
+                    return _buildContent(snapshot.data!);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(_SheetData data) {
+    final visibleRecent = _showAllRecent
+        ? data.recentLocations
+        : data.recentLocations.take(_initialCount).toList();
+    final visiblePopular = _showAllPopular
+        ? data.popularLocations
+        : data.popularLocations.take(_initialCount).toList();
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        _SectionHeader('Current location'),
+        _LocationRow(
+          apiLocation: widget.currentLocation,
+          isSelected: true,
+          onTap: null,
+        ),
+        if (data.recentLocations.isNotEmpty) ...[
+          _SectionHeader('Recent locations'),
+          for (final loc in visibleRecent)
+            _LocationRow(
+              apiLocation: loc,
+              isSelected: false,
+              onTap: () => _select(loc),
+            ),
+          if (data.recentLocations.length > _initialCount && !_showAllRecent)
+            _ShowMoreButton(
+              onTap: () => setState(() => _showAllRecent = true),
+            ),
+        ],
+        if (data.popularLocations.isNotEmpty) ...[
+          _SectionHeader('Popular locations'),
+          for (final loc in visiblePopular)
+            _LocationRow(
+              apiLocation: loc,
+              isSelected: false,
+              onTap: () => _select(loc),
+            ),
+          if (data.popularLocations.length > _initialCount && !_showAllPopular)
+            _ShowMoreButton(
+              onTap: () => setState(() => _showAllPopular = true),
+            ),
+        ],
+      ],
+    );
+  }
+
+  void _select(String apiLocation) {
+    Navigator.of(context).pop();
+    widget.onLocationSelected(apiLocation);
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  const _SectionHeader(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 6),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          color: kGreyLabelColour,
+          fontSize: kFontSizeBody - 4,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+}
+
+class _LocationRow extends StatelessWidget {
+  final String apiLocation;
+  final bool isSelected;
+  final VoidCallback? onTap;
+
+  const _LocationRow({
+    required this.apiLocation,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  String get _displayName => apiLocation.split(',').first.trim();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isSelected ? kBarCurrentYearColour : kAccentColour;
+
+    return InkWell(
+      onTap: onTap,
+      splashColor: kAccentColour.withValues(alpha: 0.1),
+      highlightColor: kAccentColour.withValues(alpha: 0.05),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              Icons.location_on_outlined,
+              size: kIconSize + 3,
+              color: color,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                _displayName,
+                style: TextStyle(
+                  color: color,
+                  fontSize: kFontSizeBody,
+                  fontWeight:
+                      isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+            if (isSelected)
+              Icon(
+                Icons.check,
+                size: kIconSize + 3,
+                color: kBarCurrentYearColour,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShowMoreButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ShowMoreButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 20),
+      child: TextButton(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          padding: EdgeInsets.zero,
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: Text(
+          'Show more...',
+          style: TextStyle(
+            color: kGreyLabelColour,
+            fontSize: kFontSizeBody - 2,
+          ),
+        ),
+      ),
+    );
+  }
+}

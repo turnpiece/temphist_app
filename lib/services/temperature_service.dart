@@ -20,11 +20,69 @@ extension StringExtension on String {
 
 class TemperatureService {
   static final Map<String, PeriodTemperatureData> _periodCache = {};
+  static List<String>? _preapprovedLocationsCache;
   final String apiBaseUrl;
 
   /// Clears all cached period data. Call on refresh so stale data is not served.
   static void clearCache() {
     _periodCache.clear();
+  }
+
+  /// Fetches the list of pre-approved locations from the API.
+  ///
+  /// Result is cached in memory for the lifetime of the app so repeated
+  /// sheet opens do not make additional network calls.
+  /// Throws on network or auth failure — callers should handle and fall back.
+  Future<List<String>> fetchPreapprovedLocations() async {
+    if (_preapprovedLocationsCache != null) return _preapprovedLocationsCache!;
+
+    final token = await getAuthToken();
+    final url = Uri.parse('$apiBaseUrl/v1/locations/preapproved');
+
+    DebugUtils.logLazy(() => 'Fetching pre-approved locations: $url');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: kApiTimeoutSeconds));
+
+    DebugUtils.logLazy(() =>
+        'Pre-approved locations response: ${response.statusCode} — ${response.body}');
+
+    if (response.statusCode != 200) {
+      throw ApiException(response.statusCode, 'v1/locations/preapproved');
+    }
+
+    final data = jsonDecode(response.body);
+    final List<dynamic> raw;
+    if (data is List) {
+      raw = data;
+    } else if (data is Map && data['locations'] is List) {
+      raw = data['locations'] as List;
+    } else {
+      throw ApiException(0, 'Unexpected format from v1/locations/preapproved');
+    }
+
+    // Build "City, Country" strings matching the format used throughout the app.
+    // The API returns rich objects; we use name + country_name (e.g.
+    // "Auckland, New Zealand"). toList() forces eager evaluation so any errors
+    // surface here rather than propagating lazily to the caller.
+    _preapprovedLocationsCache = raw.map<String>((e) {
+      if (e is String) return e;
+      if (e is Map) {
+        final name = e['name']?.toString() ?? '';
+        final country = e['country_name']?.toString() ?? '';
+        if (name.isNotEmpty && country.isNotEmpty) return '$name, $country';
+        // Fallback for unexpected shape
+        return (e['location'] ?? name).toString();
+      }
+      return e.toString();
+    }).where((s) => s.isNotEmpty).toList();
+
+    return _preapprovedLocationsCache!;
   }
 
   TemperatureService({
@@ -445,10 +503,13 @@ class TemperatureService {
         }
 
         final status = AsyncJobStatus.fromJson(jsonDecode(response.body));
+        DebugUtils.logLazy(() => 'Job $jobId poll #$pollCount: ${status.status}');
 
         if (status.isReady) {
+          DebugUtils.logLazy(() => 'Job $jobId completed after $pollCount polls');
           return status.result!;
         } else if (status.isError) {
+          DebugUtils.logLazy(() => 'Job $jobId failed: ${status.error}');
           throw JobPollingException(status.error ?? 'unknown error');
         }
 

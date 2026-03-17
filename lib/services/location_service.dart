@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/app_constants.dart';
 import '../utils/debug_utils.dart';
 import '../utils/location_utils.dart' as location_utils;
+import 'location_history_service.dart';
 
 /// Encapsulates all device-location concerns: GPS, reverse-geocoding,
 /// caching, and continuous background monitoring.
@@ -146,6 +147,8 @@ class LocationService extends ChangeNotifier {
       _locationDeterminedAt = DateTime.now();
       _notify();
 
+      // Record GPS-detected location to history (manual selections are not recorded)
+      await LocationHistoryService.add(city);
       await _cacheLocation(city, _displayLocation);
     } catch (e) {
       DebugUtils.logLazy(() => 'LocationService.determineLocation failed: $e');
@@ -245,6 +248,19 @@ class LocationService extends ChangeNotifier {
     _displayLocation = '';
     _locationDeterminedAt = null;
     _notify();
+  }
+
+  /// Override the current location with a manually chosen value.
+  ///
+  /// Caches the selection with the standard 30-min TTL so it survives a
+  /// foreground/background cycle. Does NOT add to GPS location history.
+  Future<void> setManualLocation(String apiLocation) async {
+    _determinedLocation = apiLocation;
+    _displayLocation = _extractDisplayLocation(apiLocation);
+    _isLocationDetermined = true;
+    _locationDeterminedAt = DateTime.now();
+    _notify();
+    await _cacheLocation(apiLocation, _displayLocation);
   }
 
   /// Stop continuous GPS monitoring and release resources.

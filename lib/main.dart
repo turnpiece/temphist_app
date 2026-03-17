@@ -24,6 +24,7 @@ import 'widgets/temperature_bar_chart.dart';
 import 'widgets/period_page.dart';
 import 'widgets/splash_screen.dart';
 import 'widgets/onboarding/onboarding_screen.dart';
+import 'widgets/location_selector_sheet.dart';
 import 'constants/app_constants.dart';
 import 'utils/date_utils.dart' as date_utils;
 
@@ -1348,6 +1349,37 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     await _initializeApp();
   }
 
+  /// Opens the location selector bottom sheet.
+  void _showLocationSelector() {
+    LocationSelectorSheet.show(
+      context,
+      currentLocation: _determinedLocation,
+      onLocationSelected: _onLocationSelected,
+    );
+  }
+
+  /// Called when the user picks a location from the selector sheet.
+  Future<void> _onLocationSelected(String apiLocation) async {
+    if (apiLocation == _determinedLocation) return;
+
+    await _locationService.setManualLocation(apiLocation);
+
+    if (!mounted) return;
+    setState(() {
+      _currentData = null;
+      _isDataLoading = true;
+      _progressiveLoadingCompleted = false;
+      _chartDataFailed = false;
+      _chartDataFailedDueToRateLimit = false;
+      _chartDataTimedOut = false;
+      _failedYears.clear();
+    });
+
+    _startAverageTrendDisplayTimer();
+    _loadChartDataProgressive().whenComplete(_prefetchPeriodData);
+    _startLoadingMessageTimer();
+  }
+
   /// Test date change detection (for debugging)
   Future<void> _handleTestDateChange() async {
     DebugUtils.logLazy(() => 'Test date change triggered - simulating date change detection');
@@ -1735,16 +1767,34 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           ),
         ),
         Expanded(
-          child: Text(
-            headerText,
-            style: TextStyle(
-              color: kAccentColour,
-              fontSize: kFontSizeLocation,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
+          child: GestureDetector(
+            onTap: _isLocationDetermined ? _showLocationSelector : null,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  color: _isLocationDetermined
+                      ? kAccentColour.withValues(alpha: 0.8)
+                      : kGreyLabelColour.withValues(alpha: 0.4),
+                  size: kIconSize + 2,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    headerText,
+                    style: TextStyle(
+                      color: kAccentColour,
+                      fontSize: kFontSizeLocation,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              ],
             ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
           ),
         ),
       ],
