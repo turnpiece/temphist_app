@@ -210,13 +210,23 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     );
   }
 
+  /// Returns [all] with the selected item moved to index 0 (if present).
+  List<String> _withSelectedFirst(List<String> all) {
+    final i = all.indexWhere(_isSelected);
+    if (i <= 0) return all; // not found or already first
+    return [all[i], ...all.sublist(0, i), ...all.sublist(i + 1)];
+  }
+
   Widget _buildContent(_SheetData data) {
+    final orderedRecent = _withSelectedFirst(data.recentLocations);
+    final orderedPopular = _withSelectedFirst(data.popularLocations);
+
     final visibleRecent = _showAllRecent
-        ? data.recentLocations
-        : data.recentLocations.take(_initialCount).toList();
+        ? orderedRecent
+        : orderedRecent.take(_initialCount).toList();
     final visiblePopular = _showAllPopular
-        ? data.popularLocations
-        : data.popularLocations.take(_initialCount).toList();
+        ? orderedPopular
+        : orderedPopular.take(_initialCount).toList();
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),

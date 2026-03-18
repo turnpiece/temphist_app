@@ -1769,6 +1769,18 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         ? _displayLocation
         : (_determinedLocation.isNotEmpty ? _determinedLocation : 'Loading location...');
 
+    // Green when showing the user's actual GPS location; red when a different
+    // city has been manually selected.
+    final Color locationColour;
+    if (!_isLocationDetermined) {
+      locationColour = kGreyLabelColour.withValues(alpha: 0.4);
+    } else {
+      final gps = _locationService.gpsLocation;
+      String cityOf(String l) => l.split(',').first.trim().toLowerCase();
+      final isAtGps = gps.isEmpty || cityOf(gps) == cityOf(_determinedLocation);
+      locationColour = isAtGps ? kBarCurrentYearColour : kAccentColour;
+    }
+
     return Row(
       children: [
         Transform.translate(
@@ -1790,9 +1802,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               children: [
                 Icon(
                   Icons.location_on_outlined,
-                  color: _isLocationDetermined
-                      ? kAccentColour.withValues(alpha: 0.8)
-                      : kGreyLabelColour.withValues(alpha: 0.4),
+                  color: locationColour.withValues(alpha: 0.8),
                   size: kIconSize + 2,
                 ),
                 const SizedBox(width: 6),
@@ -1800,7 +1810,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                   child: Text(
                     headerText,
                     style: TextStyle(
-                      color: kAccentColour,
+                      color: locationColour,
                       fontSize: kFontSizeLocation,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.5,
@@ -2576,11 +2586,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Widget _buildSummarySection(String? summaryText) {
     if (summaryText?.isEmpty != false) return const SizedBox.shrink();
 
-    return Padding(
+    // Reserve 3 lines in landscape (screen is short), 4 lines in portrait.
+    return Builder(builder: (context) {
+      final lines = MediaQuery.of(context).orientation == Orientation.landscape
+          ? kSummaryMinLines - 1
+          : kSummaryMinLines;
+      return Padding(
       padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          minHeight: kSummaryFontSize * kSummaryLineHeight * kSummaryMinLines + 8,
+        constraints: BoxConstraints(
+          minHeight: kSummaryFontSize * kSummaryLineHeight * lines + 8,
         ),
         child: Text(
           summaryText!,
@@ -2599,6 +2614,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         ),
       ),
     );
+    });
   }
 
   Widget _buildLoadingChartSection(double chartHeight) {
