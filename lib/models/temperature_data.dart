@@ -2,7 +2,7 @@ class TemperatureData {
   final Average? average;
   final Trend? trend;
   final String? summary;
-  final dynamic currentWeather;
+  final Map<String, dynamic>? currentWeather;
   final Series? series;
   final double? temperature; // For simple API responses
 
@@ -35,7 +35,7 @@ class TemperatureData {
       average: json['average'] != null ? Average.fromJson(json['average']) : null,
       trend: json['trend'] != null ? Trend.fromJson(json['trend']) : null,
       summary: json['summary'],
-      currentWeather: json['current_weather'],
+      currentWeather: json['current_weather'] as Map<String, dynamic>?,
       series: json['weather'] != null ? Series.fromJson(json['weather']) : null,
     );
   }

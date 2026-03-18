@@ -942,7 +942,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     final identifier = dateInfo['mmdd']!;
     final location = _determinedLocation;
     final service = TemperatureService();
-    const periods = ['daily', 'week', 'month', 'year'];
+    // 'daily' is already fetched by _loadChartDataProgressive — skip it here.
+    const periods = ['week', 'month', 'year'];
 
     // Capture the generation at the start of this prefetch so we can bail
     // out between polls if the location changes while we are running.
@@ -1062,7 +1063,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       } else if (_loadingElapsedSeconds < 45) {
         // Use the display location if available
         final locationText = _displayLocation.isNotEmpty ? _displayLocation : 'your area';
-        newMessage = 'Analyzing temperature history in $locationText...';
+        newMessage = 'Analysing temperature history in $locationText...';
       } else if (_loadingElapsedSeconds < 60) {
         newMessage = 'Calculating averages and trends...';
       } else if (_loadingElapsedSeconds < 80) {
@@ -1125,9 +1126,19 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // coordinates + date); fall through to network on miss and write-through.
       final lat = _lastPosition?.latitude;
       final lon = _lastPosition?.longitude;
+
+      // Only use the coordinate-keyed Hive cache when the selected city
+      // matches the GPS location.  If the user has manually chosen a different
+      // city the GPS coordinates belong to the old city, so the cache would
+      // return the wrong data.
+      String cityOf(String l) => l.split(',').first.trim().toLowerCase();
+      final gps = _locationService.gpsLocation;
+      final isAtGpsLocation =
+          gps.isEmpty || cityOf(gps) == cityOf(city);
+
       PeriodTemperatureData periodData;
       final cached =
-          (lat != null && lon != null)
+          (isAtGpsLocation && lat != null && lon != null)
               ? await PeriodCacheService.get('daily', lat, lon, formattedDate)
               : null;
       if (cached != null) {
@@ -1135,7 +1146,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         DebugUtils.logLazy(() => '_loadChartDataProgressive: served from Hive cache');
       } else {
         periodData = await service.fetchPeriodData('daily', city, identifier);
-        if (lat != null && lon != null) {
+        if (isAtGpsLocation && lat != null && lon != null) {
           await PeriodCacheService.put('daily', lat, lon, formattedDate, periodData);
         }
       }
@@ -1986,10 +1997,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     try {
       // Try to reach a reliable endpoint
       final response = await http.get(
-        Uri.parse('https://www.google.com'),
-        headers: {'User-Agent': 'Mozilla/5.0'},
+        Uri.parse(AppConfig.apiBaseUrl),
       ).timeout(const Duration(seconds: kConnectivityTestTimeoutSeconds));
-      return response.statusCode == 200;
+      return response.statusCode < 500;
     } catch (e) {
       DebugUtils.logLazy(() => '🌐 Connectivity test failed: $e');
       return false;

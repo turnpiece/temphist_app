@@ -9,7 +9,7 @@ class DebugUtils {
   /// This is zero-cost in production builds - the closure is never called.
   /// Use this for all new debug logging.
   static void logLazy(Object? Function() messageBuilder) {
-    if (kDebugMode && AppConfig.isDebugMode) {
+    if (isEnabled) {
       // ignore: avoid_print
       print('DEBUG: ${messageBuilder()}');
     }
@@ -17,7 +17,7 @@ class DebugUtils {
 
   /// Print debug message with timestamp
   static void logWithTimestamp(String message) {
-    if (kDebugMode && AppConfig.isDebugMode) {
+    if (isEnabled) {
       final timestamp = DateTime.now().toIso8601String();
       // ignore: avoid_print
       print('DEBUG [$timestamp]: $message');
@@ -26,7 +26,7 @@ class DebugUtils {
   
   /// Print debug message with timestamp using lazy evaluation
   static void logWithTimestampLazy(Object? Function() messageBuilder) {
-    if (kDebugMode && AppConfig.isDebugMode) {
+    if (isEnabled) {
       final timestamp = DateTime.now().toIso8601String();
       // ignore: avoid_print
       print('DEBUG [$timestamp]: ${messageBuilder()}');
@@ -35,7 +35,7 @@ class DebugUtils {
   
   /// Print debug message with context
   static void logWithContext(String context, String message) {
-    if (kDebugMode && AppConfig.isDebugMode) {
+    if (isEnabled) {
       // ignore: avoid_print
       print('DEBUG [$context]: $message');
     }
@@ -43,7 +43,7 @@ class DebugUtils {
   
   /// Print debug message with context using lazy evaluation
   static void logWithContextLazy(String context, Object? Function() messageBuilder) {
-    if (kDebugMode && AppConfig.isDebugMode) {
+    if (isEnabled) {
       // ignore: avoid_print
       print('DEBUG [$context]: ${messageBuilder()}');
     }
@@ -52,7 +52,7 @@ class DebugUtils {
   /// Print debug message only in verbose mode
   /// Uses verboseLogs constant for production builds
   static void verbose(String message) {
-    if ((kDebugMode && AppConfig.isDebugMode) || verboseLogs) {
+    if (isVerboseEnabled) {
       // ignore: avoid_print
       print('VERBOSE: $message');
     }
@@ -61,7 +61,7 @@ class DebugUtils {
   /// Print verbose message using lazy evaluation
   /// Uses verboseLogs constant for production builds
   static void verboseLazy(Object? Function() messageBuilder) {
-    if ((kDebugMode && AppConfig.isDebugMode) || verboseLogs) {
+    if (isVerboseEnabled) {
       // ignore: avoid_print
       print('VERBOSE: ${messageBuilder()}');
     }
@@ -70,7 +70,7 @@ class DebugUtils {
   /// Print verbose message with timestamp
   /// Uses verboseLogs constant for production builds
   static void verboseWithTimestamp(String message) {
-    if ((kDebugMode && AppConfig.isDebugMode) || verboseLogs) {
+    if (isVerboseEnabled) {
       final timestamp = DateTime.now().toIso8601String();
       // ignore: avoid_print
       print('VERBOSE [$timestamp]: $message');
@@ -80,7 +80,7 @@ class DebugUtils {
   /// Print verbose message with timestamp using lazy evaluation
   /// Uses verboseLogs constant for production builds
   static void verboseWithTimestampLazy(Object? Function() messageBuilder) {
-    if ((kDebugMode && AppConfig.isDebugMode) || verboseLogs) {
+    if (isVerboseEnabled) {
       final timestamp = DateTime.now().toIso8601String();
       // ignore: avoid_print
       print('VERBOSE [$timestamp]: ${messageBuilder()}');
@@ -90,7 +90,7 @@ class DebugUtils {
   /// Print verbose message with context
   /// Uses verboseLogs constant for production builds
   static void verboseWithContext(String context, String message) {
-    if ((kDebugMode && AppConfig.isDebugMode) || verboseLogs) {
+    if (isVerboseEnabled) {
       // ignore: avoid_print
       print('VERBOSE [$context]: $message');
     }
@@ -99,7 +99,7 @@ class DebugUtils {
   /// Print verbose message with context using lazy evaluation
   /// Uses verboseLogs constant for production builds
   static void verboseWithContextLazy(String context, Object? Function() messageBuilder) {
-    if ((kDebugMode && AppConfig.isDebugMode) || verboseLogs) {
+    if (isVerboseEnabled) {
       // ignore: avoid_print
       print('VERBOSE [$context]: ${messageBuilder()}');
     }

@@ -24,12 +24,6 @@ String cleanupLocationString(String location) {
   // Remove trailing comma if present
   cleaned = cleaned.replaceAll(_trailingComma, '');
 
-  // Ensure we have at least a city and country
-  if (!cleaned.contains(',')) {
-    // If no comma, assume it's just a city, add default country
-    cleaned = '$cleaned, UK';
-  }
-
   return cleaned;
 }
 
