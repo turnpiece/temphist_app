@@ -40,30 +40,34 @@ class LocationSelectorSheet extends StatefulWidget {
     required this.onLocationSelected,
   });
 
-  /// Push this selector as a full-screen modal that slides up from the bottom.
+  /// Show the location selector as a full-screen modal that slides up.
+  ///
+  /// Uses [showGeneralDialog] so the modal fills the entire screen in all
+  /// orientations and properly blocks gestures from the underlying route
+  /// (which fixes scroll issues that occur with PageRouteBuilder in landscape).
   static Future<void> show(
     BuildContext context, {
     required String gpsLocation,
     required String selectedLocation,
     required void Function(String) onLocationSelected,
   }) {
-    return Navigator.of(context).push(
-      PageRouteBuilder<void>(
-        opaque: false,
-        barrierColor: Colors.black54,
-        barrierDismissible: true,
-        pageBuilder: (_, __, ___) => LocationSelectorSheet(
-          gpsLocation: gpsLocation,
-          selectedLocation: selectedLocation,
-          onLocationSelected: onLocationSelected,
-        ),
-        transitionsBuilder: (_, animation, __, child) => SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-          child: child,
-        ),
+    return showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (_, __, ___) => LocationSelectorSheet(
+        gpsLocation: gpsLocation,
+        selectedLocation: selectedLocation,
+        onLocationSelected: onLocationSelected,
+      ),
+      transitionBuilder: (_, animation, __, child) => SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 1),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+        child: child,
       ),
     );
   }
@@ -130,9 +134,11 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Container(
+    // Material (not Scaffold) so that showGeneralDialog gives us the full
+    // screen size correctly in both portrait and landscape.
+    return Material(
+      color: Colors.transparent,
+      child: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,

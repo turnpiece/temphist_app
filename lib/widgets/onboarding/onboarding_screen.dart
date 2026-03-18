@@ -4,6 +4,7 @@ import '../../constants/app_constants.dart';
 import 'pages/onboarding_average_trend_page.dart';
 import 'pages/onboarding_day_page.dart';
 import 'pages/onboarding_location_page.dart';
+import 'pages/onboarding_location_switch_page.dart';
 import 'pages/onboarding_swipe_page.dart';
 import 'pages/onboarding_tap_page.dart';
 import 'pages/onboarding_welcome_page.dart';
@@ -23,7 +24,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late final PageController _controller;
   int _currentPage = 0;
 
-  static const int _pageCount = 6;
+  static const int _pageCount = 7;
   static const List<Widget> _pages = [
     OnboardingWelcomePage(),
     OnboardingDayPage(),
@@ -31,6 +32,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     OnboardingAverageTrendPage(),
     OnboardingSwipePage(),
     OnboardingLocationPage(),
+    OnboardingLocationSwitchPage(),
   ];
 
   @override
@@ -71,55 +73,64 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Stack(
             children: [
               // Full-height layout: pages + dots + button
-              Column(
-                children: [
-                  Expanded(
-                    child: Padding(
-                      // In landscape, pull back the right edge so content
-                      // doesn't slide under the floating Skip button.
-                      padding: MediaQuery.of(context).orientation ==
-                              Orientation.landscape
-                          ? const EdgeInsets.only(right: 72)
-                          : EdgeInsets.zero,
-                      child: PageView(
-                        controller: _controller,
-                        onPageChanged: (i) => setState(() => _currentPage = i),
-                        children: _pages,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  // Dot indicators
-                  _buildDots(),
-                  const SizedBox(height: 24),
-                  // Next / Get Started button
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _next,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: kAccentColour,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          _currentPage < _pageCount - 1 ? 'Next' : 'Get Started',
-                          style: const TextStyle(
-                            fontSize: kFontSizeBody,
-                            fontWeight: FontWeight.bold,
-                          ),
+              Builder(builder: (context) {
+                final isLandscape = MediaQuery.of(context).orientation ==
+                    Orientation.landscape;
+                return Column(
+                  children: [
+                    // In landscape, add top breathing room so the content sits
+                    // roughly as far from the top as the button is from the bottom.
+                    if (isLandscape) const SizedBox(height: 12),
+                    Expanded(
+                      child: Padding(
+                        // Pull back the right edge so content doesn't slide
+                        // under the floating Skip button in landscape.
+                        padding: isLandscape
+                            ? const EdgeInsets.only(right: 72)
+                            : EdgeInsets.zero,
+                        child: PageView(
+                          controller: _controller,
+                          onPageChanged: (i) =>
+                              setState(() => _currentPage = i),
+                          children: _pages,
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 40),
-                ],
-              ),
+                    SizedBox(height: isLandscape ? 6 : 24),
+                    // Dot indicators
+                    _buildDots(),
+                    SizedBox(height: isLandscape ? 6 : 24),
+                    // Next / Get Started button
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _next,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kAccentColour,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            _currentPage < _pageCount - 1
+                                ? 'Next'
+                                : 'Get Started',
+                            style: const TextStyle(
+                              fontSize: kFontSizeBody,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: isLandscape ? 12 : 40),
+                  ],
+                );
+              }),
               // Skip button floats over content in top-right corner
               if (_currentPage < _pageCount - 1)
                 Positioned(
