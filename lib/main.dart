@@ -1776,9 +1776,14 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       locationColour = kGreyLabelColour.withValues(alpha: 0.4);
     } else {
       final gps = _locationService.gpsLocation;
-      String cityOf(String l) => l.split(',').first.trim().toLowerCase();
-      final isAtGps = gps.isEmpty || cityOf(gps) == cityOf(_determinedLocation);
-      locationColour = isAtGps ? kBarCurrentYearColour : kAccentColour;
+      if (gps.isEmpty) {
+        // GPS location not yet known (first-ever launch) — neutral colour.
+        locationColour = kGreyLabelColour.withValues(alpha: 0.7);
+      } else {
+        String cityOf(String l) => l.split(',').first.trim().toLowerCase();
+        final isAtGps = cityOf(gps) == cityOf(_determinedLocation);
+        locationColour = isAtGps ? kBarCurrentYearColour : kAccentColour;
+      }
     }
 
     return Row(

@@ -58,6 +58,11 @@ class LocationService extends ChangeNotifier {
 
   static const Duration _locationCacheExpiration = Duration(minutes: 30);
 
+  /// SharedPreferences key for the GPS-detected location.
+  /// Only written by [determineLocation] — never by [setManualLocation] —
+  /// so it always reflects the device's physical location, not a manual pick.
+  static const String _kGpsLocationKey = 'gpsLocationPersisted';
+
   /// Optional callback invoked when continuous monitoring detects a
   /// significant city change (>1 km moved AND city name differs).
   /// The widget should hook this up to trigger data reloading.
@@ -80,6 +85,16 @@ class LocationService extends ChangeNotifier {
     try {
       String city = kDefaultLocation;
 
+      // Restore the last GPS-detected location from previous sessions so it is
+      // available immediately — even if we return early from the cache below.
+      if (_gpsLocation.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        final saved = prefs.getString(_kGpsLocationKey);
+        if (saved != null && saved.isNotEmpty) {
+          _gpsLocation = saved;
+        }
+      }
+
       // Try cached location first
       final cached = await _loadCachedLocation();
       if (cached != null) {
@@ -88,6 +103,17 @@ class LocationService extends ChangeNotifier {
         _displayLocation = cached['displayLocation']!;
         _isLocationDetermined = true;
         _locationDeterminedAt = DateTime.now();
+
+        // If the persisted GPS key hasn't been written yet (e.g. first run
+        // after this feature was added), fall back to the most recent entry
+        // in location history, which only ever contains GPS-detected cities.
+        if (_gpsLocation.isEmpty) {
+          try {
+            final history = await LocationHistoryService.getAll();
+            if (history.isNotEmpty) _gpsLocation = history.first;
+          } catch (_) {}
+        }
+
         _notify();
         return;
       }
@@ -156,6 +182,10 @@ class LocationService extends ChangeNotifier {
       // Record GPS-detected location to history (manual selections are not recorded)
       await LocationHistoryService.add(city);
       await _cacheLocation(city, _displayLocation);
+      // Persist GPS location separately so it survives across sessions and is
+      // never overwritten by setManualLocation.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kGpsLocationKey, city);
     } catch (e) {
       DebugUtils.logLazy(() => 'LocationService.determineLocation failed: $e');
       _determinedLocation = kDefaultLocation;

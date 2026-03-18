@@ -279,8 +279,10 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
   }
 
   void _select(String apiLocation) {
-    Navigator.of(context).pop();
+    // Clear the main screen's data before popping so the loading state is
+    // already showing when the dismiss animation plays — not the old chart.
     widget.onLocationSelected(apiLocation);
+    Navigator.of(context).pop();
   }
 }
 
