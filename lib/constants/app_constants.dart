@@ -28,7 +28,7 @@ const double kTitleRowBottomPadding = 16.0;
 
 // Main content area margins
 const double kContentHorizontalMargin = 8.0;
-const double kContentVerticalPadding = 32.0;
+const double kContentVerticalPadding = 20.0;
 
 // Chart-specific spacing
 const double kChartHorizontalMargin = 0.0;
