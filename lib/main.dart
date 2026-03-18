@@ -1062,13 +1062,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       } else if (_loadingElapsedSeconds < 45) {
         // Use the display location if available
         final locationText = _displayLocation.isNotEmpty ? _displayLocation : 'your area';
-        newMessage = 'Analyzing temperature patterns in $locationText...';
+        newMessage = 'Analyzing temperature history in $locationText...';
       } else if (_loadingElapsedSeconds < 60) {
         newMessage = 'Calculating averages and trends...';
       } else if (_loadingElapsedSeconds < 80) {
-        newMessage = 'Almost there...';
+        newMessage = 'Please be patient...';
       } else {
-        newMessage = 'The server is taking longer than usual. Please wait...';
+        newMessage = 'Still waiting for the data...';
       }
     }
     
