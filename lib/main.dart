@@ -1371,9 +1371,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<void> _onLocationSelected(String apiLocation) async {
     if (apiLocation == _determinedLocation) return;
 
-    await _locationService.setManualLocation(apiLocation);
-
-    if (!mounted) return;
+    // Clear stale chart data immediately so the old location's chart is never
+    // shown under the new location header.  This must happen before the await
+    // so it wins the race against the setState triggered by setManualLocation's
+    // internal _notify() call.
     setState(() {
       _prefetchGeneration++; // cancels any in-flight prefetch for the old location
       _currentData = null;
@@ -1387,6 +1388,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       _failedYears.clear();
     });
 
+    await _locationService.setManualLocation(apiLocation);
+
+    if (!mounted) return;
     _startAverageTrendDisplayTimer();
     _loadChartDataProgressive().whenComplete(_prefetchPeriodData);
     _startLoadingMessageTimer();
