@@ -233,7 +233,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
       children: [
         // "Current location" shows the physical GPS location, if known.
         if (widget.gpsLocation.isNotEmpty) ...[
-          _SectionHeader('Current location'),
+          _SectionHeader('Current'),
           _LocationRow(
             apiLocation: widget.gpsLocation,
             isSelected: widget.selectedLocation == widget.gpsLocation,
@@ -243,7 +243,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
           ),
         ],
         if (data.recentLocations.isNotEmpty) ...[
-          _SectionHeader('Recent locations'),
+          _SectionHeader('Recent'),
           for (final loc in visibleRecent)
             _LocationRow(
               apiLocation: loc,
@@ -256,7 +256,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
             ),
         ],
         if (data.popularLocations.isNotEmpty) ...[
-          _SectionHeader('Popular locations'),
+          _SectionHeader('Popular'),
           for (final loc in visiblePopular)
             _LocationRow(
               apiLocation: loc,

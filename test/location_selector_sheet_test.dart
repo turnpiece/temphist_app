@@ -39,7 +39,7 @@ void main() {
   });
 
   group('LocationSelectorSheet — current location section', () {
-    testWidgets('shows "CURRENT LOCATION" header when gpsLocation is set',
+    testWidgets('shows "CURRENT" header when gpsLocation is set',
         (tester) async {
       await _pump(
         tester,
@@ -48,16 +48,16 @@ void main() {
           selectedLocation: 'Sydney, Australia',
         ),
       );
-      expect(find.text('CURRENT LOCATION'), findsOneWidget);
+      expect(find.text('CURRENT'), findsOneWidget);
     });
 
-    testWidgets('hides "CURRENT LOCATION" header when gpsLocation is empty',
+    testWidgets('hides "CURRENT" header when gpsLocation is empty',
         (tester) async {
       await _pump(
         tester,
         _sheet(gpsLocation: '', selectedLocation: 'Sydney, Australia'),
       );
-      expect(find.text('CURRENT LOCATION'), findsNothing);
+      expect(find.text('CURRENT'), findsNothing);
     });
 
     testWidgets('displays the GPS city name in current location section',
@@ -75,7 +75,7 @@ void main() {
   });
 
   group('LocationSelectorSheet — popular locations section', () {
-    testWidgets('shows "POPULAR LOCATIONS" section after data loads',
+    testWidgets('shows "POPULAR" section after data loads',
         (tester) async {
       await _pump(
         tester,
@@ -84,12 +84,12 @@ void main() {
           selectedLocation: 'Sydney, Australia',
         ),
       );
-      expect(find.text('POPULAR LOCATIONS'), findsOneWidget);
+      expect(find.text('POPULAR'), findsOneWidget);
     });
   });
 
   group('LocationSelectorSheet — recent locations section', () {
-    testWidgets('shows "RECENT LOCATIONS" section when history is present',
+    testWidgets('shows "RECENT" section when history is present',
         (tester) async {
       SharedPreferences.setMockInitialValues({
         'locationHistory': '["London, United Kingdom","Paris, France"]',
@@ -101,10 +101,10 @@ void main() {
           selectedLocation: 'London, United Kingdom',
         ),
       );
-      expect(find.text('RECENT LOCATIONS'), findsOneWidget);
+      expect(find.text('RECENT'), findsOneWidget);
     });
 
-    testWidgets('hides "RECENT LOCATIONS" when history is empty',
+    testWidgets('hides "RECENT" when history is empty',
         (tester) async {
       await _pump(
         tester,
@@ -113,7 +113,7 @@ void main() {
           selectedLocation: 'Sydney, Australia',
         ),
       );
-      expect(find.text('RECENT LOCATIONS'), findsNothing);
+      expect(find.text('RECENT'), findsNothing);
     });
 
     testWidgets('GPS location is excluded from recent locations list',
