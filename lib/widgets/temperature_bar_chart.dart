@@ -225,17 +225,19 @@ List<TemperatureChartData> generateTrendData(
 ) {
   if (chartData.isEmpty) return [];
 
-  final yearsWithData = chartData
-      .where((d) => d.hasData)
-      .map((d) => int.parse(d.year))
+  final dataWithValues = chartData.where((d) => d.hasData).toList();
+  if (dataWithValues.isEmpty) return [];
+
+  final yearsWithData = dataWithValues
+      .map((d) => int.tryParse(d.year) ?? 0)
+      .where((y) => y > 0)
       .toList();
   if (yearsWithData.isEmpty) return [];
 
   yearsWithData.sort();
   final middleYear = yearsWithData[yearsWithData.length ~/ 2];
 
-  final tempsWithData =
-      chartData.where((d) => d.hasData).map((d) => d.temperature).toList();
+  final tempsWithData = dataWithValues.map((d) => d.temperature).toList();
   final middleTemp = tempsWithData.reduce((a, b) => a + b) / tempsWithData.length;
 
   final minYear = yearsWithData.first;
@@ -265,7 +267,8 @@ List<TemperatureChartData> generateAverageData(
 
   final yearsWithData = chartData
       .where((d) => d.hasData)
-      .map((d) => int.parse(d.year))
+      .map((d) => int.tryParse(d.year) ?? 0)
+      .where((y) => y > 0)
       .toList();
   if (yearsWithData.isEmpty) return [];
 

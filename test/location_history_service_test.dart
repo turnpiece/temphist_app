@@ -8,6 +8,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  tearDown(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   group('LocationHistoryService', () {
     test('getAll returns empty list when nothing stored', () async {
       expect(await LocationHistoryService.getAll(), isEmpty);

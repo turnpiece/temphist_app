@@ -24,7 +24,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late final PageController _controller;
   int _currentPage = 0;
 
-  static const int _pageCount = 7;
   static const List<Widget> _pages = [
     OnboardingWelcomePage(),
     OnboardingDayPage(),
@@ -48,7 +47,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _next() {
-    if (_currentPage < _pageCount - 1) {
+    if (_currentPage < _pages.length - 1) {
       _controller.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -90,8 +89,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             : EdgeInsets.zero,
                         child: PageView(
                           controller: _controller,
-                          onPageChanged: (i) =>
-                              setState(() => _currentPage = i),
+                          onPageChanged: (i) {
+                            if (mounted) setState(() => _currentPage = i);
+                          },
                           children: _pages,
                         ),
                       ),
@@ -116,7 +116,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             ),
                           ),
                           child: Text(
-                            _currentPage < _pageCount - 1
+                            _currentPage < _pages.length - 1
                                 ? 'Next'
                                 : 'Get Started',
                             style: const TextStyle(
@@ -132,7 +132,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 );
               }),
               // Skip button floats over content in top-right corner
-              if (_currentPage < _pageCount - 1)
+              if (_currentPage < _pages.length - 1)
                 Positioned(
                   top: 0,
                   right: 0,
@@ -157,7 +157,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget _buildDots() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(_pageCount, (i) {
+      children: List.generate(_pages.length, (i) {
         final active = i == _currentPage;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),

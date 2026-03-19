@@ -222,12 +222,12 @@ class TemperatureService {
       );
       
       if (responseBody.isEmpty) {
-        throw ApiResponseException('empty response', normalizedEndpoint);
+        throw ApiResponseException('empty response from $normalizedEndpoint');
       }
 
       final json = jsonDecode(responseBody);
       if (json == null) {
-        throw ApiResponseException('null response body', normalizedEndpoint);
+        throw ApiResponseException('null response body from $normalizedEndpoint');
       }
       
       return json;
@@ -272,7 +272,7 @@ class TemperatureService {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
       },
-    ).timeout(const Duration(seconds: 60));
+    ).timeout(const Duration(seconds: kApiLongTimeoutSeconds));
 
     if (response.statusCode == 429) {
       throw RateLimitException('Rate limit exceeded fetching v1 records');
@@ -307,7 +307,7 @@ class TemperatureService {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
       },
-    ).timeout(const Duration(seconds: 60));
+    ).timeout(const Duration(seconds: kApiLongTimeoutSeconds));
 
     if (response.statusCode == 429) {
       throw RateLimitException('Rate limit exceeded fetching $subresource');
@@ -509,7 +509,7 @@ class TemperatureService {
             'Authorization': 'Bearer $token',
             'Accept': 'application/json',
           },
-        ).timeout(const Duration(seconds: kFirebaseAuthTimeoutSeconds));
+        ).timeout(const Duration(seconds: kJobPollTimeoutSeconds));
 
         if (response.statusCode == 429) {
           throw RateLimitException('Rate limit exceeded polling job');
@@ -570,7 +570,7 @@ class TemperatureService {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
       },
-    ).timeout(const Duration(seconds: 60));
+    ).timeout(const Duration(seconds: kApiLongTimeoutSeconds));
 
     if (response.statusCode == 429) {
       throw RateLimitException('Rate limit exceeded on sync fallback');

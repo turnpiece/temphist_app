@@ -57,7 +57,9 @@ class LocationHistoryService {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is List) return decoded.cast<String>();
-    } catch (_) {}
+    } catch (e) {
+      DebugUtils.logLazy(() => 'LocationHistoryService._decode failed: $e');
+    }
     return [];
   }
 }

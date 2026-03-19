@@ -8,6 +8,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  tearDown(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   group('LocationService — gpsLocation vs selectedLocation separation', () {
     test('gpsLocation is empty initially', () {
       expect(LocationService().gpsLocation, '');

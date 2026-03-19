@@ -38,6 +38,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  tearDown(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   group('LocationSelectorSheet — current location section', () {
     testWidgets('shows "CURRENT" header when gpsLocation is set',
         (tester) async {

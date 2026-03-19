@@ -890,8 +890,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           // Check if this is a network error and test actual connectivity
           if (_isNetworkError(e.toString())) {
             DebugUtils.logLazy(() => '🌐 Potential network error detected during retry, testing connectivity');
-            final isActuallyOffline = await _testConnectivity();
-            if (!isActuallyOffline) {
+            final isReachable = await _testConnectivity();
+            if (!isReachable) {
               if (mounted) {
                 setState(() {
                   _isOnline = false;
@@ -917,7 +917,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Update the current data with retried results and refresh UI
       DebugUtils.logLazy(() => '📊 Retry completed: $successCount/${_failedYears.length} years successfully retried');
 
-      if (mounted) {
+      if (mounted && _currentData != null) {
         setState(() {
           _currentData!['chartData'] = chartData;
         });
@@ -2152,7 +2152,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   Widget _buildResetAllButton() {
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         setState(() {
           _simulateAverageFailure = false;
           _simulateTrendFailure = false;
@@ -2166,8 +2166,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           ),
         );
         // Clear cache and refresh to ensure clean state
-        _clearCache();
-        _handleRefresh();
+        await _clearCache();
+        if (mounted) _handleRefresh();
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

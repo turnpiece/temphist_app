@@ -111,7 +111,9 @@ class LocationService extends ChangeNotifier {
           try {
             final history = await LocationHistoryService.getAll();
             if (history.isNotEmpty) _gpsLocation = history.first;
-          } catch (_) {}
+          } catch (e) {
+            DebugUtils.logLazy(() => 'Failed to load location history: $e');
+          }
         }
 
         _notify();
@@ -189,7 +191,8 @@ class LocationService extends ChangeNotifier {
     } catch (e) {
       DebugUtils.logLazy(() => 'LocationService.determineLocation failed: $e');
       _determinedLocation = kDefaultLocation;
-      _gpsLocation = kDefaultLocation;
+      // Do NOT set _gpsLocation here — it should only reflect actual GPS results
+      // so the "Return to GPS location" option remains accurate.
       _displayLocation = _extractDisplayLocation(kDefaultLocation);
       _isLocationDetermined = true;
       _locationDeterminedAt = DateTime.now();
