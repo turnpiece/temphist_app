@@ -324,11 +324,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   // Track if progressive loading has completed to prevent flash of "no data" message
   bool _progressiveLoadingCompleted = false;
   
-  // Track current loading operation to prevent race conditions
-  bool _isLoadingOperationActive = false;
-
-  // Incremented whenever the location changes so in-flight prefetch polls
-  // for the old location can detect they are stale and bail out early.
+  // Incremented whenever the location changes so in-flight data loads and
+  // prefetch polls for the old location can detect they are stale and bail
+  // out early, preventing stale data from overwriting the new location's
+  // loading state.
+  int _loadGeneration = 0;
   int _prefetchGeneration = 0;
   
   // Track chart data loading failures
@@ -1081,12 +1081,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Future<void> _loadChartDataProgressive() async {
-    // Prevent multiple concurrent loading operations
-    if (_isLoadingOperationActive) {
-      DebugUtils.logLazy(() => '_loadChartDataProgressive: Already loading, skipping duplicate request');
-      return;
-    }
-    
+    // Capture the current generation so we can detect if the location changed
+    // while we were awaiting network data.  If it did, our results are stale
+    // and must be silently discarded.
+    final gen = _loadGeneration;
+
     // Check network connectivity before attempting to load data
     if (!_isOnline) {
       DebugUtils.logLazy(() => '📡 No network connection, skipping data load');
@@ -1097,8 +1096,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       return;
     }
     
-    _isLoadingOperationActive = true;
-    DebugUtils.logLazy(() => '_loadChartDataProgressive: Starting progressive chart data load');
+    DebugUtils.logLazy(() => '_loadChartDataProgressive: Starting progressive chart data load (gen=$gen)');
     
     try {
       final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
@@ -1160,27 +1158,31 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               ))
           .toList();
 
-      if (mounted) {
-        setState(() {
-          _failedYears
-            ..clear()
-            ..addAll(periodData.metadata?.missingYears.map((m) => m.year) ?? []);
-
-          _chartDataFailed = _failedYears.isNotEmpty;
-
-          _currentData = _createResultMap(
-            chartData: chartData,
-            averageTemperature: periodData.average.mean,
-            trendSlope: periodData.trend.slope,
-            summaryText: periodData.summary,
-            dateToUse: dateToUse,
-            city: city,
-          );
-
-          _isDataLoading = false;
-          _progressiveLoadingCompleted = true;
-        });
+      // Discard results if the location changed while we were fetching.
+      if (!mounted || gen != _loadGeneration) {
+        DebugUtils.logLazy(() => '_loadChartDataProgressive: stale result (gen=$gen, current=$_loadGeneration), discarding');
+        return;
       }
+
+      setState(() {
+        _failedYears
+          ..clear()
+          ..addAll(periodData.metadata?.missingYears.map((m) => m.year) ?? []);
+
+        _chartDataFailed = _failedYears.isNotEmpty;
+
+        _currentData = _createResultMap(
+          chartData: chartData,
+          averageTemperature: periodData.average.mean,
+          trendSlope: periodData.trend.slope,
+          summaryText: periodData.summary,
+          dateToUse: dateToUse,
+          city: city,
+        );
+
+        _isDataLoading = false;
+        _progressiveLoadingCompleted = true;
+      });
 
       // Stop loading message timer when data loading completes
       _stopLoadingMessageTimer();
@@ -1218,26 +1220,29 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         );
       }
 
-      if (mounted) {
-        setState(() {
-          if (e is RateLimitException) {
-            _chartDataFailedDueToRateLimit = true;
-          } else if (e is TimeoutException) {
-            _chartDataTimedOut = true;
-          }
-          _chartDataFailed = true;
-          _isDataLoading = false;
-          _progressiveLoadingCompleted = true;
-          if (minimalData != null) _currentData = minimalData;
-        });
-      }
+      // Discard error state if the location changed while we were fetching.
+      if (!mounted || gen != _loadGeneration) return;
+
+      setState(() {
+        if (e is RateLimitException) {
+          _chartDataFailedDueToRateLimit = true;
+        } else if (e is TimeoutException) {
+          _chartDataTimedOut = true;
+        }
+        _chartDataFailed = true;
+        _isDataLoading = false;
+        _progressiveLoadingCompleted = true;
+        if (minimalData != null) _currentData = minimalData;
+      });
 
       return;
     } finally {
-      // Always reset the loading operation flag and ensure loading is marked as completed
-      _isLoadingOperationActive = false;
-      _isDataLoading = false;
-      _progressiveLoadingCompleted = true;
+      // Only update loading flags if this is still the current generation.
+      // A newer load may already be in progress — don't overwrite its state.
+      if (gen == _loadGeneration) {
+        _isDataLoading = false;
+        _progressiveLoadingCompleted = true;
+      }
       _startCoachmarkIfPending();
     }
   }
@@ -1387,6 +1392,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // so it wins the race against the setState triggered by setManualLocation's
     // internal _notify() call.
     setState(() {
+      _loadGeneration++;     // cancels any in-flight data load for the old location
       _prefetchGeneration++; // cancels any in-flight prefetch for the old location
       _currentData = null;
       _isDataLoading = true;
@@ -3269,7 +3275,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   void _startListeningToLocationChanges() {
     _locationService.startListeningToLocationChanges(
-      isLoadingGuard: () => _isDataLoading || _isLoadingOperationActive,
+      isLoadingGuard: () => _isDataLoading,
     );
   }
 
