@@ -29,6 +29,9 @@ class PeriodTemperatureData {
     this.metadata,
   });
 
+  /// Whether the API returned data already converted to Fahrenheit.
+  bool get isFahrenheit => unitGroup == 'fahrenheit';
+
   factory PeriodTemperatureData.fromJson(Map<String, dynamic> json) {
     return PeriodTemperatureData(
       period: json['period'] ?? '',

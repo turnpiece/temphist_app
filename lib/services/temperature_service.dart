@@ -152,15 +152,19 @@ class TemperatureService {
     return _fetchTemperatureData('weather', city, date);
   }
 
-  Future<TemperatureData> fetchCompleteData(String city, String date) async {
+  Future<TemperatureData> fetchCompleteData(String city, String date, {
+    String? unitGroup,
+  }) async {
     // Extract month-day from the date (e.g., "2025-06-18" -> "06-18")
     final monthDay = date.length >= 10 ? date.substring(5) : date;
-    final json = await _fetchV1Records('daily', city, monthDay);
+    final json = await _fetchV1Records('daily', city, monthDay, unitGroup: unitGroup);
     return TemperatureData.fromJson(json);
   }
 
   /// Common helper function for fetching data from API endpoints
-  Future<Map<String, dynamic>> _fetchApiData(String endpoint, String city, String date) async {
+  Future<Map<String, dynamic>> _fetchApiData(String endpoint, String city, String date, {
+    String? unitGroup,
+  }) async {
     final normalizedEndpoint = endpoint.replaceAll('/', '').toLowerCase();
 
     // Legacy endpoints for summary/average/trend were removed; route to v1.
@@ -168,7 +172,8 @@ class TemperatureService {
         normalizedEndpoint == 'average' ||
         normalizedEndpoint == 'trend') {
       final json =
-          await _fetchV1Subresource('daily', city, date, normalizedEndpoint);
+          await _fetchV1Subresource('daily', city, date, normalizedEndpoint,
+              unitGroup: unitGroup);
       final data = json['data'];
       if (normalizedEndpoint == 'summary') {
         return {
@@ -251,18 +256,36 @@ class TemperatureService {
     }
   }
 
+  /// Build a v1 records URL, optionally appending `?unit_group=...`.
+  Uri _buildV1Url(
+    String apiPeriod,
+    String encodedLocation,
+    String identifier, {
+    String? suffix,
+    String? unitGroup,
+  }) {
+    final path = suffix != null
+        ? '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier/$suffix'
+        : '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier';
+    final base = Uri.parse(path);
+    if (unitGroup != null && unitGroup != 'celsius') {
+      return base.replace(queryParameters: {'unit_group': unitGroup});
+    }
+    return base;
+  }
+
   /// Fetch v1 records data (full response) for a specific period and identifier.
   Future<Map<String, dynamic>> _fetchV1Records(
     String period,
     String location,
-    String identifier,
-  ) async {
+    String identifier, {
+    String? unitGroup,
+  }) async {
     final token = await getAuthToken();
     final apiPeriod = _apiPeriodPath(period);
     final encodedLocation = Uri.encodeComponent(location);
-    final url = Uri.parse(
-      '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier',
-    );
+    final url = _buildV1Url(apiPeriod, encodedLocation, identifier,
+        unitGroup: unitGroup);
 
     DebugUtils.logLazy(() => 'Fetching v1 records: $url');
 
@@ -290,14 +313,14 @@ class TemperatureService {
     String period,
     String location,
     String identifier,
-    String subresource,
-  ) async {
+    String subresource, {
+    String? unitGroup,
+  }) async {
     final token = await getAuthToken();
     final apiPeriod = _apiPeriodPath(period);
     final encodedLocation = Uri.encodeComponent(location);
-    final url = Uri.parse(
-      '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier/$subresource',
-    );
+    final url = _buildV1Url(apiPeriod, encodedLocation, identifier,
+        suffix: subresource, unitGroup: unitGroup);
 
     DebugUtils.logLazy(() => 'Fetching v1 subresource ($subresource): $url');
 
@@ -326,8 +349,11 @@ class TemperatureService {
     return TemperatureData.fromJson(json);
   }
 
-  Future<Map<String, dynamic>> fetchAverageData(String city, String date) async {
-    final json = await _fetchV1Subresource('daily', city, date, 'average');
+  Future<Map<String, dynamic>> fetchAverageData(String city, String date, {
+    String? unitGroup,
+  }) async {
+    final json = await _fetchV1Subresource('daily', city, date, 'average',
+        unitGroup: unitGroup);
     final data = json['data'];
     final mean = (data is Map<String, dynamic>) ? data['mean'] : null;
     return {
@@ -340,8 +366,11 @@ class TemperatureService {
     };
   }
 
-  Future<Map<String, dynamic>> fetchTrendData(String city, String date) async {
-    final json = await _fetchV1Subresource('daily', city, date, 'trend');
+  Future<Map<String, dynamic>> fetchTrendData(String city, String date, {
+    String? unitGroup,
+  }) async {
+    final json = await _fetchV1Subresource('daily', city, date, 'trend',
+        unitGroup: unitGroup);
     final data = json['data'];
     final slope = (data is Map<String, dynamic>) ? data['slope'] : null;
     final unit = (data is Map<String, dynamic>) ? data['unit'] : null;
@@ -356,8 +385,11 @@ class TemperatureService {
     };
   }
 
-  Future<Map<String, dynamic>> fetchSummaryData(String city, String date) async {
-    final json = await _fetchV1Subresource('daily', city, date, 'summary');
+  Future<Map<String, dynamic>> fetchSummaryData(String city, String date, {
+    String? unitGroup,
+  }) async {
+    final json = await _fetchV1Subresource('daily', city, date, 'summary',
+        unitGroup: unitGroup);
     return {
       'summary': json['data'],
       'metadata': json['metadata'],
@@ -392,15 +424,18 @@ class TemperatureService {
   /// [period] is one of 'daily', 'week', 'month', 'year'.
   /// [location] is the city/location string (e.g. "London, UK").
   /// [identifier] is the MM-DD date string (e.g. "02-06").
+  /// [unitGroup] optional unit preference ('fahrenheit' or null for Celsius).
   /// [onProgress] optional callback invoked while the job is processing.
   Future<PeriodTemperatureData> fetchPeriodData(
     String period,
     String location,
     String identifier, {
+    String? unitGroup,
     void Function(AsyncJobStatus)? onProgress,
     bool Function()? isCancelled,
   }) async {
-    final cacheKey = '${_apiPeriodPath(period)}|$location|$identifier';
+    final unitSuffix = (unitGroup != null && unitGroup != 'celsius') ? '|$unitGroup' : '';
+    final cacheKey = '${_apiPeriodPath(period)}|$location|$identifier$unitSuffix';
     final cached = _periodCache[cacheKey];
     if (cached != null) {
       return cached;
@@ -408,7 +443,8 @@ class TemperatureService {
 
     try {
       DebugUtils.logLazy(() => 'Attempting async fetch for $period data...');
-      final jobId = await _createAsyncJob(period, location, identifier);
+      final jobId = await _createAsyncJob(period, location, identifier,
+          unitGroup: unitGroup);
       final result = await _pollJobStatus(
         jobId,
         onProgress: onProgress,
@@ -433,7 +469,8 @@ class TemperatureService {
         DebugUtils.logLazy(() => 'Async job failed ($e), falling back to sync API...');
         try {
           final fallback =
-              await _fetchPeriodDataSync(period, location, identifier);
+              await _fetchPeriodDataSync(period, location, identifier,
+                  unitGroup: unitGroup);
           DebugUtils.logLazy(() => 'Synchronous fallback successful for $period data');
           _periodCache[cacheKey] = fallback;
           return fallback;
@@ -449,14 +486,14 @@ class TemperatureService {
   Future<String> _createAsyncJob(
     String period,
     String location,
-    String identifier,
-  ) async {
+    String identifier, {
+    String? unitGroup,
+  }) async {
     final token = await getAuthToken();
     final apiPeriod = _apiPeriodPath(period);
     final encodedLocation = Uri.encodeComponent(location);
-    final url = Uri.parse(
-      '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier/async',
-    );
+    final url = _buildV1Url(apiPeriod, encodedLocation, identifier,
+        suffix: 'async', unitGroup: unitGroup);
 
     DebugUtils.logLazy(() => 'Creating async job: $url');
 
@@ -553,14 +590,14 @@ class TemperatureService {
   Future<PeriodTemperatureData> _fetchPeriodDataSync(
     String period,
     String location,
-    String identifier,
-  ) async {
+    String identifier, {
+    String? unitGroup,
+  }) async {
     final token = await getAuthToken();
     final apiPeriod = _apiPeriodPath(period);
     final encodedLocation = Uri.encodeComponent(location);
-    final url = Uri.parse(
-      '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier',
-    );
+    final url = _buildV1Url(apiPeriod, encodedLocation, identifier,
+        unitGroup: unitGroup);
 
     DebugUtils.logLazy(() => 'Sync fallback: $url');
 

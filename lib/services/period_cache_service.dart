@@ -6,9 +6,10 @@ import '../utils/debug_utils.dart';
 /// Hive-backed disk cache for all period temperature responses
 /// (daily, week, month, year).
 ///
-/// Key format: `{period}:{lat:.3f}:{lon:.3f}:{identifier}`
+/// Key format: `{period}:{lat:.3f}:{lon:.3f}:{identifier}[:{unitGroup}]`
 ///   - daily  → identifier is `yyyy-MM-dd`
 ///   - others → identifier is `MM-dd`
+///   - unitGroup is appended only when non-Celsius (e.g. `:fahrenheit`)
 ///
 /// TTL: 7 days.
 ///
@@ -47,10 +48,11 @@ class PeriodCacheService {
     String period,
     double lat,
     double lon,
-    String identifier,
-  ) {
+    String identifier, {
+    String? unitGroup,
+  }) {
     try {
-      final raw = _box?.get(_key(period, lat, lon, identifier));
+      final raw = _box?.get(_key(period, lat, lon, identifier, unitGroup: unitGroup));
       if (raw == null || raw is! Map) return false;
       final map = Map<String, dynamic>.from(raw);
       final cachedAtValue = map['_cachedAt'];
@@ -68,12 +70,13 @@ class PeriodCacheService {
     String period,
     double lat,
     double lon,
-    String identifier,
-  ) async {
+    String identifier, {
+    String? unitGroup,
+  }) async {
     final box = _box;
     if (box == null) return null;
 
-    final key = _key(period, lat, lon, identifier);
+    final key = _key(period, lat, lon, identifier, unitGroup: unitGroup);
     try {
       final raw = box.get(key);
       if (raw == null || raw is! Map) return null;
@@ -120,12 +123,13 @@ class PeriodCacheService {
     double lon,
     String identifier,
     PeriodTemperatureData data, {
+    String? unitGroup,
     DateTime? cachedAt,
   }) async {
     final box = _box;
     if (box == null) return;
 
-    final key = _key(period, lat, lon, identifier);
+    final key = _key(period, lat, lon, identifier, unitGroup: unitGroup);
     await box.put(key, {
       '_cachedAt': (cachedAt ?? DateTime.now()).millisecondsSinceEpoch,
       'data': jsonEncode(_toJson(data)),
@@ -141,9 +145,15 @@ class PeriodCacheService {
     String period,
     double lat,
     double lon,
-    String identifier,
-  ) =>
-      '$period:${lat.toStringAsFixed(3)}:${lon.toStringAsFixed(3)}:$identifier';
+    String identifier, {
+    String? unitGroup,
+  }) {
+    final base = '$period:${lat.toStringAsFixed(3)}:${lon.toStringAsFixed(3)}:$identifier';
+    if (unitGroup != null && unitGroup != 'celsius') {
+      return '$base:$unitGroup';
+    }
+    return base;
+  }
 
   static Map<String, dynamic> _toJson(PeriodTemperatureData d) => {
         'period': d.period,

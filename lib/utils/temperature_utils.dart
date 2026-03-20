@@ -6,21 +6,35 @@
 /// Convert a Celsius value to Fahrenheit.
 double celsiusToFahrenheit(double celsius) => celsius * 9 / 5 + 32;
 
-/// Format a temperature (stored in Celsius) for display.
+/// Format a temperature for display.
 ///
-/// Returns e.g. `"14.2°C"` or `"57.6°F"` depending on [isFahrenheit].
-String formatTemperature(double celsius, {required bool isFahrenheit}) {
-  final value = isFahrenheit ? celsiusToFahrenheit(celsius) : celsius;
+/// When [isFahrenheit] is true and [convert] is true (the default), the value
+/// is assumed to be in Celsius and is converted to Fahrenheit.  When [convert]
+/// is false the value is already in the target unit and only formatting
+/// (unit label and decimal places) is applied.
+String formatTemperature(
+  double value, {
+  required bool isFahrenheit,
+  bool convert = true,
+}) {
+  final display = (isFahrenheit && convert) ? celsiusToFahrenheit(value) : value;
   final unit = isFahrenheit ? '°F' : '°C';
-  return '${value.toStringAsFixed(1)}$unit';
+  final decimals = isFahrenheit ? 0 : 1;
+  return '${display.toStringAsFixed(decimals)}$unit';
 }
 
-/// Format a trend slope (°C per decade) for display.
+/// Format a trend slope for display.
 ///
-/// The slope is a *rate*, so only the scaling factor (×1.8) applies — no +32
-/// offset.  Returns e.g. `"Trend: Rising at 0.3°F/decade"`.
-String formatTrendSlope(double slopePerDecade, {required bool isFahrenheit}) {
-  final value = isFahrenheit ? slopePerDecade * 9 / 5 : slopePerDecade;
+/// When [isFahrenheit] is true and [convert] is true (the default), the slope
+/// is assumed to be in °C/decade and is scaled by ×1.8 (no +32 offset, since
+/// slope is a rate).  When [convert] is false the value is already in the
+/// target unit.
+String formatTrendSlope(
+  double slopePerDecade, {
+  required bool isFahrenheit,
+  bool convert = true,
+}) {
+  final value = (isFahrenheit && convert) ? slopePerDecade * 9 / 5 : slopePerDecade;
   final unit = isFahrenheit ? '°F/decade' : '°C/decade';
   if (value.abs() < 0.05) {
     return 'Trend: Steady at ${value.abs().toStringAsFixed(1)}$unit';

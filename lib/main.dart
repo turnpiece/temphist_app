@@ -373,7 +373,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   void _onUnitChanged() {
-    if (mounted) setState(() {});
+    // The API may return different data (especially summaries) depending on the
+    // unit.  Clear the in-memory cache and re-fetch so the correct unit is
+    // requested.  Once the API supports the unit_group parameter, summaries
+    // will arrive in the correct unit; until then the chart/average/trend use
+    // client-side conversion as a fallback.
+    TemperatureService.clearCache();
+    if (mounted) {
+      setState(() {});
+      _loadChartDataProgressive().whenComplete(_prefetchPeriodData);
+    }
   }
 
   @override
@@ -976,16 +985,19 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         if (isCancelled()) return;
         try {
           DebugUtils.logLazy(() => 'Prefetching $period data');
+          final unitGroup = _isFahrenheit ? 'fahrenheit' : null;
           final data = await service.fetchPeriodData(
             period,
             location,
             identifier,
+            unitGroup: unitGroup,
             isCancelled: isCancelled,
           );
           // Write period views to Hive so they survive hot restart / relaunch.
           // (daily is already handled by _loadChartDataProgressive.)
           if (!isCancelled() && period != 'daily' && lat != null && lon != null) {
-            await PeriodCacheService.put(period, lat, lon, identifier, data);
+            await PeriodCacheService.put(period, lat, lon, identifier, data,
+                unitGroup: unitGroup);
           }
         } catch (e) {
           DebugUtils.logLazy(() => 'Prefetch $period failed: $e');
@@ -1150,18 +1162,23 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       final isAtGpsLocation =
           gps.isEmpty || cityOf(gps) == cityOf(city);
 
+      final unitGroup = _isFahrenheit ? 'fahrenheit' : null;
+
       PeriodTemperatureData periodData;
       final cached =
           (isAtGpsLocation && lat != null && lon != null)
-              ? await PeriodCacheService.get('daily', lat, lon, formattedDate)
+              ? await PeriodCacheService.get('daily', lat, lon, formattedDate,
+                    unitGroup: unitGroup)
               : null;
       if (cached != null) {
         periodData = cached;
         DebugUtils.logLazy(() => '_loadChartDataProgressive: served from Hive cache');
       } else {
-        periodData = await service.fetchPeriodData('daily', city, identifier);
+        periodData = await service.fetchPeriodData('daily', city, identifier,
+            unitGroup: unitGroup);
         if (isAtGpsLocation && lat != null && lon != null) {
-          await PeriodCacheService.put('daily', lat, lon, formattedDate, periodData);
+          await PeriodCacheService.put('daily', lat, lon, formattedDate, periodData,
+              unitGroup: unitGroup);
         }
       }
 
@@ -1194,6 +1211,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           summaryText: periodData.summary,
           dateToUse: dateToUse,
           city: city,
+          dataUnitGroup: periodData.unitGroup,
         );
 
         _isDataLoading = false;
@@ -1584,8 +1602,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     final displayDate = data['displayDate'] as String?;
     // Use display location instead of full location from API data
     final city = _displayLocation.isNotEmpty ? _displayLocation : (data['city'] as String?);
-    
-    DebugUtils.logLazy(() => 'Average temperature for plot band: $averageTemperature°C');
+    final dataUnitGroup = (data['dataUnitGroup'] as String?) ?? 'celsius';
+
+    // If the API already returned data in the user's preferred unit, no
+    // client-side conversion is needed.  Otherwise fall back to converting.
+    final needsClientConversion = _isFahrenheit && dataUnitGroup != 'fahrenheit';
+
+    DebugUtils.logLazy(() => 'Average temperature for plot band: $averageTemperature (unit: $dataUnitGroup)');
 
 
     return _buildChartContent(
@@ -1596,6 +1619,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       displayDate: displayDate,
       city: city,
       chartHeight: chartHeight,
+      needsClientConversion: needsClientConversion,
     );
   }
 
@@ -2712,6 +2736,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     required String? displayDate,
     required String? city,
     required double chartHeight,
+    bool needsClientConversion = true,
   }) {
     // If no data loaded yet, show the loading placeholder
     final validData = chartData.where((data) => data.hasData).toList();
@@ -2752,6 +2777,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           isLoading: _isDataLoading,
           height: chartHeight,
           isFahrenheit: _isFahrenheit,
+          needsConversion: needsClientConversion,
         ),
         // Consistent spacing below chart - always show this
         const SizedBox(height: kSectionTopPadding),
@@ -2760,7 +2786,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           Padding(
             padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
             child: Text(
-              'Average: ${formatTemperature(averageTemperature, isFahrenheit: _isFahrenheit)}',
+              'Average: ${formatTemperature(averageTemperature, isFahrenheit: _isFahrenheit, convert: needsClientConversion)}',
               style: TextStyle(color: kAverageColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
               textAlign: TextAlign.left,
             ),
@@ -2770,7 +2796,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           Padding(
             padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
             child: Text(
-              formatTrendSlope(trendSlope, isFahrenheit: _isFahrenheit),
+              formatTrendSlope(trendSlope, isFahrenheit: _isFahrenheit, convert: needsClientConversion),
               style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
               textAlign: TextAlign.left,
             ),
@@ -3300,6 +3326,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           'summary': _currentData!['summary'],
           'displayDate': _currentData!['displayDate'],
           'city': _currentData!['city'],
+          'dataUnitGroup': _currentData!['dataUnitGroup'],
         };
         _currentData = essentialData;
       }
@@ -3372,6 +3399,7 @@ Map<String, dynamic> _createResultMap({
   required String? summaryText,
   required DateTime dateToUse,
   required String city,
+  String dataUnitGroup = 'celsius',
 }) {
   return {
     'chartData': chartData,
@@ -3380,6 +3408,7 @@ Map<String, dynamic> _createResultMap({
     'summary': summaryText,
     'displayDate': _formatDayMonth(dateToUse),
     'city': city,
+    'dataUnitGroup': dataUnitGroup,
   };
 }
 

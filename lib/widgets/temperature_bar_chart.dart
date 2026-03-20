@@ -33,6 +33,13 @@ class TemperatureBarChart extends StatelessWidget {
   final double height;
   final bool isFahrenheit;
 
+  /// Whether the chart values need client-side Celsius→Fahrenheit conversion.
+  ///
+  /// When the API already returns Fahrenheit data this should be `false`
+  /// (data is pre-converted).  Defaults to `true` to preserve the existing
+  /// behaviour where the app always converts from Celsius.
+  final bool needsConversion;
+
   const TemperatureBarChart({
     super.key,
     required this.chartData,
@@ -41,17 +48,19 @@ class TemperatureBarChart extends StatelessWidget {
     this.isLoading = false,
     this.height = 600,
     this.isFahrenheit = false,
+    this.needsConversion = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Convert all temperatures at the display layer when Fahrenheit is active.
-    // This ensures axis range, average/trend lines, and tooltips all operate
-    // on the same converted values.
-    double conv(double c) => isFahrenheit ? celsiusToFahrenheit(c) : c;
+    // Convert temperatures at the display layer only when needed (i.e. the API
+    // returned Celsius but the user wants Fahrenheit).  When needsConversion is
+    // false the data is already in the target unit.
+    final shouldConvert = isFahrenheit && needsConversion;
+    double conv(double c) => shouldConvert ? celsiusToFahrenheit(c) : c;
     final unitLabel = temperatureUnitLabel(isFahrenheit: isFahrenheit);
 
-    final displayData = isFahrenheit
+    final displayData = shouldConvert
         ? chartData
             .map((d) => TemperatureChartData(
                   year: d.year,
@@ -64,7 +73,7 @@ class TemperatureBarChart extends StatelessWidget {
     final displayAvg = averageTemperature != null ? conv(averageTemperature!) : null;
     // Trend slope is a rate (°C/decade) — scale by 1.8, no +32 offset.
     final displaySlope = trendSlope != null
-        ? (isFahrenheit ? trendSlope! * 9 / 5 : trendSlope!)
+        ? (shouldConvert ? trendSlope! * 9 / 5 : trendSlope!)
         : null;
 
     final validData = displayData.where((d) => d.hasData).toList();
@@ -153,7 +162,7 @@ class TemperatureBarChart extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    '${d.year}: ${d.temperature.toStringAsFixed(1)}$unitLabel',
+                    '${d.year}: ${d.temperature.toStringAsFixed(isFahrenheit ? 0 : 1)}$unitLabel',
                     style: const TextStyle(
                         color: Colors.white, fontSize: kFontSizeBody - 4),
                   ),

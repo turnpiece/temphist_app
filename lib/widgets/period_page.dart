@@ -77,8 +77,9 @@ class PeriodPageState extends State<PeriodPage>
   @override
   void didUpdateWidget(PeriodPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.location != widget.location) {
-      // Location changed — re-fetch
+    if (oldWidget.location != widget.location ||
+        oldWidget.isFahrenheit != widget.isFahrenheit) {
+      // Location or unit changed — re-fetch to get correct summary text
       _lastFetchKey = '';
       _loadIfNeeded();
     }
@@ -96,7 +97,10 @@ class PeriodPageState extends State<PeriodPage>
     return DateFormat('MM-dd').format(dateToUse);
   }
 
-  String get _fetchKey => '${widget.periodKey}|${widget.location}|$_identifier';
+  String get _unitGroup => widget.isFahrenheit ? 'fahrenheit' : 'celsius';
+
+  String get _fetchKey =>
+      '${widget.periodKey}|${widget.location}|$_identifier|$_unitGroup';
 
   void _loadIfNeeded() {
     if (widget.location.isEmpty) return;
@@ -118,10 +122,12 @@ class PeriodPageState extends State<PeriodPage>
       final lon = widget.longitude;
 
       // Cache-first: serve from Hive when available, fall through on miss.
+      final unitGroup = widget.isFahrenheit ? 'fahrenheit' : null;
       PeriodTemperatureData? data;
       if (lat != null && lon != null) {
         data = await PeriodCacheService.get(
           widget.periodKey, lat, lon, _identifier,
+          unitGroup: unitGroup,
         );
         if (data != null) {
           DebugUtils.logLazy(
@@ -136,6 +142,7 @@ class PeriodPageState extends State<PeriodPage>
           widget.periodKey,
           widget.location,
           _identifier,
+          unitGroup: unitGroup,
           onProgress: (status) {
             if (mounted) {
               setState(() {
@@ -150,6 +157,7 @@ class PeriodPageState extends State<PeriodPage>
         if (lat != null && lon != null) {
           await PeriodCacheService.put(
             widget.periodKey, lat, lon, _identifier, data,
+            unitGroup: unitGroup,
           );
         }
       }
@@ -357,32 +365,42 @@ class PeriodPageState extends State<PeriodPage>
             ),
           ),
         ),
-      // Chart
-      TemperatureBarChart(
-        chartData: chartData,
-        averageTemperature: data.average.mean,
-        trendSlope: data.trend.slope,
-        isLoading: false,
-        height: 800,
-        isFahrenheit: widget.isFahrenheit,
-      ),
-      const SizedBox(height: kSectionBottomPadding),
-      // Average text
-      Padding(
-        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-        child: Text(
-          'Average: ${formatTemperature(data.average.mean, isFahrenheit: widget.isFahrenheit)}',
-          style: const TextStyle(color: kAverageColour, fontSize: kFontSizeBody),
-        ),
-      ),
-      // Trend text
-      Padding(
-        padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-        child: Text(
-          formatTrendSlope(data.trend.slope, isFahrenheit: widget.isFahrenheit),
-          style: const TextStyle(color: kTrendColour, fontSize: kFontSizeBody),
-        ),
-      ),
+      // Chart — skip client-side conversion when the API already returned
+      // data in the requested unit.
+      Builder(builder: (_) {
+        final needsConversion = widget.isFahrenheit && !data.isFahrenheit;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TemperatureBarChart(
+              chartData: chartData,
+              averageTemperature: data.average.mean,
+              trendSlope: data.trend.slope,
+              isLoading: false,
+              height: 800,
+              isFahrenheit: widget.isFahrenheit,
+              needsConversion: needsConversion,
+            ),
+            const SizedBox(height: kSectionBottomPadding),
+            // Average text
+            Padding(
+              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+              child: Text(
+                'Average: ${formatTemperature(data.average.mean, isFahrenheit: widget.isFahrenheit, convert: needsConversion)}',
+                style: const TextStyle(color: kAverageColour, fontSize: kFontSizeBody),
+              ),
+            ),
+            // Trend text
+            Padding(
+              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+              child: Text(
+                formatTrendSlope(data.trend.slope, isFahrenheit: widget.isFahrenheit, convert: needsConversion),
+                style: const TextStyle(color: kTrendColour, fontSize: kFontSizeBody),
+              ),
+            ),
+          ],
+        );
+      }),
       // Completeness notice
       if (data.metadata != null && data.metadata!.completeness < 100)
         Padding(
