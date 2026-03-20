@@ -25,6 +25,9 @@ import 'widgets/period_page.dart';
 import 'widgets/splash_screen.dart';
 import 'widgets/onboarding/onboarding_screen.dart';
 import 'widgets/location_selector_sheet.dart';
+import 'widgets/settings_sheet.dart';
+import 'services/temperature_unit_service.dart';
+import 'utils/temperature_utils.dart';
 import 'constants/app_constants.dart';
 import 'utils/date_utils.dart' as date_utils;
 
@@ -284,6 +287,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   int _loadingElapsedSeconds = 0;
   final ValueNotifier<int> _loadingDotsTick = ValueNotifier<int>(0);
   String _currentLoadingMessage = '';
+  // Temperature unit preference (°C / °F).
+  final TemperatureUnitService _unitService = TemperatureUnitService();
+  bool get _isFahrenheit => _unitService.isFahrenheit.value;
+
   // Location is managed by the LocationService; these getters provide
   // backward-compatible access throughout the class.
   final LocationService _locationService = LocationService();
@@ -365,6 +372,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     if (mounted) setState(() {});
   }
 
+  void _onUnitChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
@@ -378,6 +389,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     DebugUtils.logLazy(() => '  - AppConfig.enableDebugUI: ${AppConfig.enableDebugUI}');
     DebugUtils.logLazy(() => '  - AppConfig.shouldShowDebugFeatures: ${AppConfig.shouldShowDebugFeatures}');
     
+    // Load temperature unit preference (°C / °F) and rebuild on change.
+    _unitService.load();
+    _unitService.isFahrenheit.addListener(_onUnitChanged);
+
     // Listen to location changes to trigger UI rebuilds
     _locationService.addListener(_onLocationChanged);
     _locationService.onSignificantLocationChange = _refreshLocationAndData;
@@ -408,6 +423,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
+    _unitService.isFahrenheit.removeListener(_onUnitChanged);
     _locationService.removeListener(_onLocationChanged);
     _locationService.dispose();
     _connectivitySubscription?.cancel();
@@ -1373,6 +1389,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     await _initializeApp();
   }
 
+  /// Opens the settings sheet.
+  void _showSettings() {
+    SettingsSheet.show(
+      context,
+      isFahrenheit: _isFahrenheit,
+      onUnitChanged: (value) => _unitService.setFahrenheit(value),
+      onOpenLocationSelector: _showLocationSelector,
+    );
+  }
+
   /// Opens the location selector bottom sheet.
   void _showLocationSelector() {
     LocationSelectorSheet.show(
@@ -1842,6 +1868,19 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+        // Settings gear icon
+        GestureDetector(
+          onTap: _showSettings,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Icon(
+              Icons.settings,
+              color: kGreyLabelColour.withValues(alpha: 0.7),
+              size: kIconSize + 4,
             ),
           ),
         ),
@@ -2538,6 +2577,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       latitude: _lastPosition?.latitude,
       longitude: _lastPosition?.longitude,
       useInternalScroll: false,
+      isFahrenheit: _isFahrenheit,
     );
 
     final scrollView = _buildScrollablePageBody(context, page);
@@ -2711,6 +2751,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           trendSlope: trendSlope,
           isLoading: _isDataLoading,
           height: chartHeight,
+          isFahrenheit: _isFahrenheit,
         ),
         // Consistent spacing below chart - always show this
         const SizedBox(height: kSectionTopPadding),
@@ -2719,7 +2760,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           Padding(
             padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
             child: Text(
-              'Average: ${averageTemperature.toStringAsFixed(1)}°C',
+              'Average: ${formatTemperature(averageTemperature, isFahrenheit: _isFahrenheit)}',
               style: TextStyle(color: kAverageColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
               textAlign: TextAlign.left,
             ),
@@ -2729,11 +2770,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           Padding(
             padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
             child: Text(
-              trendSlope.abs() < 0.05
-                ? 'Trend: Steady at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
-                : trendSlope > 0 
-                  ? 'Trend: Rising at ${trendSlope.abs().toStringAsFixed(1)}°C/decade'
-                  : 'Trend: Falling at ${trendSlope.abs().toStringAsFixed(1)}°C/decade',
+              formatTrendSlope(trendSlope, isFahrenheit: _isFahrenheit),
               style: TextStyle(color: kTrendColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w400),
               textAlign: TextAlign.left,
             ),

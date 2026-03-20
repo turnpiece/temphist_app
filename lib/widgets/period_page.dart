@@ -6,6 +6,7 @@ import '../models/period_temperature_data.dart';
 import '../services/temperature_service.dart';
 import '../services/period_cache_service.dart';
 import '../utils/debug_utils.dart';
+import '../utils/temperature_utils.dart';
 import 'temperature_bar_chart.dart';
 
 /// A reusable page that fetches and displays period temperature data
@@ -34,6 +35,9 @@ class PeriodPage extends StatefulWidget {
   /// Whether this widget wraps its own scroll/refresh UI.
   final bool useInternalScroll;
 
+  /// Whether to display temperatures in Fahrenheit.
+  final bool isFahrenheit;
+
   const PeriodPage({
     super.key,
     required this.periodKey,
@@ -44,6 +48,7 @@ class PeriodPage extends StatefulWidget {
     this.longitude,
     this.onRefresh,
     this.useInternalScroll = true,
+    this.isFahrenheit = false,
   });
 
   @override
@@ -359,13 +364,14 @@ class PeriodPageState extends State<PeriodPage>
         trendSlope: data.trend.slope,
         isLoading: false,
         height: 800,
+        isFahrenheit: widget.isFahrenheit,
       ),
       const SizedBox(height: kSectionBottomPadding),
       // Average text
       Padding(
         padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
         child: Text(
-          'Average: ${data.average.mean.toStringAsFixed(1)}°C',
+          'Average: ${formatTemperature(data.average.mean, isFahrenheit: widget.isFahrenheit)}',
           style: const TextStyle(color: kAverageColour, fontSize: kFontSizeBody),
         ),
       ),
@@ -373,7 +379,7 @@ class PeriodPageState extends State<PeriodPage>
       Padding(
         padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
         child: Text(
-          _formatTrend(data.trend.slope),
+          formatTrendSlope(data.trend.slope, isFahrenheit: widget.isFahrenheit),
           style: const TextStyle(color: kTrendColour, fontSize: kFontSizeBody),
         ),
       ),
@@ -389,12 +395,4 @@ class PeriodPageState extends State<PeriodPage>
     ];
   }
 
-  String _formatTrend(double slope) {
-    if (slope.abs() < 0.05) {
-      return 'Trend: Steady at ${slope.abs().toStringAsFixed(1)}°C/decade';
-    }
-    return slope > 0
-        ? 'Trend: Rising at ${slope.abs().toStringAsFixed(1)}°C/decade'
-        : 'Trend: Falling at ${slope.abs().toStringAsFixed(1)}°C/decade';
-  }
 }

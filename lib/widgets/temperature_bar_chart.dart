@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 
 import '../constants/app_constants.dart';
+import '../utils/temperature_utils.dart';
 
 // Re-export so existing code can import from here
 class TemperatureChartData {
@@ -30,6 +31,7 @@ class TemperatureBarChart extends StatelessWidget {
   final double? trendSlope;
   final bool isLoading;
   final double height;
+  final bool isFahrenheit;
 
   const TemperatureBarChart({
     super.key,
@@ -38,11 +40,34 @@ class TemperatureBarChart extends StatelessWidget {
     this.trendSlope,
     this.isLoading = false,
     this.height = 600,
+    this.isFahrenheit = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final validData = chartData.where((d) => d.hasData).toList();
+    // Convert all temperatures at the display layer when Fahrenheit is active.
+    // This ensures axis range, average/trend lines, and tooltips all operate
+    // on the same converted values.
+    double conv(double c) => isFahrenheit ? celsiusToFahrenheit(c) : c;
+    final unitLabel = temperatureUnitLabel(isFahrenheit: isFahrenheit);
+
+    final displayData = isFahrenheit
+        ? chartData
+            .map((d) => TemperatureChartData(
+                  year: d.year,
+                  temperature: conv(d.temperature),
+                  isCurrentYear: d.isCurrentYear,
+                  hasData: d.hasData,
+                ))
+            .toList()
+        : chartData;
+    final displayAvg = averageTemperature != null ? conv(averageTemperature!) : null;
+    // Trend slope is a rate (°C/decade) — scale by 1.8, no +32 offset.
+    final displaySlope = trendSlope != null
+        ? (isFahrenheit ? trendSlope! * 9 / 5 : trendSlope!)
+        : null;
+
+    final validData = displayData.where((d) => d.hasData).toList();
     if (validData.isEmpty) {
       return SizedBox(
         height: height,
@@ -116,7 +141,7 @@ class TemperatureBarChart extends StatelessWidget {
             tooltipBehavior: TooltipBehavior(
               enable: true,
               color: Colors.black87,
-              format: 'point.x: point.y°C',
+              format: 'point.x: point.y$unitLabel',
               canShowMarker: false,
               header: '',
               textStyle: const TextStyle(fontSize: kFontSizeBody),
@@ -129,14 +154,14 @@ class TemperatureBarChart extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    '${d.year}: ${d.temperature.toStringAsFixed(1)}°C',
+                    '${d.year}: ${d.temperature.toStringAsFixed(1)}$unitLabel',
                     style: const TextStyle(
                         color: Colors.white, fontSize: kFontSizeBody - 4),
                   ),
                 );
               },
             ),
-            series: _buildSeries(yAxisMin),
+            series: _buildSeries(yAxisMin, displayData, displayAvg, displaySlope),
             primaryXAxis: NumericAxis(
               labelStyle: const TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
               majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
@@ -149,7 +174,7 @@ class TemperatureBarChart extends StatelessWidget {
               axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
             ),
             primaryYAxis: NumericAxis(
-              labelFormat: '{value}°C',
+              labelFormat: '{value}$unitLabel',
               numberFormat: NumberFormat('0'),
               minimum: yAxisMin,
               maximum: yAxisMax,
@@ -174,10 +199,15 @@ class TemperatureBarChart extends StatelessWidget {
     );
   }
 
-  List<CartesianSeries<TemperatureChartData, int>> _buildSeries(double baseline) {
+  List<CartesianSeries<TemperatureChartData, int>> _buildSeries(
+    double baseline,
+    List<TemperatureChartData> data,
+    double? avg,
+    double? slope,
+  ) {
     return [
       RangeColumnSeries<TemperatureChartData, int>(
-        dataSource: chartData,
+        dataSource: data,
         xValueMapper: (TemperatureChartData data, _) => int.tryParse(data.year) ?? 0,
         lowValueMapper: (TemperatureChartData data, _) => baseline,
         highValueMapper: (TemperatureChartData data, _) => data.temperature,
@@ -190,9 +220,9 @@ class TemperatureBarChart extends StatelessWidget {
         spacing: 0.1,
         borderRadius: BorderRadius.circular(2),
       ),
-      if (averageTemperature != null && !isLoading)
+      if (avg != null && !isLoading)
         LineSeries<TemperatureChartData, int>(
-          dataSource: generateAverageData(chartData, averageTemperature!),
+          dataSource: generateAverageData(data, avg),
           xValueMapper: (TemperatureChartData data, _) => int.tryParse(data.year) ?? 0,
           yValueMapper: (TemperatureChartData data, _) => data.temperature,
           color: kAverageColour,
@@ -202,9 +232,9 @@ class TemperatureBarChart extends StatelessWidget {
           markerSettings: const MarkerSettings(isVisible: false),
           enableTooltip: false,
         ),
-      if (trendSlope != null && !isLoading)
+      if (slope != null && !isLoading)
         LineSeries<TemperatureChartData, int>(
-          dataSource: generateTrendData(chartData, trendSlope!),
+          dataSource: generateTrendData(data, slope),
           xValueMapper: (TemperatureChartData data, _) => int.tryParse(data.year) ?? 0,
           yValueMapper: (TemperatureChartData data, _) => data.temperature,
           color: kTrendColour,
