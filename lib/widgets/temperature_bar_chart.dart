@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 
 import '../constants/app_constants.dart';
@@ -53,30 +52,15 @@ class TemperatureBarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Convert temperatures at the display layer only when needed (i.e. the API
-    // returned Celsius but the user wants Fahrenheit).  When needsConversion is
-    // false the data is already in the target unit.
+    // The chart always plots raw values (Celsius or pre-converted Fahrenheit
+    // from the API) so that bar proportions stay visually identical regardless
+    // of the selected unit.  Only axis labels and tooltips are converted for
+    // display when the user selects a different unit.
     final shouldConvert = isFahrenheit && needsConversion;
-    double conv(double c) => shouldConvert ? celsiusToFahrenheit(c) : c;
+    double convLabel(double v) => shouldConvert ? celsiusToFahrenheit(v) : v;
     final unitLabel = temperatureUnitLabel(isFahrenheit: isFahrenheit);
 
-    final displayData = shouldConvert
-        ? chartData
-            .map((d) => TemperatureChartData(
-                  year: d.year,
-                  temperature: conv(d.temperature),
-                  isCurrentYear: d.isCurrentYear,
-                  hasData: d.hasData,
-                ))
-            .toList()
-        : chartData;
-    final displayAvg = averageTemperature != null ? conv(averageTemperature!) : null;
-    // Trend slope is a rate (°C/decade) — scale by 1.8, no +32 offset.
-    final displaySlope = trendSlope != null
-        ? (shouldConvert ? trendSlope! * 9 / 5 : trendSlope!)
-        : null;
-
-    final validData = displayData.where((d) => d.hasData).toList();
+    final validData = chartData.where((d) => d.hasData).toList();
     if (validData.isEmpty) {
       return SizedBox(
         height: height,
@@ -116,18 +100,18 @@ class TemperatureBarChart extends StatelessWidget {
     }
 
     // Choose a whole-number interval that keeps ≤ 6 labels on the axis.
-    // Fahrenheit ranges are ~1.8× wider than Celsius, so the thresholds
-    // must work for both units without crowding labels on a phone screen.
+    // The axis always uses raw (Celsius) values — labels are converted for
+    // display — so these thresholds only need to work for Celsius ranges.
     final yRange = yAxisMax - yAxisMin;
     final double yAxisInterval;
-    if (yRange <= 8) {
-      yAxisInterval = 1;    // ≤ 8 labels
-    } else if (yRange <= 16) {
-      yAxisInterval = 2;    // ≤ 8 labels
-    } else if (yRange <= 25) {
-      yAxisInterval = 5;    // ≤ 5 labels
+    if (yRange <= 6) {
+      yAxisInterval = 1;    // ≤ 6 labels
+    } else if (yRange <= 12) {
+      yAxisInterval = 2;    // ≤ 6 labels
+    } else if (yRange <= 30) {
+      yAxisInterval = 5;    // ≤ 6 labels
     } else {
-      yAxisInterval = 10;   // ≤ 6 labels for typical ranges
+      yAxisInterval = 10;   // for unusually wide ranges
     }
 
     return Padding(
@@ -155,6 +139,7 @@ class TemperatureBarChart extends StatelessWidget {
               textStyle: const TextStyle(fontSize: kFontSizeBody),
               builder: (data, point, series, pointIndex, seriesIndex) {
                 final d = data as TemperatureChartData;
+                final displayTemp = convLabel(d.temperature);
                 return Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -162,14 +147,14 @@ class TemperatureBarChart extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    '${d.year}: ${d.temperature.toStringAsFixed(isFahrenheit ? 0 : 1)}$unitLabel',
+                    '${d.year}: ${displayTemp.toStringAsFixed(isFahrenheit ? 0 : 1)}$unitLabel',
                     style: const TextStyle(
                         color: Colors.white, fontSize: kFontSizeBody - 4),
                   ),
                 );
               },
             ),
-            series: _buildSeries(yAxisMin, displayData, displayAvg, displaySlope),
+            series: _buildSeries(yAxisMin, chartData, averageTemperature, trendSlope),
             primaryXAxis: NumericAxis(
               labelStyle: const TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
               majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
@@ -182,8 +167,12 @@ class TemperatureBarChart extends StatelessWidget {
               axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
             ),
             primaryYAxis: NumericAxis(
-              labelFormat: '{value}$unitLabel',
-              numberFormat: NumberFormat('0'),
+              axisLabelFormatter: (AxisLabelRenderDetails details) {
+                final raw = details.value.toDouble();
+                final display = convLabel(raw);
+                final text = '${display.toStringAsFixed(0)}$unitLabel';
+                return ChartAxisLabel(text, details.textStyle);
+              },
               minimum: yAxisMin,
               maximum: yAxisMax,
               majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),

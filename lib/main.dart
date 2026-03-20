@@ -373,14 +373,18 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   void _onUnitChanged() {
-    // The API may return different data (especially summaries) depending on the
+    // The API returns different data (especially summaries) depending on the
     // unit.  Clear the in-memory cache and re-fetch so the correct unit is
-    // requested.  Once the API supports the unit_group parameter, summaries
-    // will arrive in the correct unit; until then the chart/average/trend use
-    // client-side conversion as a fallback.
+    // requested.
     TemperatureService.clearCache();
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _loadGeneration++;
+        _prefetchGeneration++;
+        _currentData = null;
+        _isDataLoading = true;
+        _progressiveLoadingCompleted = false;
+      });
       _loadChartDataProgressive().whenComplete(_prefetchPeriodData);
     }
   }

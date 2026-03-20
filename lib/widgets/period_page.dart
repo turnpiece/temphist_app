@@ -79,8 +79,11 @@ class PeriodPageState extends State<PeriodPage>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.location != widget.location ||
         oldWidget.isFahrenheit != widget.isFahrenheit) {
-      // Location or unit changed — re-fetch to get correct summary text
+      // Location or unit changed — clear stale data immediately so the old
+      // location's/unit's content is never shown under the new header, then
+      // re-fetch.
       _lastFetchKey = '';
+      _data = null;
       _loadIfNeeded();
     }
   }
