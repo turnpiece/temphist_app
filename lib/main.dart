@@ -2530,17 +2530,24 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  Widget _buildScrollablePageBody(BuildContext context, Widget content) {
-    return SingleChildScrollView(
+  Widget _buildScrollablePageBody(
+    BuildContext context,
+    Widget content, {
+    Widget Function(Widget child)? wrapWithRefresh,
+  }) {
+    final scrollView = SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildPageHeader(context),
-          _buildPageIndicator(),
-          content,
-        ],
-      ),
+      child: content,
+    );
+    final scrollable =
+        wrapWithRefresh != null ? wrapWithRefresh(scrollView) : scrollView;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildPageHeader(context),
+        _buildPageIndicator(),
+        Expanded(child: scrollable),
+      ],
     );
   }
 
@@ -2586,8 +2593,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       context,
       _buildFutureBuilder(chartHeight: chartHeight),
     );
-    final scrollView = _buildScrollablePageBody(context, content);
-    return _buildRefreshIndicator(scrollView);
+    return _buildScrollablePageBody(
+      context,
+      content,
+      wrapWithRefresh: _buildRefreshIndicator,
+    );
   }
 
   Widget _buildPeriodPage(
@@ -2608,12 +2618,15 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       isFahrenheit: _isFahrenheit,
     );
 
-    final scrollView = _buildScrollablePageBody(context, page);
-    return _buildExternalRefreshIndicator(
-      child: scrollView,
-      onRefresh: () async {
-        await pageKey.currentState?.refresh();
-      },
+    return _buildScrollablePageBody(
+      context,
+      page,
+      wrapWithRefresh: (child) => _buildExternalRefreshIndicator(
+        child: child,
+        onRefresh: () async {
+          await pageKey.currentState?.refresh();
+        },
+      ),
     );
   }
 
