@@ -2832,15 +2832,21 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     
     final missingYears = chartData.where((data) => !data.hasData).map((data) => int.tryParse(data.year) ?? 0).where((y) => y > 0).toList();
     final hasGaps = missingYears.isNotEmpty || _chartDataHasGaps || _chartDataFailed;
-    
-    DebugUtils.logLazy(() => '📊 Data completeness check - missing years: $missingYears, hasGaps: $hasGaps, chartDataFailed: $_chartDataFailed, progressiveLoadingCompleted: $_progressiveLoadingCompleted');
-    
-    // Check for missing recent years (2022 up to but not including the current year).
+
+    // Detect years that the API returned neither a value nor a metadata "missing"
+    // entry for — they are simply absent from chartData entirely.
     // The current year is always excluded — it's expected to be absent or incomplete.
     final currentYear = DateTime.now().year;
-    final recentYears = List.generate(currentYear - 1 - 2021, (index) => 2022 + index);
     final loadedYears = { for (final d in chartData) if (d.hasData) int.tryParse(d.year) };
-    final missingRecentYears = recentYears.where((year) => !loadedYears.contains(year)).toList();
+    final apiStartYear = currentYear - 50; // Visual Crossing covers a rolling 50-year window
+    final allExpectedYears = List.generate(currentYear - apiStartYear, (i) => apiStartYear + i);
+    final absentYears = allExpectedYears.where((year) => !loadedYears.contains(year) && !missingYears.contains(year)).toList();
+
+    // Keep the existing recent-years variable name for the display logic below,
+    // but now it covers the full expected range rather than just post-2021.
+    final missingRecentYears = absentYears;
+
+    DebugUtils.logLazy(() => '📊 Data completeness check - missing years: $missingYears, absent years: $absentYears, hasGaps: $hasGaps, chartDataFailed: $_chartDataFailed, progressiveLoadingCompleted: $_progressiveLoadingCompleted');
     
     // Also check if we have very few data points (less than 10 years of data)
     final successfulYears = chartData.where((data) => data.hasData).length;
