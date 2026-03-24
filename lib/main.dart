@@ -2889,7 +2889,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             ],
             const SizedBox(height: 4),
             Text(
-              'Data completeness: ${((chartData.where((data) => data.hasData).length / chartData.length) * 100).toStringAsFixed(0)}%',
+              'Data completeness: ${((chartData.where((data) => data.hasData).length / (chartData.length + absentYears.length)) * 100).toStringAsFixed(0)}%',
               style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
               textAlign: TextAlign.left,
             ),
@@ -2931,15 +2931,15 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       final recentRanges = _groupConsecutiveYears(missingRecentYears);
       String recentText;
       if (recentRanges.length == 1 && recentRanges.first.length == 1) {
-        recentText = 'Year ${recentRanges.first.first}';
+        recentText = '${recentRanges.first.first}';
       } else if (recentRanges.length == 1) {
-        recentText = 'Years ${recentRanges.first.first}-${recentRanges.first.last}';
+        recentText = '${recentRanges.first.first}-${recentRanges.first.last}';
       } else {
         final ranges = recentRanges.map((range) {
           if (range.length == 1) return range.first.toString();
           return '${range.first}-${range.last}';
         }).join(', ');
-        recentText = 'Years $ranges';
+        recentText = ranges;
       }
       
       if (missingText.isNotEmpty) {
@@ -3075,46 +3075,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         ],
       );
     } else {
-      // Only show the "genuinely incomplete" message if we didn't hit a timeout
-      // and we have a reasonable amount of data (more than 10 years)
-      final successfulYears = _currentData != null ? 
-        ((_currentData!['chartData'] as List<TemperatureChartData>?) ?? []).where((data) => data.hasData).length : 0;
-      
-      if (!_chartDataFailed && successfulYears >= 10) {
-        const message = 'Data appears to be incomplete for this location. Some years may not have data available.';
-        DebugUtils.logLazy(() => '📝 User message: $message');
-        
-        return Column(
-          children: [
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(
-                  Icons.info_outline,
-                  color: kGreyLabelColour,
-                  size: kIconSize,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    message,
-                    style: TextStyle(
-                      color: kGreyLabelColour, 
-                      fontSize: kFontSizeBody - 2, 
-                      fontWeight: FontWeight.w400
-                    ),
-                    textAlign: TextAlign.left,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-      } else {
-        // Don't show the "incomplete" message if we hit a timeout or have very little data
-        DebugUtils.logLazy(() => '📝 Skipping "incomplete" message - chartDataFailed: $_chartDataFailed, successfulYears: $successfulYears');
-        return const SizedBox.shrink();
-      }
+      DebugUtils.logLazy(() => '📝 No retry attempts and no chart data failure — skipping info section');
+      return const SizedBox.shrink();
     }
   }
 
