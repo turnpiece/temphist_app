@@ -3359,7 +3359,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }
 
     if (!_hasSeenOnboarding) {
-      return OnboardingScreen(onComplete: _completeOnboarding);
+      return OnboardingScreen(
+        onComplete: _completeOnboarding,
+        unitService: _unitService,
+      );
     }
 
     final double chartHeight = kChartHeight;

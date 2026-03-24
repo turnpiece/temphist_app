@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
 
 import '../../constants/app_constants.dart';
+import '../../services/temperature_unit_service.dart';
 import 'pages/onboarding_average_trend_page.dart';
 import 'pages/onboarding_day_page.dart';
 import 'pages/onboarding_location_page.dart';
 import 'pages/onboarding_location_switch_page.dart';
 import 'pages/onboarding_swipe_page.dart';
 import 'pages/onboarding_tap_page.dart';
+import 'pages/onboarding_temperature_unit_page.dart';
 import 'pages/onboarding_welcome_page.dart';
 
 /// Full-screen onboarding flow shown on first launch.
 /// Calls [onComplete] when the user taps "Get Started" or "Skip".
 class OnboardingScreen extends StatefulWidget {
   final VoidCallback onComplete;
+  final TemperatureUnitService unitService;
 
-  const OnboardingScreen({super.key, required this.onComplete});
+  const OnboardingScreen({
+    super.key,
+    required this.onComplete,
+    required this.unitService,
+  });
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -22,22 +29,23 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   late final PageController _controller;
+  late final List<Widget> _pages;
   int _currentPage = 0;
-
-  static const List<Widget> _pages = [
-    OnboardingWelcomePage(),
-    OnboardingDayPage(),
-    OnboardingTapPage(),
-    OnboardingAverageTrendPage(),
-    OnboardingSwipePage(),
-    OnboardingLocationPage(),
-    OnboardingLocationSwitchPage(),
-  ];
 
   @override
   void initState() {
     super.initState();
     _controller = PageController();
+    _pages = [
+      const OnboardingWelcomePage(),
+      const OnboardingDayPage(),
+      const OnboardingTapPage(),
+      const OnboardingAverageTrendPage(),
+      const OnboardingSwipePage(),
+      const OnboardingLocationPage(),
+      const OnboardingLocationSwitchPage(),
+      OnboardingTemperatureUnitPage(unitService: widget.unitService),
+    ];
   }
 
   @override

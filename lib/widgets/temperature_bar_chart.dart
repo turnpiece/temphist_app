@@ -99,27 +99,33 @@ class TemperatureBarChart extends StatelessWidget {
       yAxisMax = (midPoint + 2.5).ceilToDouble();
     }
 
-    // Choose a whole-number interval that keeps ≤ 6 labels on the axis.
-    // The axis always uses raw (Celsius) values — labels are converted for
-    // display — so these thresholds only need to work for Celsius ranges.
-    final yRange = yAxisMax - yAxisMin;
-    final double yAxisInterval;
-    if (yRange <= 6) {
-      yAxisInterval = 1;    // ≤ 6 labels
-    } else if (yRange <= 12) {
-      yAxisInterval = 2;    // ≤ 6 labels
-    } else if (yRange <= 30) {
-      yAxisInterval = 5;    // ≤ 6 labels
-    } else {
-      yAxisInterval = 10;   // for unusually wide ranges
-    }
-
     return Padding(
       padding: EdgeInsets.zero,
       child: Builder(
         builder: (context) {
           final screenWidth = MediaQuery.of(context).size.width;
           final isTablet = screenWidth >= kTabletBreakpointWidth;
+
+          // On portrait phones in Fahrenheit, cap at 5 labels to avoid
+          // crowding. Elsewhere allow up to 7.
+          final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
+          final maxLabels = (isFahrenheit && !isTablet && isPortrait) ? 5 : 7;
+          final maxIntervals = maxLabels - 1;
+
+          // Choose a whole-number interval that stays within maxLabels.
+          // The axis always uses raw (Celsius) values — labels are converted
+          // for display — so these thresholds only need to work for Celsius ranges.
+          final yRange = yAxisMax - yAxisMin;
+          final double yAxisInterval;
+          if (yRange / 1 <= maxIntervals) {
+            yAxisInterval = 1;
+          } else if (yRange / 2 <= maxIntervals) {
+            yAxisInterval = 2;
+          } else if (yRange / 5 <= maxIntervals) {
+            yAxisInterval = 5;
+          } else {
+            yAxisInterval = 10;
+          }
           final availableWidth = isTablet ? kTabletMaxContentWidth : screenWidth;
           final contentPadding = kScreenPadding + kContentHorizontalMargin;
           final chartWidth = availableWidth - kChartRightMargin - (contentPadding * 2);
