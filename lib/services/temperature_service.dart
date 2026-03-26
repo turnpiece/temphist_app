@@ -28,6 +28,20 @@ class TemperatureService {
     _periodCache.clear();
   }
 
+  /// Removes a single entry from the in-memory cache so the next call to
+  /// [fetchPeriodData] with the same parameters goes to the network.
+  static void evictCacheEntry(
+    String period,
+    String location,
+    String identifier, {
+    String? unitGroup,
+  }) {
+    final unitSuffix =
+        (unitGroup != null && unitGroup != 'celsius') ? '|$unitGroup' : '';
+    final cacheKey = '${_apiPeriodPath(period)}|$location|$identifier$unitSuffix';
+    _periodCache.remove(cacheKey);
+  }
+
   /// Fetches the list of pre-approved locations from the API.
   ///
   /// Result is cached in memory for the lifetime of the app so repeated

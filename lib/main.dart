@@ -21,6 +21,7 @@ import 'models/period_temperature_data.dart';
 import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
 import 'widgets/temperature_bar_chart.dart';
+import 'widgets/completeness_section.dart';
 import 'widgets/period_page.dart';
 import 'widgets/splash_screen.dart';
 import 'widgets/onboarding/onboarding_screen.dart';
@@ -897,19 +898,21 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           final temperature = tempData.temperature ?? tempData.average?.temperature;
           
           if (temperature != null) {
-            // Find and update the entry for this year
+            final entry = TemperatureChartData(
+              year: year.toString(),
+              temperature: temperature,
+              isCurrentYear: year == DateTime.now().year,
+              hasData: true,
+            );
             final yearIndex = chartData.indexWhere((data) => data.year == year.toString());
             if (yearIndex != -1) {
-              chartData[yearIndex] = TemperatureChartData(
-                year: year.toString(),
-                temperature: temperature,
-                isCurrentYear: year == DateTime.now().year,
-                hasData: true,
-              );
-              
-              successCount++;
-              DebugUtils.logLazy(() => '✅ Successfully retried year $year: ${temperature.toStringAsFixed(1)}°C');
+              chartData[yearIndex] = entry;
+            } else {
+              // Year was absent from the original data — insert it.
+              chartData.add(entry);
             }
+            successCount++;
+            DebugUtils.logLazy(() => '✅ Successfully retried year $year: ${temperature.toStringAsFixed(1)}°C');
           } else {
             DebugUtils.logLazy(() => '❌ No valid temperature data for retry year $year');
           }
@@ -2825,132 +2828,44 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Widget _buildDataCompletenessIndicator(List<TemperatureChartData> chartData) {
-    // Only show completeness indicator if we're not currently loading data AND progressive loading has completed
     if (_isDataLoading || !_progressiveLoadingCompleted) {
       return const SizedBox.shrink();
     }
-    
-    final missingYears = chartData.where((data) => !data.hasData).map((data) => int.tryParse(data.year) ?? 0).where((y) => y > 0).toList();
-    final hasGaps = missingYears.isNotEmpty || _chartDataHasGaps || _chartDataFailed;
 
-    // Detect years that the API returned neither a value nor a metadata "missing"
-    // entry for — they are simply absent from chartData entirely.
-    // The current year is always excluded — it's expected to be absent or incomplete.
-    final currentYear = DateTime.now().year;
     final loadedYears = { for (final d in chartData) if (d.hasData) int.tryParse(d.year) };
-    final apiStartYear = currentYear - 50; // Visual Crossing covers a rolling 50-year window
-    final allExpectedYears = List.generate(currentYear - apiStartYear, (i) => apiStartYear + i);
-    final absentYears = allExpectedYears.where((year) => !loadedYears.contains(year) && !missingYears.contains(year)).toList();
-
-    // Keep the existing recent-years variable name for the display logic below,
-    // but now it covers the full expected range rather than just post-2021.
-    final missingRecentYears = absentYears;
-
-    DebugUtils.logLazy(() => '📊 Data completeness check - missing years: $missingYears, absent years: $absentYears, hasGaps: $hasGaps, chartDataFailed: $_chartDataFailed, progressiveLoadingCompleted: $_progressiveLoadingCompleted');
-    
-    // Also check if we have very few data points (less than 10 years of data)
-    final successfulYears = chartData.where((data) => data.hasData).length;
+    final absentYears = detectAbsentYears(loadedYears.whereType<int>().toSet(), []);
+    final successfulYears = loadedYears.whereType<int>().length;
     final hasVeryLittleData = successfulYears < 10;
-    
-    // Debug log the user-facing messages
-    if (hasGaps || missingRecentYears.isNotEmpty || hasVeryLittleData) {
-      DebugUtils.logLazy(() => '📝 Showing data completeness message - missingYears: $missingYears, missingRecentYears: $missingRecentYears, hasVeryLittleData: $hasVeryLittleData, successfulYears: $successfulYears');
-    }
-    
-    if (hasGaps || missingRecentYears.isNotEmpty || hasVeryLittleData) {
-      return Padding(
-        padding: const EdgeInsets.only(top: kSectionTopPadding, bottom: kSectionBottomPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Show chart data failure message if there was a failure
-            if (_chartDataFailed) _buildChartDataFailureMessage(),
-            // Show missing years text or low data warning
-            if (missingYears.isNotEmpty || missingRecentYears.isNotEmpty || hasVeryLittleData) ...[
-              const SizedBox(height: 8),
-              Builder(
-                builder: (context) {
-                  String message;
-                  if (hasVeryLittleData && missingYears.isEmpty && missingRecentYears.isEmpty) {
-                    message = 'Note: Very limited data available for this location. Only $successfulYears years of data were loaded.';
-                    DebugUtils.logLazy(() => '📝 User message: $message');
-                  } else {
-                    message = 'Note: ${_buildMissingYearsText(missingYears, missingRecentYears)}.';
-                    DebugUtils.logLazy(() => '📝 User message: $message');
-                  }
-                  
-                  return Text(
-                    message,
-                    style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
-                    textAlign: TextAlign.left,
-                  );
-                },
-              ),
-            ],
-            const SizedBox(height: 4),
-            Text(
-              'Data completeness: ${((chartData.where((data) => data.hasData).length / (chartData.length + absentYears.length)) * 100).toStringAsFixed(0)}%',
-              style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w400),
-              textAlign: TextAlign.left,
-            ),
-            _buildDataRetrySection(),
-            _buildRetryAttemptsOrInfoSection(),
-          ],
-        ),
-      );
-    }
-    return const SizedBox.shrink();
-  }
+    final allExpectedCount = successfulYears + absentYears.length;
+    final completeness = allExpectedCount > 0 ? (successfulYears / allExpectedCount * 100) : 100.0;
 
-  String _buildMissingYearsText(List<int> missingYears, List<int> missingRecentYears) {
-    // Sort missing years for better display
-    missingYears.sort();
-    
-    // Group consecutive missing years for cleaner display
-    final missingRanges = _groupConsecutiveYears(missingYears);
-    
-    String missingText;
-    if (missingRanges.length == 1 && missingRanges.first.length == 1) {
-      // Single year missing
-      missingText = 'Year ${missingRanges.first.first} is missing';
-    } else if (missingRanges.length == 1) {
-      // Consecutive years missing
-      missingText = 'Years ${missingRanges.first.first}-${missingRanges.first.last} are missing';
-    } else {
-      // Multiple ranges missing
-      final ranges = missingRanges.map((range) {
-        if (range.length == 1) return range.first.toString();
-        return '${range.first}-${range.last}';
-      }).join(', ');
-      missingText = 'Years $ranges are missing';
+    DebugUtils.logLazy(() => '📊 Data completeness check - absent years: $absentYears, chartDataFailed: $_chartDataFailed, completeness: ${completeness.toStringAsFixed(0)}%');
+
+    final shouldShow = absentYears.isNotEmpty || _chartDataFailed || _chartDataHasGaps || hasVeryLittleData;
+    if (!shouldShow) return const SizedBox.shrink();
+
+    String? overrideNote;
+    if (hasVeryLittleData && absentYears.isEmpty && !_chartDataFailed) {
+      overrideNote = 'Note: Very limited data available for this location. Only $successfulYears years of data were loaded.';
     }
-    
-    // Only add note about missing recent years if they were actually attempted to be loaded
-    // and are genuinely missing (not just not yet attempted due to timeout)
-    if (missingRecentYears.isNotEmpty) {
-      final recentRanges = _groupConsecutiveYears(missingRecentYears);
-      String recentText;
-      if (recentRanges.length == 1 && recentRanges.first.length == 1) {
-        recentText = '${recentRanges.first.first}';
-      } else if (recentRanges.length == 1) {
-        recentText = '${recentRanges.first.first}-${recentRanges.first.last}';
-      } else {
-        final ranges = recentRanges.map((range) {
-          if (range.length == 1) return range.first.toString();
-          return '${range.first}-${range.last}';
-        }).join(', ');
-        recentText = ranges;
-      }
-      
-      if (missingText.isNotEmpty) {
-        missingText += '. Recent data ($recentText) could not be loaded';
-      } else {
-        missingText = 'Recent data ($recentText) could not be loaded';
-      }
-    }
-    
-    DebugUtils.logLazy(() => '📝 Generated missing years text: "$missingText"');
-    return missingText;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: kSectionTopPadding, bottom: kSectionBottomPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_chartDataFailed) _buildChartDataFailureMessage(),
+          CompletenessSection(
+            allMissing: absentYears,
+            completeness: completeness,
+            onRetry: _chartDataFailed ? null : _retryChartData,
+            isRetrying: _isRetryingChartData,
+            retryCount: _chartDataRetryCount,
+            noteText: overrideNote,
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildChartDataFailureMessage() {
@@ -3006,102 +2921,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         ],
       ],
     );
-  }
-
-  Widget _buildDataRetrySection() {
-    // Only show the general retry section if there's no specific chart data failure
-    // (_buildChartDataFailureMessage handles the retry button in that case).
-    if (_chartDataFailed) {
-      return const SizedBox.shrink();
-    }
-    
-    return Column(
-      children: [
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Icon(
-              _isRetryingChartData ? Icons.hourglass_empty : Icons.refresh,
-              color: _isRetryingChartData ? kGreyLabelColour : kAccentColour,
-              size: kIconSize,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                _isRetryingChartData 
-                  ? 'Retrying chart data...'
-                  : 'Missing data may be temporary. Try refreshing.',
-                style: TextStyle(
-                  color: kGreyLabelColour, 
-                  fontSize: kFontSizeBody - 2, 
-                  fontWeight: FontWeight.w400
-                ),
-                textAlign: TextAlign.left,
-              ),
-            ),
-            if (!_isRetryingChartData) ...[
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: _retryChartData,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: kAccentColour.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'Retry',
-                    style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody - 2, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRetryAttemptsOrInfoSection() {
-    if (_chartDataRetryCount > 0) {
-      return Column(
-        children: [
-          const SizedBox(height: 4),
-          Text(
-            'Retry attempts: $_chartDataRetryCount',
-            style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody - 3, fontWeight: FontWeight.w400),
-            textAlign: TextAlign.left,
-          ),
-        ],
-      );
-    } else {
-      DebugUtils.logLazy(() => '📝 No retry attempts and no chart data failure — skipping info section');
-      return const SizedBox.shrink();
-    }
-  }
-
-  /// Group consecutive years into ranges for cleaner display
-  List<List<int>> _groupConsecutiveYears(List<int> years) {
-    if (years.isEmpty) return [];
-    
-    final sortedYears = List<int>.from(years)..sort();
-    final ranges = <List<int>>[];
-    List<int> currentRange = [sortedYears.first];
-    
-    for (int i = 1; i < sortedYears.length; i++) {
-      if (sortedYears[i] == sortedYears[i - 1] + 1) {
-        // Consecutive year, add to current range
-        currentRange.add(sortedYears[i]);
-      } else {
-        // Gap found, save current range and start new one
-        ranges.add(List<int>.from(currentRange));
-        currentRange = [sortedYears[i]];
-      }
-    }
-    
-    // Add the last range
-    ranges.add(currentRange);
-    return ranges;
   }
 
   /// Start monitoring network connectivity

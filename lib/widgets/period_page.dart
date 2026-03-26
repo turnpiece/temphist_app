@@ -7,6 +7,7 @@ import '../services/temperature_service.dart';
 import '../services/period_cache_service.dart';
 import '../utils/debug_utils.dart';
 import '../utils/temperature_utils.dart';
+import 'completeness_section.dart';
 import 'temperature_bar_chart.dart';
 
 /// A reusable page that fetches and displays period temperature data
@@ -111,7 +112,7 @@ class PeriodPageState extends State<PeriodPage>
     _fetchData();
   }
 
-  Future<void> _fetchData() async {
+  Future<void> _fetchData({bool bypassCache = false}) async {
     if (_isLoading) return;
 
     setState(() {
@@ -125,9 +126,20 @@ class PeriodPageState extends State<PeriodPage>
       final lon = widget.longitude;
 
       // Cache-first: serve from Hive when available, fall through on miss.
+      // bypassCache is set when retrying to ensure fresh data from the API.
       final unitGroup = widget.isFahrenheit ? 'fahrenheit' : null;
+      if (bypassCache) {
+        // Evict only this period's entry from the in-memory service cache so
+        // the retry goes to the network without disturbing other periods.
+        TemperatureService.evictCacheEntry(
+          widget.periodKey,
+          widget.location,
+          _identifier,
+          unitGroup: unitGroup,
+        );
+      }
       PeriodTemperatureData? data;
-      if (lat != null && lon != null) {
+      if (!bypassCache && lat != null && lon != null) {
         data = await PeriodCacheService.get(
           widget.periodKey, lat, lon, _identifier,
           unitGroup: unitGroup,
@@ -201,7 +213,7 @@ class PeriodPageState extends State<PeriodPage>
   /// Public refresh hook for external RefreshIndicator.
   Future<void> refresh() async {
     _lastFetchKey = '';
-    await _fetchData();
+    await _fetchData(bypassCache: true);
     if (widget.onRefresh != null) {
       await widget.onRefresh!();
     }
@@ -405,14 +417,35 @@ class PeriodPageState extends State<PeriodPage>
         );
       }),
       // Completeness notice
-      if (data.metadata != null && data.metadata!.completeness < 100)
-        Padding(
+      Builder(builder: (context) {
+        final currentYear = DateTime.now().year;
+        final loadedYears = data.values.map((v) => v.year).toSet();
+        final metaMissing = (data.metadata?.missingYears ?? []).map((m) => m.year).toList();
+        final absent = detectAbsentYears(loadedYears, metaMissing);
+        final allMissing = [...metaMissing, ...absent]..sort();
+        // Exclude the current year: API may return it but it has no full-year data yet.
+        final effectiveLoaded = loadedYears.where((y) => y < currentYear && !metaMissing.contains(y)).length;
+        const totalExpected = 50; // rolling 50-year window
+        final completeness = effectiveLoaded / totalExpected * 100;
+
+        DebugUtils.logLazy(() =>
+            'PeriodPage(${widget.periodKey}): metaMissing=$metaMissing, absent=$absent, effectiveLoaded=$effectiveLoaded, completeness=${completeness.toStringAsFixed(0)}%');
+
+        return Padding(
           padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-          child: Text(
-            'Data completeness: ${data.metadata!.completeness.toStringAsFixed(0)}%',
-            style: const TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
+          child: CompletenessSection(
+            allMissing: allMissing,
+            completeness: completeness,
+            isRetrying: _isLoading,
+            onRetry: _isLoading
+                ? null
+                : () {
+                    _lastFetchKey = '';
+                    _fetchData(bypassCache: true);
+                  },
           ),
-        ),
+        );
+      }),
     ];
   }
 

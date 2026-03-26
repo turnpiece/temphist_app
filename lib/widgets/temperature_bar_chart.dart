@@ -106,10 +106,10 @@ class TemperatureBarChart extends StatelessWidget {
           final screenWidth = MediaQuery.of(context).size.width;
           final isTablet = screenWidth >= kTabletBreakpointWidth;
 
-          // On portrait phones in Fahrenheit, cap at 5 labels to avoid
-          // crowding. Elsewhere allow up to 7.
+          // On portrait phones, cap at 5 labels to avoid crowding.
+          // Tablets and landscape views allow up to 7.
           final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
-          final maxLabels = (isFahrenheit && !isTablet && isPortrait) ? 5 : 7;
+          final maxLabels = (!isTablet && isPortrait) ? 5 : 7;
           final maxIntervals = maxLabels - 1;
 
           // Choose a whole-number interval that stays within maxLabels.
@@ -121,6 +121,8 @@ class TemperatureBarChart extends StatelessWidget {
             yAxisInterval = 1;
           } else if (yRange / 2 <= maxIntervals) {
             yAxisInterval = 2;
+          } else if (yRange / 3 <= maxIntervals) {
+            yAxisInterval = 3;
           } else if (yRange / 5 <= maxIntervals) {
             yAxisInterval = 5;
           } else {
