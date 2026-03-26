@@ -107,28 +107,34 @@ class CompletenessSection extends StatelessWidget {
                   ),
                 ),
               ),
-              if (!isRetrying) ...[
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: onRetry,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: kAccentColour.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'Retry',
-                      style: TextStyle(
-                        color: kAccentColour,
-                        fontSize: kFontSizeBody - 2,
-                        fontWeight: FontWeight.w500,
+              const SizedBox(width: 8),
+              // Keep the button in the layout at all times to prevent height
+              // shift when switching between idle and retrying states.
+              Opacity(
+                opacity: isRetrying ? 0.0 : 1.0,
+                child: IgnorePointer(
+                  ignoring: isRetrying,
+                  child: GestureDetector(
+                    onTap: onRetry,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: kAccentColour.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'Retry',
+                        style: TextStyle(
+                          color: kAccentColour,
+                          fontSize: kFontSizeBody - 2,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ],
           ),
         if (note != null) ...[
