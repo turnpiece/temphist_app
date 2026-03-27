@@ -1235,6 +1235,19 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       DebugUtils.logLazy(() => '📊 Chart data loading completed: $successfulYears/$totalYears years loaded successfully');
       if (_failedYears.isNotEmpty) {
         DebugUtils.logLazy(() => '❌ Missing years: $_failedYears');
+
+        // If the current year failed, retry it automatically after a brief
+        // delay — it's the most important bar on the chart and transient
+        // API hiccups are common for the most-recent record.
+        if (_failedYears.contains(DateTime.now().year)) {
+          DebugUtils.logLazy(() => '🔄 Current year missing — scheduling auto-retry in 2s');
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted && _failedYears.contains(DateTime.now().year) && !_isRetryingChartData) {
+              DebugUtils.logLazy(() => '🔄 Auto-retrying current year');
+              _retryChartData();
+            }
+          });
+        }
       }
 
       return;

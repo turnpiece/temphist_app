@@ -148,15 +148,17 @@ class CompletenessSection extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: 4),
-        Text(
-          'Data completeness: ${completeness.toStringAsFixed(0)}%',
-          style: const TextStyle(
-            color: kGreyLabelColour,
-            fontSize: kFontSizeBody - 2,
-            fontWeight: FontWeight.w400,
+        if (completeness < 80) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Data completeness: ${completeness.toStringAsFixed(0)}%',
+            style: const TextStyle(
+              color: kGreyLabelColour,
+              fontSize: kFontSizeBody - 2,
+              fontWeight: FontWeight.w400,
+            ),
           ),
-        ),
+        ],
         if (retryCount > 0) ...[
           const SizedBox(height: 4),
           Text(
