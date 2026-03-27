@@ -309,12 +309,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   final Completer<void> _splashCompleter = Completer<void>();
   
   
-  // Add error tracking for chart data
-  bool _chartDataHasGaps = false;
-
-  // Rate limit tracking
-  bool _chartDataRateLimited = false; // Track if chart data fetching is rate limited
-
   // Store current data for updates
   Map<String, dynamic>? _currentData;
   
@@ -379,9 +373,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   bool _showSwipeCoachmark = false;
   bool _coachmarkFadingOut = false;
 
-  /// Called whenever [_locationService] notifies listeners.
-  void _onLocationChanged() {
-    // Reset scroll positions so the header doesn't show stale collapsed state.
+  /// Resets scroll positions on all period pages to the top and clears the
+  /// collapsed-header state. Call whenever the content is about to reload.
+  void _resetScrollPositions() {
     _scrollOffsetNotifier.value = 0.0;
     for (final c in [
       _dailyScrollController,
@@ -391,6 +385,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     ]) {
       if (c.hasClients) c.jumpTo(0);
     }
+  }
+
+  /// Called whenever [_locationService] notifies listeners.
+  void _onLocationChanged() {
+    _resetScrollPositions();
     if (mounted) setState(() {});
   }
 
@@ -399,16 +398,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // unit.  Clear the in-memory cache and re-fetch so the correct unit is
     // requested.
     TemperatureService.clearCache();
-    // Reset scroll positions so the header shows dots, not the collapsed state.
-    _scrollOffsetNotifier.value = 0.0;
-    for (final c in [
-      _dailyScrollController,
-      _weekScrollController,
-      _monthScrollController,
-      _yearScrollController,
-    ]) {
-      if (c.hasClients) c.jumpTo(0);
-    }
+    _resetScrollPositions();
     if (mounted) {
       setState(() {
         _loadGeneration++;
@@ -665,10 +655,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   void _resetErrorStates() {
     if (!mounted) return;
     setState(() {
-      _chartDataHasGaps = false;
       _isRetryingChartData = false;
       _chartDataRetryCount = 0;
-      _chartDataRateLimited = false;
       _chartDataFailed = false;
       _chartDataFailedDueToRateLimit = false;
       _chartDataTimedOut = false;
@@ -1637,7 +1625,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Show no chart data state with retry button (only if we have no data at all and not loading)
     // Only show this if progressive loading has completed - this prevents flash during loading transitions
     if (chartData.isEmpty && !_isDataLoading && _progressiveLoadingCompleted) {
-      final isRateLimited = _chartDataRateLimited;
+      final isRateLimited = _chartDataFailedDueToRateLimit;
       final String message;
       if (isRateLimited) {
         message = 'API rate limit exceeded. Please wait a few minutes before trying again.';
@@ -2634,10 +2622,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
       final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
       final dateToUse = DateTime.parse(dateInfo['date']!);
-      // Match the leap-day fallback used by PeriodPage._identifier.
-      final identifier = (dateToUse.month == 2 && dateToUse.day == 29)
-          ? '02-28'
-          : '${dateToUse.month.toString().padLeft(2, '0')}-${dateToUse.day.toString().padLeft(2, '0')}';
+      final identifier = dateIdentifier(dateToUse);
       final refYear = dateToUse.year;
       final unit = _isFahrenheit ? 'fahrenheit' : 'celsius';
 
@@ -3107,7 +3092,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
     DebugUtils.logLazy(() => '📊 Data completeness check - absent years: $absentYears, chartDataFailed: $_chartDataFailed, completeness: ${completeness.toStringAsFixed(0)}%');
 
-    final shouldShow = absentYears.isNotEmpty || _chartDataFailed || _chartDataHasGaps || hasVeryLittleData;
+    final shouldShow = absentYears.isNotEmpty || _chartDataFailed || hasVeryLittleData;
     if (!shouldShow) return const SizedBox.shrink();
 
     String? overrideNote;

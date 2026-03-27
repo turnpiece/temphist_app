@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../constants/app_constants.dart';
 import '../models/period_temperature_data.dart';
@@ -93,12 +92,7 @@ class PeriodPageState extends State<PeriodPage>
     final now = DateTime.now();
     final useYesterday = now.hour < kUseYesterdayHourThreshold;
     final dateToUse = useYesterday ? now.subtract(const Duration(days: 1)) : now;
-
-    // Handle leap day
-    if (dateToUse.month == 2 && dateToUse.day == 29) {
-      return '02-28';
-    }
-    return DateFormat('MM-dd').format(dateToUse);
+    return dateIdentifier(dateToUse);
   }
 
   String get _unitGroup => widget.isFahrenheit ? 'fahrenheit' : 'celsius';

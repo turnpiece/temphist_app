@@ -50,3 +50,10 @@ String formatTrendSlope(
 /// Return the unit suffix string: `"°F"` or `"°C"`.
 String temperatureUnitLabel({required bool isFahrenheit}) =>
     isFahrenheit ? '°F' : '°C';
+
+/// Return the MM-dd identifier for [date], applying the Feb 29 → Feb 28
+/// fallback used throughout the app (the API has no Feb 29 data).
+String dateIdentifier(DateTime date) {
+  if (date.month == 2 && date.day == 29) return '02-28';
+  return '${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+}

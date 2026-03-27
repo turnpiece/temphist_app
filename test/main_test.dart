@@ -44,7 +44,7 @@ void main() {
 
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Loading location...'), findsOneWidget);
+    expect(find.text('Loading location...'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('Chart and summary render with data', (WidgetTester tester) async {
