@@ -354,10 +354,6 @@ class PeriodPageState extends State<PeriodPage>
     }).toList();
 
     return [
-      // Date is shown in the header; omit it here.
-      const SizedBox.shrink(),
-      // Location
-      const SizedBox.shrink(),
       // Summary
       if (data.summary.isNotEmpty)
         Padding(

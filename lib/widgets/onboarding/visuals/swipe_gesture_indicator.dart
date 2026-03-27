@@ -24,7 +24,9 @@ class _SwipeGestureIndicatorState extends State<SwipeGestureIndicator>
       duration: const Duration(milliseconds: 1400),
     )..repeat();
 
-    // Slide right, hold briefly, snap back invisibly
+    // Slide right, snap back invisibly once fully faded out.
+    // The fade-out ends exactly when the snap happens (both at t=55%)
+    // so the jump is never visible.
     _slide = TweenSequence([
       TweenSequenceItem(
         tween: Tween(begin: 0.0, end: 48.0)
@@ -35,18 +37,22 @@ class _SwipeGestureIndicatorState extends State<SwipeGestureIndicator>
     ]).animate(_controller);
 
     _fade = TweenSequence([
-      TweenSequenceItem(tween: ConstantTween(1.0), weight: 55),
+      // Hold visible while sliding
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 40),
+      // Fade out so opacity reaches 0 exactly when slide snaps at t=55%
       TweenSequenceItem(
         tween: Tween(begin: 1.0, end: 0.0)
             .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 10,
+        weight: 15,
       ),
+      // Fade back in at origin
       TweenSequenceItem(
         tween: Tween(begin: 0.0, end: 1.0)
             .chain(CurveTween(curve: Curves.easeIn)),
         weight: 10,
       ),
-      TweenSequenceItem(tween: ConstantTween(1.0), weight: 25),
+      // Hold visible before next cycle
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 35),
     ]).animate(_controller);
   }
 

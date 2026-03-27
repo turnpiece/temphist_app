@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -15,6 +14,7 @@ import 'dart:async'; // Added for StreamSubscription and StreamController
 import 'dart:convert'; // Added for jsonEncode/jsonDecode
 
 import 'services/temperature_service.dart';
+import 'services/share_service.dart';
 import 'services/location_service.dart';
 import 'services/period_cache_service.dart';
 import 'models/period_temperature_data.dart';
@@ -356,6 +356,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   late final PageController _pageController;
   final ValueNotifier<int> _pageIndexNotifier = ValueNotifier<int>(0);
   static const List<String> _periodKeys = ['daily', 'week', 'month', 'year'];
+  bool _isSharing = false;
+  final GlobalKey _dailyRepaintKey = GlobalKey();
+  final GlobalKey _weekRepaintKey = GlobalKey();
+  final GlobalKey _monthRepaintKey = GlobalKey();
+  final GlobalKey _yearRepaintKey = GlobalKey();
+  late final ScrollController _dailyScrollController;
+  late final ScrollController _weekScrollController;
+  late final ScrollController _monthScrollController;
+  late final ScrollController _yearScrollController;
+  final ValueNotifier<double> _scrollOffsetNotifier = ValueNotifier(0.0);
+  ScrollController? _activeScrollController;
   final _weekPageKey = GlobalKey<PeriodPageState>();
   final _monthPageKey = GlobalKey<PeriodPageState>();
   final _yearPageKey = GlobalKey<PeriodPageState>();
@@ -370,6 +381,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   /// Called whenever [_locationService] notifies listeners.
   void _onLocationChanged() {
+    // Reset scroll positions so the header doesn't show stale collapsed state.
+    _scrollOffsetNotifier.value = 0.0;
+    for (final c in [
+      _dailyScrollController,
+      _weekScrollController,
+      _monthScrollController,
+      _yearScrollController,
+    ]) {
+      if (c.hasClients) c.jumpTo(0);
+    }
     if (mounted) setState(() {});
   }
 
@@ -378,6 +399,16 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // unit.  Clear the in-memory cache and re-fetch so the correct unit is
     // requested.
     TemperatureService.clearCache();
+    // Reset scroll positions so the header shows dots, not the collapsed state.
+    _scrollOffsetNotifier.value = 0.0;
+    for (final c in [
+      _dailyScrollController,
+      _weekScrollController,
+      _monthScrollController,
+      _yearScrollController,
+    ]) {
+      if (c.hasClients) c.jumpTo(0);
+    }
     if (mounted) {
       setState(() {
         _loadGeneration++;
@@ -395,6 +426,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _pageController = PageController();
+    _dailyScrollController = ScrollController();
+    _weekScrollController = ScrollController();
+    _monthScrollController = ScrollController();
+    _yearScrollController = ScrollController();
+    _attachScrollController(_dailyScrollController);
 
     // Debug mode detection logging
     DebugUtils.logLazy(() => '🔧 Debug mode detection:');
@@ -448,6 +484,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     _splashScreenTimer = null;
     _pageIndexNotifier.dispose();
     _loadingDotsTick.dispose();
+    _dailyScrollController.dispose();
+    _weekScrollController.dispose();
+    _monthScrollController.dispose();
+    _yearScrollController.dispose();
+    _scrollOffsetNotifier.dispose();
     super.dispose();
   }
 
@@ -1851,88 +1892,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  Widget _buildTitleLogoSection() {
-    final headerText = _displayLocation.isNotEmpty
-        ? _displayLocation
-        : (_determinedLocation.isNotEmpty ? _determinedLocation : 'Loading location...');
-
-    // Green when showing the user's actual GPS location; red when a different
-    // city has been manually selected.
-    final Color locationColour;
-    if (!_isLocationDetermined) {
-      locationColour = kGreyLabelColour.withValues(alpha: 0.4);
-    } else {
-      final gps = _locationService.gpsLocation;
-      if (gps.isEmpty) {
-        // GPS location not yet known (first-ever launch) — neutral colour.
-        locationColour = kGreyLabelColour.withValues(alpha: 0.7);
-      } else {
-        String cityOf(String l) => l.split(',').first.trim().toLowerCase();
-        final isAtGps = cityOf(gps) == cityOf(_determinedLocation);
-        locationColour = isAtGps ? kBarCurrentYearColour : kAccentColour;
-      }
-    }
-
-    return Row(
-      children: [
-        Transform.translate(
-          offset: const Offset(-9.0, 0.0), // Shift logo left to compensate for SVG's internal margin
-          child: Padding(
-            padding: const EdgeInsets.only(right: kTitleRowIconRightPadding),
-            child: SvgPicture.asset(
-              'assets/logo.svg',
-              width: 40,
-              height: 40,
-            ),
-          ),
-        ),
-        Expanded(
-          child: GestureDetector(
-            onTap: _isLocationDetermined ? _showLocationSelector : null,
-            behavior: HitTestBehavior.opaque,
-            child: Row(
-              children: [
-                Icon(
-                  Icons.location_on_outlined,
-                  color: locationColour.withValues(alpha: 0.8),
-                  size: kIconSize + 2,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    headerText,
-                    style: TextStyle(
-                      color: locationColour,
-                      fontSize: kFontSizeLocation,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        // Settings gear icon
-        GestureDetector(
-          onTap: _showSettings,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 8),
-            child: Icon(
-              Icons.settings,
-              color: kGreyLabelColour.withValues(alpha: 0.7),
-              size: kIconSize + 4,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-
   /// Build error indicator with icon, title, and message
   Widget _buildErrorIndicator({
     required IconData icon,
@@ -2413,6 +2372,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 onPageChanged: (index) {
                   _pageIndexNotifier.value = index;
                   _dismissCoachmark();
+                  final controllers = [
+                    _dailyScrollController,
+                    _weekScrollController,
+                    _monthScrollController,
+                    _yearScrollController,
+                  ];
+                  _attachScrollController(controllers[index]);
                 },
                 children: [
                   // Page 0: Daily (existing view)
@@ -2420,23 +2386,32 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                   // Page 1: Weekly
                   _buildPeriodPage(
                     context,
+                    pageIndex: 1,
                     pageKey: _weekPageKey,
+                    repaintKey: _weekRepaintKey,
                     periodKey: 'week',
                     periodLabel: 'Past week',
+                    scrollController: _weekScrollController,
                   ),
                   // Page 2: Monthly
                   _buildPeriodPage(
                     context,
+                    pageIndex: 2,
                     pageKey: _monthPageKey,
+                    repaintKey: _monthRepaintKey,
                     periodKey: 'month',
                     periodLabel: 'Past month',
+                    scrollController: _monthScrollController,
                   ),
                   // Page 3: Yearly
                   _buildPeriodPage(
                     context,
+                    pageIndex: 3,
                     pageKey: _yearPageKey,
+                    repaintKey: _yearRepaintKey,
                     periodKey: 'year',
                     periodLabel: 'Past year',
+                    scrollController: _yearScrollController,
                   ),
                 ],
               ),
@@ -2447,102 +2422,153 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  /// Page indicator dots showing which period view is active.
-  Widget _buildPageIndicator() {
-    return Padding(
-      padding: const EdgeInsets.only(
-        left: kScreenPadding + kContentHorizontalMargin,
-        right: kScreenPadding + kContentHorizontalMargin,
-        bottom: 12.0,
-      ),
-      child: ValueListenableBuilder<int>(
-        valueListenable: _pageIndexNotifier,
-        builder: (context, pageIndex, _) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Transform.translate(
-                offset: const Offset(0, -2),
-                child: Row(
-                  children: [
-                    for (int i = 0; i < _periodKeys.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 6),
-                      Container(
-                        width: i == pageIndex ? 10 : 8,
-                        height: i == pageIndex ? 10 : 8,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: i == pageIndex
-                              ? kBarCurrentYearColour
-                              : kGreyLabelColour.withValues(alpha: 0.4),
+  Widget _buildPageHeader(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: _scrollOffsetNotifier,
+      builder: (context, offset, _) {
+        const collapseThreshold = 80.0;
+        final t = (offset / collapseThreshold).clamp(0.0, 1.0);
+
+        return ValueListenableBuilder<int>(
+          valueListenable: _pageIndexNotifier,
+          builder: (context, pageIndex, _) {
+            final locationColour = _locationColour;
+            final headerText = _displayLocation.isNotEmpty
+                ? _displayLocation
+                : (_determinedLocation.isNotEmpty
+                    ? _determinedLocation
+                    : 'Loading location...');
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(
+                    top: kContentVerticalPadding,
+                    bottom: kTitleRowBottomPadding,
+                    left: kScreenPadding + kContentHorizontalMargin,
+                    right: kScreenPadding + kContentHorizontalMargin,
+                  ),
+                  child: Row(
+                    children: [
+                      // Cross-fade: dots (t=0) → location+period (t=1)
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            // Location + period — always laid out (sets Stack height),
+                            // fades in as user scrolls.
+                            Opacity(
+                              opacity: t,
+                              child: IgnorePointer(
+                                ignoring: t < 0.5,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: _isLocationDetermined
+                                          ? _showLocationSelector
+                                          : null,
+                                      behavior: HitTestBehavior.opaque,
+                                      child: Text(
+                                        headerText,
+                                        style: TextStyle(
+                                          color: locationColour,
+                                          fontSize: kFontSizeLocation,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 0.5,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: _isSharing
+                                          ? null
+                                          : () => _shareCurrentPeriod(pageIndex),
+                                      behavior: HitTestBehavior.opaque,
+                                      child: Text(
+                                        _buildPeriodHeaderLabel(pageIndex),
+                                        style: const TextStyle(
+                                          color: kGreyLabelColour,
+                                          fontSize: kFontSizeBody - 2,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            // Dots + coachmark — Positioned.fill so they don't
+                            // affect Stack height; centred to align with the
+                            // settings/share icons in the Row; fade out on scroll.
+                            Positioned.fill(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Opacity(
+                                  opacity: (1.0 - t).clamp(0.0, 1.0),
+                                  child: IgnorePointer(
+                                    ignoring: t > 0.5,
+                                    child: _buildDotsRow(pageIndex),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Share icon — always visible
+                      GestureDetector(
+                        onTap: _isSharing ? null : () => _shareCurrentPeriod(pageIndex),
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          // No GlobalKey here — _buildPageHeader is called once
+                          // per page, so 4 Padding widgets would share one key.
+                          // iPad popover falls back to Rect.fromLTWH(0,0,1,1).
+                          padding: const EdgeInsets.only(left: 8),
+                          child: _isSharing
+                              ? SizedBox(
+                                  width: kIconSize,
+                                  height: kIconSize,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: kGreyLabelColour.withValues(alpha: 0.7),
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.ios_share,
+                                  color: kGreyLabelColour.withValues(alpha: 0.7),
+                                  size: kIconSize + 2,
+                                ),
+                        ),
+                      ),
+                      // Settings gear — always visible
+                      GestureDetector(
+                        onTap: _showSettings,
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Icon(
+                            Icons.settings,
+                            color: kGreyLabelColour.withValues(alpha: 0.7),
+                            size: kIconSize + 4,
+                          ),
                         ),
                       ),
                     ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      _buildPeriodHeaderLabel(pageIndex),
-                      style: const TextStyle(
-                        color: kTextPrimaryColour,
-                        fontSize: kFontSizeBody,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
                   ),
-                  if (_showSwipeCoachmark) ...[
-                    const Spacer(),
-                    AnimatedOpacity(
-                      opacity: _coachmarkFadingOut ? 0.0 : 1.0,
-                      duration: const Duration(milliseconds: 600),
-                      onEnd: () {
-                        if (_coachmarkFadingOut && mounted) {
-                          setState(() {
-                            _showSwipeCoachmark = false;
-                          });
-                        }
-                      },
-                      child: const Text(
-                        '← swipe to explore →',
-                        style: TextStyle(
-                          color: kGreyLabelColour,
-                          fontSize: 15.0,
-                        ),
-                      ),
-                    ),
-                  ],
+                ),
+                if (AppConfig.shouldShowDebugFeatures) ...[
+                  _buildDebugPadding(context, _buildDebugToggleSection()),
+                  _buildDebugPadding(context, _buildVersionSection()),
                 ],
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildPageHeader(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: EdgeInsets.only(
-            top: kContentVerticalPadding,
-            bottom: kTitleRowBottomPadding,
-            left: kScreenPadding + kContentHorizontalMargin,
-            right: kScreenPadding + kContentHorizontalMargin,
-          ),
-          child: _buildTitleLogoSection(),
-        ),
-        if (AppConfig.shouldShowDebugFeatures) ...[
-          _buildDebugPadding(context, _buildDebugToggleSection()),
-          _buildDebugPadding(context, _buildVersionSection()),
-        ],
-      ],
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -2550,8 +2576,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     BuildContext context,
     Widget content, {
     Widget Function(Widget child)? wrapWithRefresh,
+    ScrollController? scrollController,
   }) {
     final scrollView = SingleChildScrollView(
+      controller: scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       child: content,
     );
@@ -2561,7 +2589,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildPageHeader(context),
-        _buildPageIndicator(),
         Expanded(child: scrollable),
       ],
     );
@@ -2581,6 +2608,181 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       backgroundColor: kBackgroundColour,
       child: child,
     );
+  }
+
+  Future<void> _shareCurrentPeriod(int pageIndex) async {
+    setState(() => _isSharing = true);
+    try {
+      final String periodKey;
+      final GlobalKey captureKey;
+      switch (pageIndex) {
+        case 0:
+          periodKey = 'daily';
+          captureKey = _dailyRepaintKey;
+        case 1:
+          periodKey = 'week';
+          captureKey = _weekRepaintKey;
+        case 2:
+          periodKey = 'month';
+          captureKey = _monthRepaintKey;
+        case 3:
+          periodKey = 'year';
+          captureKey = _yearRepaintKey;
+        default:
+          return;
+      }
+
+      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final dateToUse = DateTime.parse(dateInfo['date']!);
+      // Match the leap-day fallback used by PeriodPage._identifier.
+      final identifier = (dateToUse.month == 2 && dateToUse.day == 29)
+          ? '02-28'
+          : '${dateToUse.month.toString().padLeft(2, '0')}-${dateToUse.day.toString().padLeft(2, '0')}';
+      final refYear = dateToUse.year;
+      final unit = _isFahrenheit ? 'fahrenheit' : 'celsius';
+
+      final shareService = ShareService();
+
+      // Create the server-side share record and capture the chart in parallel.
+      final shareUrlFuture = shareService.createShare(
+        location: _determinedLocation,
+        period: periodKey,
+        identifier: identifier,
+        refYear: refYear,
+        unit: unit,
+      );
+      final imageFuture = shareService.captureWidget(captureKey);
+
+      final shareUrl = await shareUrlFuture;
+      final imageFile = await imageFuture;
+
+      final periodLabel = _buildPeriodHeaderLabel(pageIndex);
+      final locationLabel =
+          _displayLocation.isNotEmpty ? _displayLocation : _determinedLocation;
+
+      await shareService.share(
+        shareUrl: shareUrl,
+        text: '$periodLabel in $locationLabel',
+        imageFile: imageFile,
+        shareButtonKey: null,
+      );
+    } catch (e) {
+      DebugUtils.logLazy(() => 'Share failed: $e');
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
+    }
+  }
+
+  Widget _buildDotsRow(int pageIndex) {
+    return Row(
+      children: [
+        for (int i = 0; i < _periodKeys.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Container(
+            width: i == pageIndex ? 10 : 8,
+            height: i == pageIndex ? 10 : 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: i == pageIndex
+                  ? kBarCurrentYearColour
+                  : kGreyLabelColour.withValues(alpha: 0.4),
+            ),
+          ),
+        ],
+        const SizedBox(width: 10),
+        AnimatedOpacity(
+          opacity: (_showSwipeCoachmark && !_coachmarkFadingOut) ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 600),
+          onEnd: () {
+            if (_coachmarkFadingOut && mounted) {
+              setState(() => _showSwipeCoachmark = false);
+            }
+          },
+          child: _DotsSwipeHint(
+            running: _showSwipeCoachmark && !_coachmarkFadingOut,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Location row + period heading row shown at the top of each page's
+  /// scrollable content. This is inside the RepaintBoundary so both elements
+  /// appear in the share image.
+  Widget _buildLocationAndHeadingContent(int pageIndex) {
+    final locationColour = _locationColour;
+    final headerText = _displayLocation.isNotEmpty
+        ? _displayLocation
+        : (_determinedLocation.isNotEmpty
+            ? _determinedLocation
+            : 'Loading location...');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: _isLocationDetermined ? _showLocationSelector : null,
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            children: [
+              Icon(
+                Icons.location_on_outlined,
+                color: locationColour.withValues(alpha: 0.8),
+                size: kIconSize + 2,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  headerText,
+                  style: TextStyle(
+                    color: locationColour,
+                    fontSize: kFontSizeLocation,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _buildPeriodHeaderLabel(pageIndex),
+          style: const TextStyle(
+            color: kTextPrimaryColour,
+            fontSize: kFontSizeBody,
+            fontWeight: FontWeight.w600,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
+  void _attachScrollController(ScrollController controller) {
+    _activeScrollController?.removeListener(_onActiveScrollChanged);
+    _activeScrollController = controller;
+    controller.addListener(_onActiveScrollChanged);
+    _scrollOffsetNotifier.value =
+        controller.hasClients ? controller.offset : 0.0;
+  }
+
+  void _onActiveScrollChanged() {
+    if (_activeScrollController?.hasClients == true) {
+      _scrollOffsetNotifier.value =
+          _activeScrollController!.offset.clamp(0.0, double.infinity);
+    }
+  }
+
+  Color get _locationColour {
+    if (!_isLocationDetermined) return kGreyLabelColour.withValues(alpha: 0.4);
+    final gps = _locationService.gpsLocation;
+    if (gps.isEmpty) return kGreyLabelColour.withValues(alpha: 0.7);
+    String cityOf(String l) => l.split(',').first.trim().toLowerCase();
+    final isAtGps = cityOf(gps) == cityOf(_determinedLocation);
+    return isAtGps ? kBarCurrentYearColour : kAccentColour;
   }
 
   String _buildPeriodHeaderLabel(int pageIndex) {
@@ -2605,38 +2807,89 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   /// The daily view page — wraps the existing daily content in a scrollable
   /// RefreshIndicator so pull-to-refresh continues to work.
   Widget _buildDailyPage(BuildContext context, double chartHeight) {
-    final content = _buildContentPadding(
-      context,
-      _buildFutureBuilder(chartHeight: chartHeight),
+    final sidePad = _standardHorizontalPadding();
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // RepaintBoundary: location, date heading, and chart are captured.
+        RepaintBoundary(
+          key: _dailyRepaintKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: EdgeInsets.only(
+                  left: sidePad,
+                  right: sidePad,
+                  bottom: kSectionBottomPadding,
+                ),
+                child: _buildLocationAndHeadingContent(0),
+              ),
+              _buildContentPadding(
+                context,
+                _buildFutureBuilder(chartHeight: chartHeight),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
     return _buildScrollablePageBody(
       context,
       content,
+      scrollController: _dailyScrollController,
       wrapWithRefresh: _buildRefreshIndicator,
     );
   }
 
   Widget _buildPeriodPage(
     BuildContext context, {
+    required int pageIndex,
     required GlobalKey<PeriodPageState> pageKey,
+    required GlobalKey repaintKey,
     required String periodKey,
     required String periodLabel,
+    required ScrollController scrollController,
   }) {
-    final page = PeriodPage(
-      key: pageKey,
-      periodKey: periodKey,
-      periodLabel: periodLabel,
-      location: _determinedLocation,
-      displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
-      latitude: _lastPosition?.latitude,
-      longitude: _lastPosition?.longitude,
-      useInternalScroll: false,
-      isFahrenheit: _isFahrenheit,
+    final sidePad = _standardHorizontalPadding();
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // RepaintBoundary: location, period heading, and chart are captured.
+        RepaintBoundary(
+          key: repaintKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: EdgeInsets.only(
+                  left: sidePad,
+                  right: sidePad,
+                  bottom: kSectionBottomPadding,
+                ),
+                child: _buildLocationAndHeadingContent(pageIndex),
+              ),
+              PeriodPage(
+                key: pageKey,
+                periodKey: periodKey,
+                periodLabel: periodLabel,
+                location: _determinedLocation,
+                displayLocation:
+                    _displayLocation.isNotEmpty ? _displayLocation : null,
+                latitude: _lastPosition?.latitude,
+                longitude: _lastPosition?.longitude,
+                useInternalScroll: false,
+                isFahrenheit: _isFahrenheit,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
-
     return _buildScrollablePageBody(
       context,
-      page,
+      content,
+      scrollController: scrollController,
       wrapWithRefresh: (child) => _buildExternalRefreshIndicator(
         child: child,
         onRefresh: () async {
@@ -3210,6 +3463,95 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 }
 
 String _formatDayMonth(DateTime date) => date_utils.formatDateWithOrdinal(date);
+
+/// Animated right-arrow hint shown inline with the page-indicator dots.
+///
+/// Slides a chevron to the right and fades it out, then snaps back and
+/// repeats — identical timing to [SwipeGestureIndicator] but compact
+/// (icon only, no text). The [running] flag stops the animation controller
+/// when the parent hides this widget, avoiding unnecessary CPU use.
+class _DotsSwipeHint extends StatefulWidget {
+  final bool running;
+  const _DotsSwipeHint({required this.running});
+
+  @override
+  State<_DotsSwipeHint> createState() => _DotsSwipeHintState();
+}
+
+class _DotsSwipeHintState extends State<_DotsSwipeHint>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _slide;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    if (widget.running) _controller.repeat();
+
+    _slide = TweenSequence([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: 14.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 55,
+      ),
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 45),
+    ]).animate(_controller);
+
+    _fade = TweenSequence([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 40),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 15,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 10,
+      ),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 35),
+    ]).animate(_controller);
+  }
+
+  @override
+  void didUpdateWidget(_DotsSwipeHint old) {
+    super.didUpdateWidget(old);
+    if (widget.running && !old.running) {
+      _controller.repeat();
+    } else if (!widget.running && old.running) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) => Opacity(
+        opacity: _fade.value,
+        child: Transform.translate(
+          offset: Offset(_slide.value, 0),
+          child: Icon(
+            Icons.chevron_right,
+            color: kBarCurrentYearColour,
+            size: kIconSize + 2,
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 Map<String, dynamic> _createResultMap({
   required List<TemperatureChartData> chartData,
