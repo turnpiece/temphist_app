@@ -2873,7 +2873,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             completeness: completeness,
             onRetry: _chartDataFailed ? null : _retryChartData,
             isRetrying: _isRetryingChartData,
-            retryCount: _chartDataRetryCount,
             noteText: overrideNote,
           ),
         ],

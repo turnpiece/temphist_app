@@ -53,9 +53,6 @@ class CompletenessSection extends StatelessWidget {
   /// When true, shows a "Retrying…" state instead of the Retry button.
   final bool isRetrying;
 
-  /// If > 0, shows a "Retry attempts: N" line.
-  final int retryCount;
-
   /// Optional override for the note text. When set this replaces the
   /// auto-generated "Data for X could not be loaded." line.
   final String? noteText;
@@ -66,7 +63,6 @@ class CompletenessSection extends StatelessWidget {
     required this.completeness,
     this.onRetry,
     this.isRetrying = false,
-    this.retryCount = 0,
     this.noteText,
   });
 
@@ -155,17 +151,6 @@ class CompletenessSection extends StatelessWidget {
             style: const TextStyle(
               color: kGreyLabelColour,
               fontSize: kFontSizeBody - 2,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ],
-        if (retryCount > 0) ...[
-          const SizedBox(height: 4),
-          Text(
-            'Retry attempts: $retryCount',
-            style: const TextStyle(
-              color: kGreyLabelColour,
-              fontSize: kFontSizeBody - 3,
               fontWeight: FontWeight.w400,
             ),
           ),
