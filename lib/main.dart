@@ -2654,6 +2654,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       final locationLabel =
           _displayLocation.isNotEmpty ? _displayLocation : _determinedLocation;
 
+      // Clear the spinner before opening the native sheet. The share future
+      // may never resolve on iOS if the user dismisses without selecting an
+      // action, which would leave _isSharing stuck as true indefinitely.
+      if (mounted) setState(() => _isSharing = false);
+
       await shareService.share(
         shareUrl: shareUrl,
         text: '$periodLabel in $locationLabel',
@@ -2662,7 +2667,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       );
     } catch (e) {
       DebugUtils.logLazy(() => 'Share failed: $e');
-    } finally {
       if (mounted) setState(() => _isSharing = false);
     }
   }
