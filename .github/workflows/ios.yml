@@ -38,6 +38,11 @@ jobs:
             echo "Version will be updated when a tag is pushed"
           fi
 
+      - name: 🔧 Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26'
+
       - name: 🚀 Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -68,16 +73,10 @@ jobs:
       - name: Clean DerivedData
         run: rm -rf ~/Library/Developer/Xcode/DerivedData
 
-      - name: Select latest Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
-
       - name: Finalise Xcode & ensure iPhoneOS platform
         shell: bash
         run: |
           set -euo pipefail
-
-          # Use the stock Xcode (has iPhoneOS.platform)
-          sudo xcode-select -s /Applications/Xcode.app
 
           # Capture and export DEVELOPER_DIR for THIS step and future steps
           export DEVELOPER_DIR="$(xcode-select -p)"
@@ -90,19 +89,12 @@ jobs:
           sudo xcodebuild -license accept || true
           sudo xcodebuild -runFirstLaunch || true
 
-          # Sanity checks
-          echo "iphoneos SDK version: $(xcrun --sdk iphoneos --show-sdk-version)" >/dev/null
+          # Sanity check
           if [ ! -d "$DEVELOPER_DIR/Platforms/iPhoneOS.platform/Developer/SDKs" ]; then
             echo "ERROR: iPhoneOS.platform SDKs not found in $DEVELOPER_DIR"
-            ls -la "$DEVELOPER_DIR/Platforms" || true >/dev/null
+            ls -la "$DEVELOPER_DIR/Platforms" || true
             exit 1
           fi
-
-          xcrun --sdk iphoneos --show-sdk-version >/dev/null
-          test -d "$DEVELOPER_DIR/Platforms/iPhoneOS.platform/Developer/SDKs" >/dev/null
-
-          # (Optional) only do this AFTER pod install creates the workspace:
-          # xcodebuild -showdestinations -workspace ios/Runner.xcworkspace -scheme Runner || true
 
       - name: Verify Xcode version
         run: |
