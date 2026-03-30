@@ -65,6 +65,10 @@ class PeriodPageState extends State<PeriodPage>
   // Cache key to avoid re-fetching when swiping back
   String _lastFetchKey = '';
 
+  // Generation counter — incremented whenever location/unit changes so that
+  // any in-flight fetch from the previous configuration is discarded.
+  int _fetchGeneration = 0;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -79,11 +83,12 @@ class PeriodPageState extends State<PeriodPage>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.location != widget.location ||
         oldWidget.isFahrenheit != widget.isFahrenheit) {
-      // Location or unit changed — clear stale data immediately so the old
-      // location's/unit's content is never shown under the new header, then
-      // re-fetch.
+      // Location or unit changed — increment generation so any in-flight fetch
+      // is discarded, clear stale data immediately, then re-fetch.
+      _fetchGeneration++;
       _lastFetchKey = '';
       _data = null;
+      _isLoading = false;
       _loadIfNeeded();
     }
   }
@@ -108,6 +113,8 @@ class PeriodPageState extends State<PeriodPage>
 
   Future<void> _fetchData({bool bypassCache = false}) async {
     if (_isLoading) return;
+
+    final generation = _fetchGeneration;
 
     setState(() {
       _isLoading = true;
@@ -153,7 +160,7 @@ class PeriodPageState extends State<PeriodPage>
           _identifier,
           unitGroup: unitGroup,
           onProgress: (status) {
-            if (mounted) {
+            if (mounted && _fetchGeneration == generation) {
               setState(() {
                 _loadingMessage = status.isPending
                     ? 'Processing ${widget.periodLabel.toLowerCase()} data...'
@@ -171,7 +178,7 @@ class PeriodPageState extends State<PeriodPage>
         }
       }
 
-      if (mounted) {
+      if (mounted && _fetchGeneration == generation) {
         setState(() {
           _data = data;
           _isLoading = false;
@@ -179,7 +186,7 @@ class PeriodPageState extends State<PeriodPage>
         });
       }
     } on RateLimitException {
-      if (mounted) {
+      if (mounted && _fetchGeneration == generation) {
         setState(() {
           _isLoading = false;
           _error = 'Rate limit exceeded. Please wait a moment and try again.';
@@ -187,7 +194,7 @@ class PeriodPageState extends State<PeriodPage>
       }
     } catch (e) {
       DebugUtils.logLazy(() => 'PeriodPage error (${widget.periodKey}): $e');
-      if (mounted) {
+      if (mounted && _fetchGeneration == generation) {
         setState(() {
           _isLoading = false;
           _error = 'Failed to load ${widget.periodLabel.toLowerCase()} data. '

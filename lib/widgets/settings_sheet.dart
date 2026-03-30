@@ -68,6 +68,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
   void _toggleUnit(bool fahrenheit) {
     setState(() => _isFahrenheit = fahrenheit);
     widget.onUnitChanged(fahrenheit);
+    Navigator.of(context).pop();
   }
 
   @override
