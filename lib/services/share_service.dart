@@ -126,8 +126,8 @@ class ShareService {
     }
   }
 
-  /// Returns the screen rect of [key]'s widget, or a small fallback rect at
-  /// the top-right of the screen if the key has no render object.
+  /// Returns the screen rect of [key]'s widget, or a fallback rect at the
+  /// centre of the screen if the key has no render object.
   Rect _buttonRect(GlobalKey? key) {
     if (key?.currentContext != null) {
       final box = key!.currentContext!.findRenderObject() as RenderBox?;
@@ -136,7 +136,10 @@ class ShareService {
         return pos & box.size;
       }
     }
-    // Fallback: top-right corner (safe for iPhone too).
-    return const Rect.fromLTWH(0, 0, 1, 1);
+    // Fallback: centre of the screen. A (0,0) rect can silently prevent the
+    // share sheet from presenting on physical iOS devices.
+    final view = ui.PlatformDispatcher.instance.views.first;
+    final size = view.physicalSize / view.devicePixelRatio;
+    return Rect.fromLTWH(size.width / 2, size.height / 2, 1, 1);
   }
 }
