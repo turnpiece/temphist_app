@@ -157,7 +157,16 @@ Future<void> _emergencyCacheCleanup() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  // Explicitly declare supported orientations so the app reorients correctly
+  // on physical devices (e.g. TestFlight), not just the simulator.
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+
   // Configure system UI overlay to extend app background over status bar and navigation bar
   _setSystemUIOverlayStyle();
   
@@ -2515,11 +2524,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                           // No GlobalKey here — _buildPageHeader is called once
                           // per page, so 4 Padding widgets would share one key.
                           // iPad popover falls back to Rect.fromLTWH(0,0,1,1).
-                          padding: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           child: _isSharing
                               ? SizedBox(
-                                  width: kIconSize,
-                                  height: kIconSize,
+                                  width: kIconSize + 6,
+                                  height: kIconSize + 6,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
                                     color: kGreyLabelColour.withValues(alpha: 0.7),
@@ -2528,7 +2537,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                               : Icon(
                                   Icons.ios_share,
                                   color: kGreyLabelColour.withValues(alpha: 0.7),
-                                  size: kIconSize + 2,
+                                  size: kIconSize + 6,
                                 ),
                         ),
                       ),
@@ -2537,11 +2546,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                         onTap: _showSettings,
                         behavior: HitTestBehavior.opaque,
                         child: Padding(
-                          padding: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           child: Icon(
                             Icons.settings,
                             color: kGreyLabelColour.withValues(alpha: 0.7),
-                            size: kIconSize + 4,
+                            size: kIconSize + 8,
                           ),
                         ),
                       ),
@@ -2662,10 +2671,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     return Row(
       children: [
         for (int i = 0; i < _periodKeys.length; i++) ...[
-          if (i > 0) const SizedBox(width: 6),
+          if (i > 0) const SizedBox(width: 8),
           Container(
-            width: i == pageIndex ? 10 : 8,
-            height: i == pageIndex ? 10 : 8,
+            width: i == pageIndex ? 12 : 10,
+            height: i == pageIndex ? 12 : 10,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: i == pageIndex

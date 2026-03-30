@@ -133,6 +133,7 @@ class TemperatureBarChart extends StatelessWidget {
           final chartWidth = availableWidth - kChartRightMargin - (contentPadding * 2);
 
           final chart = SfCartesianChart(
+            key: ValueKey(isFahrenheit),
             isTransposed: true,
             margin: const EdgeInsets.only(
               left: kChartHorizontalMargin,

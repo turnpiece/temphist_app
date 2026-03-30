@@ -359,8 +359,7 @@ class PeriodPageState extends State<PeriodPage>
       if (data.summary.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-          child: Container(
-            alignment: Alignment.topLeft,
+          child: ConstrainedBox(
             constraints: const BoxConstraints(
               minHeight: kSummaryFontSize * kSummaryLineHeight * kSummaryMinLines + 8,
             ),
@@ -368,9 +367,14 @@ class PeriodPageState extends State<PeriodPage>
               data.summary,
               style: const TextStyle(
                 color: kSummaryColour,
-                fontSize: kFontSizeBody,
-                height: 1.2,
-                overflow: TextOverflow.visible,
+                fontSize: kSummaryFontSize,
+                fontWeight: FontWeight.w400,
+                height: kSummaryLineHeight,
+              ),
+              strutStyle: const StrutStyle(
+                fontSize: kSummaryFontSize,
+                height: kSummaryLineHeight,
+                forceStrutHeight: true,
               ),
               softWrap: true,
               maxLines: null,
