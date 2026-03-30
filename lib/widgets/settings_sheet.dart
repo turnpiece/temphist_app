@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
+import 'help_page.dart';
 
 /// A bottom-aligned settings modal with the same slide-up animation as
 /// [LocationSelectorSheet].
@@ -156,7 +157,8 @@ class _SettingsSheetState extends State<SettingsSheet> {
                     size: kIconSize + 4,
                   ),
                   onTap: () {
-                    // Placeholder — no action yet.
+                    Navigator.of(context).pop();
+                    HelpPage.show(context);
                   },
                 ),
 
