@@ -112,18 +112,26 @@ class ShareService {
     GlobalKey? shareButtonKey,
   }) async {
     final rect = _buttonRect(shareButtonKey);
-    if (imageFile != null) {
-      await Share.shareXFiles(
-        [XFile(imageFile.path)],
-        text: '$text\n$shareUrl',
-        sharePositionOrigin: rect,
-      );
-    } else {
-      await Share.share(
-        '$text\n$shareUrl',
-        sharePositionOrigin: rect,
-      );
+    final shareText = '$text\n$shareUrl';
+
+    if (imageFile != null && await imageFile.exists()) {
+      try {
+        await Share.shareXFiles(
+          [XFile(imageFile.path, mimeType: 'image/png')],
+          text: shareText,
+          sharePositionOrigin: rect,
+        );
+        return;
+      } catch (e) {
+        DebugUtils.logLazy(
+            () => 'ShareService: shareXFiles failed, falling back to text: $e');
+      }
     }
+
+    await Share.share(
+      shareText,
+      sharePositionOrigin: rect,
+    );
   }
 
   /// Returns the screen rect of [key]'s widget, or a fallback rect at the
