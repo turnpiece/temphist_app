@@ -316,6 +316,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   bool _splashScreenMinTimeElapsed = false;
   Timer? _splashScreenTimer;
   final Completer<void> _splashCompleter = Completer<void>();
+
+  // Guards auto-opening of the location selector on first launch with no GPS.
+  // Both flags must be true before the selector can open, preventing it from
+  // firing before we know whether onboarding needs to be shown.
+  bool _onboardingCheckComplete = false;
+  bool _locationSelectorAutoOpened = false;
   
   
   // Store current data for updates
@@ -532,9 +538,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Mark app as initialized after location is determined
     // But only if minimum splash screen time has elapsed
     if (_splashScreenMinTimeElapsed) {
-      setState(() {
-        _isAppInitialized = true;
-      });
+      _onAppInitialized();
     } else {
       // If splash screen time hasn't elapsed, wait for it
       _waitForSplashScreenAndInitialize();
@@ -784,9 +788,20 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       return prefs.getBool('has_seen_onboarding') ?? false;
     }, 'load onboarding flag');
 
-    if (seen == true) return;
+    if (seen == true) {
+      if (mounted) {
+        _onboardingCheckComplete = true;
+        _maybeAutoOpenLocationSelector();
+      }
+      return;
+    }
 
-    if (mounted) setState(() => _hasSeenOnboarding = false);
+    if (mounted) {
+      setState(() => _hasSeenOnboarding = false);
+      _onboardingCheckComplete = true;
+      // _hasSeenOnboarding is false here so _maybeAutoOpenLocationSelector will
+      // not open the selector now; _completeOnboarding will call it instead.
+    }
   }
 
   /// Mark onboarding as complete and return to the main screen.
@@ -801,6 +816,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       // Now that the main screen is visible, start the coachmark if it was
       // held back because data loaded while onboarding was still showing.
       _startCoachmarkIfPending();
+      // If the app had no location when it started, open the selector now
+      // that the user has finished onboarding.
+      _maybeAutoOpenLocationSelector();
     }
   }
 
@@ -1081,10 +1099,38 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
     await _splashCompleter.future;
     if (mounted) {
-      setState(() {
-        _isAppInitialized = true;
-      });
+      _onAppInitialized();
     }
+  }
+
+  /// Sets [_isAppInitialized] then checks whether the location selector should
+  /// be auto-opened (deferred until we also know the onboarding state).
+  void _onAppInitialized() {
+    setState(() {
+      _isAppInitialized = true;
+    });
+    _maybeAutoOpenLocationSelector();
+  }
+
+  /// Opens the location selector automatically when:
+  ///  - the app is fully initialised,
+  ///  - we know whether onboarding is needed (race-condition guard),
+  ///  - onboarding has already been seen (so we don't open over it), AND
+  ///  - GPS produced no result and there is no saved location history.
+  ///
+  /// When onboarding *has not* been seen, [_completeOnboarding] will call this
+  /// once the user finishes, at which point all conditions will be satisfied.
+  void _maybeAutoOpenLocationSelector() {
+    if (_locationSelectorAutoOpened) return;
+    if (!_isAppInitialized) return;
+    if (!_onboardingCheckComplete) return;
+    if (!_hasSeenOnboarding) return;
+    if (!_locationService.locationPermissionDenied) return;
+
+    _locationSelectorAutoOpened = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showRequiredLocationSelector();
+    });
   }
 
   void _startLoadingMessageTimer() {
@@ -1482,6 +1528,18 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       gpsLocation: _locationService.gpsLocation,
       selectedLocation: _determinedLocation,
       onLocationSelected: _onLocationSelected,
+    );
+  }
+
+  /// Opens the location selector without a close button, used on first launch
+  /// when no location has been determined, so the user must pick a city.
+  void _showRequiredLocationSelector() {
+    LocationSelectorSheet.show(
+      context,
+      gpsLocation: _locationService.gpsLocation,
+      selectedLocation: _determinedLocation,
+      onLocationSelected: _onLocationSelected,
+      canDismiss: false,
     );
   }
 

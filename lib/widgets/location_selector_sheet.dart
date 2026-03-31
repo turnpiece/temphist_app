@@ -33,11 +33,17 @@ class LocationSelectorSheet extends StatefulWidget {
   /// The screen dismisses itself before invoking this.
   final void Function(String apiLocation) onLocationSelected;
 
+  /// When false the close button is hidden and the barrier is non-dismissible,
+  /// forcing the user to pick a city. Used on first launch when no location
+  /// has been determined.
+  final bool canDismiss;
+
   const LocationSelectorSheet({
     super.key,
     required this.gpsLocation,
     required this.selectedLocation,
     required this.onLocationSelected,
+    this.canDismiss = true,
   });
 
   /// Show the location selector as a full-screen modal that slides up.
@@ -50,10 +56,11 @@ class LocationSelectorSheet extends StatefulWidget {
     required String gpsLocation,
     required String selectedLocation,
     required void Function(String) onLocationSelected,
+    bool canDismiss = true,
   }) {
     return showGeneralDialog(
       context: context,
-      barrierDismissible: true,
+      barrierDismissible: canDismiss,
       barrierLabel: 'Dismiss',
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 300),
@@ -61,6 +68,7 @@ class LocationSelectorSheet extends StatefulWidget {
         gpsLocation: gpsLocation,
         selectedLocation: selectedLocation,
         onLocationSelected: onLocationSelected,
+        canDismiss: canDismiss,
       ),
       transitionBuilder: (_, animation, __, child) => SlideTransition(
         position: Tween<Offset>(
@@ -149,13 +157,13 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
         child: SafeArea(
           child: Column(
             children: [
-              // Header row with title and close button
+              // Header row with title and optional close button
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+                padding: EdgeInsets.fromLTRB(20, 16, widget.canDismiss ? 8 : 20, 12),
                 child: Row(
                   children: [
                     Text(
-                      'Choose location',
+                      widget.canDismiss ? 'Choose location' : 'Choose your location',
                       style: TextStyle(
                         color: kTextPrimaryColour,
                         fontSize: kFontSizeBody,
@@ -163,14 +171,15 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                       ),
                     ),
                     const Spacer(),
-                    IconButton(
-                      icon: Icon(
-                        Icons.close,
-                        color: kGreyLabelColour,
-                        size: kIconSize + 2,
+                    if (widget.canDismiss)
+                      IconButton(
+                        icon: Icon(
+                          Icons.close,
+                          color: kGreyLabelColour,
+                          size: kIconSize + 2,
+                        ),
+                        onPressed: () => Navigator.of(context).pop(),
                       ),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
                   ],
                 ),
               ),
@@ -224,7 +233,10 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     final visibleRecent = _showAllRecent
         ? orderedRecent
         : orderedRecent.take(_initialCount).toList();
-    final visiblePopular = _showAllPopular
+    // Show all popular locations when there are no recent locations — the
+    // limit only makes sense when the list is already long due to recent items.
+    final showAllPopular = _showAllPopular || data.recentLocations.isEmpty;
+    final visiblePopular = showAllPopular
         ? orderedPopular
         : orderedPopular.take(_initialCount).toList();
 
@@ -263,7 +275,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
               isSelected: _isSelected(loc),
               onTap: _isSelected(loc) ? null : () => _select(loc),
             ),
-          if (data.popularLocations.length > _initialCount && !_showAllPopular)
+          if (data.popularLocations.length > _initialCount && !showAllPopular)
             _ShowMoreButton(
               onTap: () => setState(() => _showAllPopular = true),
             ),

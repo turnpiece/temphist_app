@@ -5,7 +5,6 @@ import '../../services/temperature_unit_service.dart';
 import 'pages/onboarding_average_trend_page.dart';
 import 'pages/onboarding_day_page.dart';
 import 'pages/onboarding_location_page.dart';
-import 'pages/onboarding_location_switch_page.dart';
 import 'pages/onboarding_swipe_page.dart';
 import 'pages/onboarding_tap_page.dart';
 import 'pages/onboarding_temperature_unit_page.dart';
@@ -43,7 +42,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       const OnboardingAverageTrendPage(),
       const OnboardingSwipePage(),
       const OnboardingLocationPage(),
-      const OnboardingLocationSwitchPage(),
       OnboardingTemperatureUnitPage(unitService: widget.unitService),
     ];
   }

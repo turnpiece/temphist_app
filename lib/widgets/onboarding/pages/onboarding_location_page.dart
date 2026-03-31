@@ -9,10 +9,12 @@ class OnboardingLocationPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return OnboardingPage(
-      title: 'Your local weather history',
+      title: 'Location',
       body: 'TempHist uses your location to show data for the nearest '
           'weather station.\n\n'
-          'You can always see which location is being used at the top of the screen.',
+          'Tap the location name at the top of the screen at any time to '
+          'switch to a different city — including popular destinations '
+          'worldwide.',
       visual: Icon(
         Icons.location_on_outlined,
         color: kAccentColour,

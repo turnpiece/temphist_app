@@ -50,6 +50,15 @@ class LocationService extends ChangeNotifier {
   bool get isLocating => _isLocating;
   bool _isLocating = false;
 
+  /// True when [determineLocation] found that location permission was denied
+  /// (or location services are disabled) *and* there is no GPS location from
+  /// any previous session. Does NOT fire when permission was granted but GPS
+  /// simply failed to get a fix (e.g. timeout indoors).
+  /// Resets to false once the user explicitly chooses a location via
+  /// [setManualLocation], or whenever a real GPS result is obtained.
+  bool get locationPermissionDenied => _locationPermissionDenied;
+  bool _locationPermissionDenied = false;
+
   // ---------------------------------------------------------------------------
   // Private state
   // ---------------------------------------------------------------------------
@@ -80,6 +89,7 @@ class LocationService extends ChangeNotifier {
   Future<void> determineLocation() async {
     if (_isLocating) return;
     _isLocating = true;
+    _locationPermissionDenied = false;
     _notify();
 
     try {
@@ -122,11 +132,16 @@ class LocationService extends ChangeNotifier {
 
       // Try GPS + reverse-geocoding
       var gpsResolved = false;
+      var permissionDenied = false;
       try {
         DebugUtils.logLazy(() => 'LocationService: starting geolocation');
 
         final serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
-        if (serviceEnabled) {
+        if (!serviceEnabled) {
+          // System-wide location services are off — user must enable in Settings.
+          permissionDenied = true;
+          DebugUtils.logLazy(() => 'Location services disabled');
+        } else {
           var permission = await geo.Geolocator.checkPermission();
           if (permission == geo.LocationPermission.denied) {
             permission = await geo.Geolocator.requestPermission();
@@ -155,8 +170,16 @@ class LocationService extends ChangeNotifier {
                 DebugUtils.logLazy(() => 'Geolocation result: $city');
               }
             } catch (e) {
+              // Permission was granted but GPS failed to get a fix (timeout,
+              // indoors, simulator with no location set, etc.). This is NOT
+              // treated as a permission denial — the user may still get a fix
+              // later.
               DebugUtils.logLazy(() => 'Geolocation timeout or error: $e');
             }
+          } else {
+            // Permission explicitly denied or denied forever.
+            permissionDenied = true;
+            DebugUtils.logLazy(() => 'Location permission denied: $permission');
           }
         }
       } catch (e) {
@@ -172,7 +195,7 @@ class LocationService extends ChangeNotifier {
         gpsResolved = false;
       }
 
-      DebugUtils.logLazy(() => 'LocationService: final city: $city (gpsResolved: $gpsResolved)');
+      DebugUtils.logLazy(() => 'LocationService: final city: $city (gpsResolved: $gpsResolved, permissionDenied: $permissionDenied)');
       DebugUtils.verboseWithContextLazy(
         'Location',
         () => 'Determined location: $city (display: ${_extractDisplayLocation(city)})',
@@ -187,6 +210,12 @@ class LocationService extends ChangeNotifier {
       if (gpsResolved) {
         _gpsLocation = city;
       }
+      // Signal to callers that location permission was explicitly denied (or
+      // location services are off) AND there is no GPS history from a previous
+      // session. Unlike a GPS timeout, a denied permission means the app will
+      // never be able to auto-detect location, so the UI should prompt the user
+      // to pick a city manually.
+      _locationPermissionDenied = permissionDenied && _gpsLocation.isEmpty;
       _displayLocation = _extractDisplayLocation(city);
       _isLocationDetermined = true;
       _locationDeterminedAt = DateTime.now();
@@ -312,6 +341,7 @@ class LocationService extends ChangeNotifier {
     _displayLocation = _extractDisplayLocation(apiLocation);
     _isLocationDetermined = true;
     _locationDeterminedAt = DateTime.now();
+    _locationPermissionDenied = false;
     _notify();
     await _cacheLocation(apiLocation, _displayLocation);
   }
