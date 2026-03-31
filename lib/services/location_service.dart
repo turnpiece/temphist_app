@@ -121,6 +121,7 @@ class LocationService extends ChangeNotifier {
       }
 
       // Try GPS + reverse-geocoding
+      var gpsResolved = false;
       try {
         DebugUtils.logLazy(() => 'LocationService: starting geolocation');
 
@@ -150,6 +151,7 @@ class LocationService extends ChangeNotifier {
 
               if (placemarks.isNotEmpty) {
                 city = location_utils.buildLocationFromPlacemark(placemarks.first);
+                gpsResolved = true;
                 DebugUtils.logLazy(() => 'Geolocation result: $city');
               }
             } catch (e) {
@@ -161,33 +163,43 @@ class LocationService extends ChangeNotifier {
         DebugUtils.logLazy(() => 'Geolocation failed, falling back to $city: $e');
       }
 
-      // Validate
+      // Validate — if the resolved city looks suspicious, discard it and fall
+      // back to the default, treating this the same as a GPS failure.
       city = location_utils.cleanupLocationString(city);
       if (location_utils.isLocationSuspicious(city)) {
         DebugUtils.logLazy(() => 'Suspicious location: $city, falling back to default');
         city = kDefaultLocation;
+        gpsResolved = false;
       }
 
-      DebugUtils.logLazy(() => 'LocationService: final city: $city');
+      DebugUtils.logLazy(() => 'LocationService: final city: $city (gpsResolved: $gpsResolved)');
       DebugUtils.verboseWithContextLazy(
         'Location',
         () => 'Determined location: $city (display: ${_extractDisplayLocation(city)})',
       );
 
       _determinedLocation = city;
-      _gpsLocation = city;
+      // Only record a GPS location when the device actually resolved one.
+      // If permission was denied or GPS failed we use the default fallback but
+      // must not pretend it is a real device location — that would cause the
+      // location header to show green and the selector to show it as "Current
+      // location".
+      if (gpsResolved) {
+        _gpsLocation = city;
+      }
       _displayLocation = _extractDisplayLocation(city);
       _isLocationDetermined = true;
       _locationDeterminedAt = DateTime.now();
       _notify();
 
-      // Record GPS-detected location to history (manual selections are not recorded)
-      await LocationHistoryService.add(city);
+      // Only add to GPS history and persist the GPS key when a real position
+      // was obtained — manual selections and default fallbacks are excluded.
+      if (gpsResolved) {
+        await LocationHistoryService.add(city);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_kGpsLocationKey, city);
+      }
       await _cacheLocation(city, _displayLocation);
-      // Persist GPS location separately so it survives across sessions and is
-      // never overwritten by setManualLocation.
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_kGpsLocationKey, city);
     } catch (e) {
       DebugUtils.logLazy(() => 'LocationService.determineLocation failed: $e');
       _determinedLocation = kDefaultLocation;
