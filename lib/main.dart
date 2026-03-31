@@ -2834,11 +2834,20 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   Color get _locationColour {
     if (!_isLocationDetermined) return kGreyLabelColour.withValues(alpha: 0.4);
-    final gps = _locationService.gpsLocation;
-    if (gps.isEmpty) return kGreyLabelColour.withValues(alpha: 0.7);
-    String cityOf(String l) => l.split(',').first.trim().toLowerCase();
-    final isAtGps = cityOf(gps) == cityOf(_determinedLocation);
-    return isAtGps ? kBarCurrentYearColour : kAccentColour;
+    switch (_locationService.locationSource) {
+      case LocationSource.gps:
+        // Green — your actual GPS location, matches the current-year bar.
+        return kBarCurrentYearColour;
+      case LocationSource.recentlyVisited:
+        // Red — a city you've physically been to (in GPS history).
+        // Red has more visual weight than blue, reflecting that personal history
+        // is more relevant than an arbitrary popular-city selection.
+        return kAccentColour;
+      case LocationSource.manual:
+        // Blue — a city chosen from the popular list with no GPS history.
+        // Neutral, matches the average reference line in the chart.
+        return kAverageColour;
+    }
   }
 
   String _buildPeriodHeaderLabel(int pageIndex) {

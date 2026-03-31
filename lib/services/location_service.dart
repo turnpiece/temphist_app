@@ -11,6 +11,21 @@ import '../utils/debug_utils.dart';
 import '../utils/location_utils.dart' as location_utils;
 import 'location_history_service.dart';
 
+/// How the currently determined location was sourced — used for colour coding.
+enum LocationSource {
+  /// The device's active GPS-detected location this session.
+  gps,
+
+  /// A city the user has previously visited (present in GPS history) but is
+  /// not their current GPS location — e.g. they manually re-selected it or
+  /// it was loaded from the 30-min cache from a previous GPS fix.
+  recentlyVisited,
+
+  /// A city chosen from the popular list or entered manually that has no GPS
+  /// history entry — the user has never been there (as far as the app knows).
+  manual,
+}
+
 /// Encapsulates all device-location concerns: GPS, reverse-geocoding,
 /// caching, and continuous background monitoring.
 ///
@@ -59,6 +74,26 @@ class LocationService extends ChangeNotifier {
   bool get locationPermissionDenied => _locationPermissionDenied;
   bool _locationPermissionDenied = false;
 
+  /// How [determinedLocation] was sourced — drives the three-colour system in
+  /// the UI (green / red / blue for GPS / recently-visited / manual).
+  LocationSource get locationSource {
+    if (_determinedLocation.isEmpty) return LocationSource.manual;
+    final det = _cityName(_determinedLocation);
+    // Current GPS location → green.
+    if (_gpsLocation.isNotEmpty && _cityName(_gpsLocation) == det) {
+      return LocationSource.gps;
+    }
+    // Previously GPS-detected city → red.
+    if (_gpsCityNames.contains(det)) return LocationSource.recentlyVisited;
+    // Arbitrary manual selection → blue.
+    return LocationSource.manual;
+  }
+
+  /// In-memory set of lowercase city names (first comma-segment) that have
+  /// been GPS-detected at least once.  Populated at startup from history and
+  /// updated whenever GPS resolves.
+  final Set<String> _gpsCityNames = {};
+
   // ---------------------------------------------------------------------------
   // Private state
   // ---------------------------------------------------------------------------
@@ -95,13 +130,37 @@ class LocationService extends ChangeNotifier {
     try {
       String city = kDefaultLocation;
 
-      // Restore the last GPS-detected location from previous sessions so it is
-      // available immediately — even if we return early from the cache below.
-      if (_gpsLocation.isEmpty) {
-        final prefs = await SharedPreferences.getInstance();
-        final saved = prefs.getString(_kGpsLocationKey);
-        if (saved != null && saved.isNotEmpty) {
-          _gpsLocation = saved;
+      // Restore GPS state from previous sessions — done once per service
+      // lifetime (guards on emptiness / size).
+      if (_gpsLocation.isEmpty || _gpsCityNames.isEmpty) {
+        try {
+          final history = await LocationHistoryService.getAll();
+          for (final loc in history) {
+            _gpsCityNames.add(_cityName(loc));
+          }
+          if (_gpsLocation.isEmpty && history.isNotEmpty) {
+            // Prefer the dedicated GPS key; fall back to history if absent.
+            final prefs = await SharedPreferences.getInstance();
+            final saved = prefs.getString(_kGpsLocationKey);
+            _gpsLocation = (saved != null && saved.isNotEmpty)
+                ? saved
+                : history.first;
+          }
+        } catch (e) {
+          DebugUtils.logLazy(() => 'Failed to restore GPS history: $e');
+        }
+        // If GPS key exists but history was empty, restore from key alone.
+        if (_gpsLocation.isEmpty) {
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            final saved = prefs.getString(_kGpsLocationKey);
+            if (saved != null && saved.isNotEmpty) {
+              _gpsLocation = saved;
+              _gpsCityNames.add(_cityName(saved));
+            }
+          } catch (e) {
+            DebugUtils.logLazy(() => 'Failed to restore GPS location key: $e');
+          }
         }
       }
 
@@ -113,19 +172,6 @@ class LocationService extends ChangeNotifier {
         _displayLocation = cached['displayLocation']!;
         _isLocationDetermined = true;
         _locationDeterminedAt = DateTime.now();
-
-        // If the persisted GPS key hasn't been written yet (e.g. first run
-        // after this feature was added), fall back to the most recent entry
-        // in location history, which only ever contains GPS-detected cities.
-        if (_gpsLocation.isEmpty) {
-          try {
-            final history = await LocationHistoryService.getAll();
-            if (history.isNotEmpty) _gpsLocation = history.first;
-          } catch (e) {
-            DebugUtils.logLazy(() => 'Failed to load location history: $e');
-          }
-        }
-
         _notify();
         return;
       }
@@ -209,6 +255,7 @@ class LocationService extends ChangeNotifier {
       // location".
       if (gpsResolved) {
         _gpsLocation = city;
+        _gpsCityNames.add(_cityName(city));
       }
       // Signal to callers that location permission was explicitly denied (or
       // location services are off) AND there is no GPS history from a previous
@@ -373,6 +420,11 @@ class LocationService extends ChangeNotifier {
     final parts = fullLocation.split(',');
     return parts.isNotEmpty ? parts.first.trim() : fullLocation;
   }
+
+  /// Returns the lowercase city name (first comma-segment) for a location
+  /// string — used for fuzzy matching across format differences.
+  static String _cityName(String location) =>
+      location.split(',').first.trim().toLowerCase();
 
   void _notify() {
     // Guard against notifying after dispose.

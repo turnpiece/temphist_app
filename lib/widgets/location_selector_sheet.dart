@@ -245,7 +245,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
       children: [
         // "Current location" shows the physical GPS location, if known.
         if (widget.gpsLocation.isNotEmpty) ...[
-          _SectionHeader('Current'),
+          _SectionHeader('Current', color: kBarCurrentYearColour),
           _LocationRow(
             apiLocation: widget.gpsLocation,
             isSelected: widget.selectedLocation == widget.gpsLocation,
@@ -255,7 +255,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
           ),
         ],
         if (data.recentLocations.isNotEmpty) ...[
-          _SectionHeader('Recent'),
+          _SectionHeader('Recent', color: kAccentColour),
           for (final loc in visibleRecent)
             _LocationRow(
               apiLocation: loc,
@@ -268,7 +268,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
             ),
         ],
         if (data.popularLocations.isNotEmpty) ...[
-          _SectionHeader('Popular'),
+          _SectionHeader('Popular', color: kAverageColour),
           for (final loc in visiblePopular)
             _LocationRow(
               apiLocation: loc,
@@ -300,7 +300,9 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
 
 class _SectionHeader extends StatelessWidget {
   final String label;
-  const _SectionHeader(this.label);
+  final Color color;
+
+  const _SectionHeader(this.label, {required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -309,7 +311,7 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         label.toUpperCase(),
         style: TextStyle(
-          color: kGreyLabelColour,
+          color: color,
           fontSize: kFontSizeBody - 4,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.8,
