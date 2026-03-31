@@ -20,12 +20,6 @@ post_install do |installer|
         end
       end
     end
-    if t.name == 'geocoding_ios'
-      phase = t.resources_build_phase
-      phase.files_references
-           .select { |fr| fr.path.end_with?('PrivacyInfo.xcprivacy') }
-           .each   { |fr| phase.remove_file_reference(fr) }
-    end
     t.build_configurations.each do |c|
       # Pods are not independently signed
       c.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
