@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../constants/app_constants.dart';
 import 'help_page.dart';
@@ -159,6 +160,24 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   onTap: () {
                     Navigator.of(context).pop();
                     HelpPage.show(context);
+                  },
+                ),
+
+                // Privacy policy row
+                _SettingsRow(
+                  icon: Icons.privacy_tip_outlined,
+                  label: 'Privacy policy',
+                  trailing: Icon(
+                    Icons.open_in_new,
+                    color: kGreyLabelColour,
+                    size: kIconSize + 2,
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    launchUrl(
+                      Uri.parse(kPrivacyPolicyUrl),
+                      mode: LaunchMode.externalApplication,
+                    );
                   },
                 ),
 

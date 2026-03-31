@@ -79,3 +79,6 @@ const int kMaxChartDataRetries = 3;
 
 /// Default location constant
 const String kDefaultLocation = 'London, UK';
+
+/// Privacy policy URL
+const String kPrivacyPolicyUrl = 'https://temphist.com/privacy/app';

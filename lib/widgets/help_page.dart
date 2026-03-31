@@ -166,6 +166,7 @@ class _Body extends StatelessWidget {
             'Switch between °C and °F',
             'Change location',
             'View this help page',
+            'View the privacy policy',
           ],
         ),
         SizedBox(height: kSectionBottomPadding),
