@@ -1617,6 +1617,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
       final shareService = ShareService();
 
+      // Compute labels upfront so they can be baked into the image footer
+      // while createShare runs in parallel.
+      final periodLabel = _buildPeriodHeaderLabel(pageIndex);
+      final locationLabel =
+          _displayLocation.isNotEmpty ? _displayLocation : _determinedLocation;
+      final footerText = '$locationLabel — $periodLabel';
+
       // Create the server-side share record and capture the chart in parallel.
       final shareUrlFuture = shareService.createShare(
         location: _determinedLocation,
@@ -1625,14 +1632,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         refYear: refYear,
         unit: unit,
       );
-      final imageFuture = shareService.captureWidget(captureKey);
+      final imageFuture = shareService.captureWidget(
+        captureKey,
+        footerText: footerText,
+      );
 
       final shareUrl = await shareUrlFuture;
       final imageFile = await imageFuture;
-
-      final periodLabel = _buildPeriodHeaderLabel(pageIndex);
-      final locationLabel =
-          _displayLocation.isNotEmpty ? _displayLocation : _determinedLocation;
 
       // Clear the spinner before opening the native sheet. The share future
       // may never resolve on iOS if the user dismisses without selecting an
@@ -1641,7 +1647,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
       await shareService.share(
         shareUrl: shareUrl,
-        text: 'Temperature history for $locationLabel — $periodLabel',
+        text: footerText,
         imageFile: imageFile,
         shareButtonKey: null,
       );
