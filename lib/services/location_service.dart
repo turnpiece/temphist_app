@@ -421,6 +421,17 @@ class LocationService extends ChangeNotifier {
     return parts.isNotEmpty ? parts.first.trim() : fullLocation;
   }
 
+  /// Returns `true` when [city] matches the current GPS-detected location,
+  /// or no GPS location has been determined yet.  Used to decide whether
+  /// coordinate-keyed Hive cache lookups are valid — if the user has
+  /// manually selected a different city, the GPS coordinates belong to the
+  /// old city and the cache would return stale data.
+  bool isAtGpsCity(String city) {
+    if (city.isEmpty) return false;
+    if (_gpsLocation.isEmpty) return true;
+    return _cityName(city) == _cityName(_gpsLocation);
+  }
+
   /// Returns the lowercase city name (first comma-segment) for a location
   /// string — used for fuzzy matching across format differences.
   static String _cityName(String location) =>

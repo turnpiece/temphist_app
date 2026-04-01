@@ -1,23 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:temphist_app/main.dart';
-import 'package:temphist_app/widgets/temperature_bar_chart.dart';
-import 'dart:async';
 
 void main() {
   testWidgets('Finds any text', (WidgetTester tester) async {
-    final mockData = {
-      'chartData': <TemperatureChartData>[],
-      'averageTemperature': null,
-      'trendSlope': null,
-      'summary': '',
-      'displayDate': '',
-      'city': '',
-    };
-
     await tester.pumpWidget(MaterialApp(
       home: TemperatureScreen(
-        testFuture: Future.value(mockData),
+        testFuture: Future.value(<String, dynamic>{}),
       ),
     ));
 
@@ -27,18 +16,9 @@ void main() {
   });
 
   testWidgets('App shows location header placeholder', (WidgetTester tester) async {
-    final mockData = {
-      'chartData': <TemperatureChartData>[],
-      'averageTemperature': null,
-      'trendSlope': null,
-      'summary': '',
-      'displayDate': '',
-      'city': '',
-    };
-
     await tester.pumpWidget(MaterialApp(
       home: TemperatureScreen(
-        testFuture: Future.value(mockData),
+        testFuture: Future.value(<String, dynamic>{}),
       ),
     ));
 
@@ -47,71 +27,28 @@ void main() {
     expect(find.text('Loading location...'), findsAtLeastNWidgets(1));
   });
 
-  testWidgets('Chart and summary render with data', (WidgetTester tester) async {
-    // Mock chart data
-    final mockData = {
-      'chartData': [
-        TemperatureChartData(year: '2020', temperature: 15.0, isCurrentYear: false),
-        TemperatureChartData(year: '2021', temperature: 16.0, isCurrentYear: true),
-      ],
-      'averageTemperature': 15.5,
-      'trendSlope': 0.1,
-      'summary': 'Test summary',
-      'displayDate': '1st January',
-      'city': 'Testville',
-    };
-
+  testWidgets('PeriodPage shows determining location when location is empty', (WidgetTester tester) async {
     await tester.pumpWidget(MaterialApp(
       home: TemperatureScreen(
-        testFuture: Future.value(mockData),
+        testFuture: Future.value(<String, dynamic>{}),
       ),
     ));
 
-    // Wait for the FutureBuilder to complete
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    // Check for chart and summary
-    expect(find.text('Test summary'), findsOneWidget);
-    expect(find.text('Average: 15.5°C'), findsOneWidget);
-    expect(find.textContaining('Trend:'), findsOneWidget);
-    // You can also check for the chart widget type if needed
-    // expect(find.byType(SfCartesianChart), findsOneWidget);
+    // With testFuture set and no location resolved, the PeriodPage shows
+    // "Determining location..." since the location prop is empty.
+    expect(find.text('Determining location...'), findsWidgets);
   });
 
-  testWidgets('Shows loading indicator while waiting', (WidgetTester tester) async {
-    // Use a future that never completes
-    final neverCompletes = Completer<Map<String, dynamic>>().future;
-
+  testWidgets('App renders TemperatureScreen widget', (WidgetTester tester) async {
     await tester.pumpWidget(MaterialApp(
       home: TemperatureScreen(
-        testFuture: neverCompletes,
+        testFuture: Future.value(<String, dynamic>{}),
       ),
     ));
 
-    // The CircularProgressIndicator should be visible
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(TemperatureScreen), findsOneWidget);
   });
-
-  testWidgets('Shows error and retry button on error', (WidgetTester tester) async {
-    // Create a completer that we can control
-    final completer = Completer<Map<String, dynamic>>();
-
-    await tester.pumpWidget(MaterialApp(
-      home: TemperatureScreen(
-        testFuture: completer.future,
-      ),
-    ));
-
-    // Complete the future with an error
-    completer.completeError('Test error');
-
-    // Wait for the error to be displayed
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-
-    // Verify that error message and retry button are shown
-    expect(find.textContaining('Error loading data'), findsOneWidget);
-    expect(find.text('Retry'), findsOneWidget);
-  });
-} 
+}

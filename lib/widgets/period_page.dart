@@ -38,6 +38,10 @@ class PeriodPage extends StatefulWidget {
   /// Whether to display temperatures in Fahrenheit.
   final bool isFahrenheit;
 
+  /// Called once after the page successfully loads (or reloads) data.
+  /// Useful for triggering downstream actions like showing a coachmark.
+  final VoidCallback? onDataLoaded;
+
   const PeriodPage({
     super.key,
     required this.periodKey,
@@ -49,6 +53,7 @@ class PeriodPage extends StatefulWidget {
     this.onRefresh,
     this.useInternalScroll = true,
     this.isFahrenheit = false,
+    this.onDataLoaded,
   });
 
   @override
@@ -197,6 +202,7 @@ class PeriodPageState extends State<PeriodPage>
           _isLoading = false;
           _lastFetchKey = _fetchKey;
         });
+        widget.onDataLoaded?.call();
       }
     } on RateLimitException {
       if (mounted && _fetchGeneration == generation) {
