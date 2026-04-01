@@ -88,7 +88,9 @@ class PeriodPageState extends State<PeriodPage>
       _fetchGeneration++;
       _lastFetchKey = '';
       _data = null;
+      _error = null;
       _isLoading = false;
+      _loadingMessage = 'Loading ${widget.periodLabel.toLowerCase()} temperature data...';
       _loadIfNeeded();
     }
   }
@@ -265,8 +267,11 @@ class PeriodPageState extends State<PeriodPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Loading state
-          if (_isLoading && _data == null) _buildLoadingState(),
+          // Loading state — show whenever we have no data and no error,
+          // regardless of _isLoading flag. This ensures the spinner appears
+          // immediately when data is cleared (e.g. location/unit change)
+          // without waiting for _fetchData's setState to fire.
+          if (_data == null && _error == null) _buildLoadingState(),
 
           // Error state
           if (_error != null) _buildErrorState(),
@@ -294,7 +299,9 @@ class PeriodPageState extends State<PeriodPage>
           ),
           const SizedBox(height: 16),
           Text(
-            _loadingMessage,
+            _loadingMessage.isNotEmpty
+                ? _loadingMessage
+                : 'Loading ${widget.periodLabel.toLowerCase()} temperature data...',
             style: const TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
           ),
         ],

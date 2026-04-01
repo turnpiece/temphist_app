@@ -411,7 +411,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   void _onUnitChanged() {
     // The API returns different data (especially summaries) depending on the
     // unit.  Clear the in-memory cache and re-fetch so the correct unit is
-    // requested.
+    // requested.  Mirrors the full data-clearing logic of _onLocationSelected
+    // so the user never sees stale data from the previous unit.
     TemperatureService.clearCache();
     _resetScrollPositions();
     if (mounted) {
@@ -421,8 +422,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         _currentData = null;
         _isDataLoading = true;
         _progressiveLoadingCompleted = false;
+        _chartDataFailed = false;
+        _chartDataFailedDueToRateLimit = false;
+        _chartDataTimedOut = false;
+        _chartDataRetryCount = 0;
+        _isRetryingChartData = false;
+        _failedYears.clear();
+        _currentLoadingMessage = '';
       });
+      _startAverageTrendDisplayTimer();
       _loadChartDataProgressive().whenComplete(_prefetchPeriodData);
+      _startLoadingMessageTimer();
     }
   }
 
@@ -1030,15 +1040,25 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     final identifier = dateInfo['mmdd']!;
     final location = _determinedLocation;
     final service = TemperatureService();
-    // 'daily' is already fetched by _loadChartDataProgressive — skip it here.
-    const periods = ['week', 'month', 'year'];
+
+    // Skip 'daily' (already loaded by _loadChartDataProgressive) and the
+    // period currently visible in the PageView (its PeriodPage already started
+    // its own fetch via didUpdateWidget, so prefetching it would be redundant).
+    final currentPageIndex = _pageIndexNotifier.value;
+    final visiblePeriodKey = currentPageIndex > 0 && currentPageIndex < _periodKeys.length
+        ? _periodKeys[currentPageIndex]
+        : null;
+    final periods = ['week', 'month', 'year']
+        .where((p) => p != visiblePeriodKey)
+        .toList();
 
     // Capture the generation at the start of this prefetch so we can bail
     // out between polls if the location changes while we are running.
     final generation = _prefetchGeneration;
     bool isCancelled() => _prefetchGeneration != generation;
 
-    DebugUtils.logLazy(() => 'Prefetching period data in parallel for $location ($identifier)');
+    DebugUtils.logLazy(() => 'Prefetching period data in parallel for $location ($identifier)'
+        '${visiblePeriodKey != null ? " (skipping $visiblePeriodKey — already loading)" : ""}');
 
     final lat = _lastPosition?.latitude;
     final lon = _lastPosition?.longitude;
@@ -1547,6 +1567,10 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<void> _onLocationSelected(String apiLocation) async {
     if (apiLocation == _determinedLocation) return;
 
+    // Purge the in-memory service cache so stale data for the old location
+    // is never served to the new fetch.
+    TemperatureService.clearCache();
+
     // Clear stale chart data immediately so the old location's chart is never
     // shown under the new location header.  This must happen before the await
     // so it wins the race against the setState triggered by setManualLocation's
@@ -1563,6 +1587,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       _chartDataRetryCount = 0;
       _isRetryingChartData = false;
       _failedYears.clear();
+      _currentLoadingMessage = '';
     });
 
     await _locationService.setManualLocation(apiLocation);
