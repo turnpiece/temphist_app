@@ -154,9 +154,18 @@ Future<void> _emergencyCacheCleanup() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Clear any orientation restrictions so iOS/Android use the orientations
-  // declared in Info.plist / AndroidManifest.xml (portrait + landscape).
-  await SystemChrome.setPreferredOrientations([]);
+  // Lock phones to portrait; tablets use system default (all orientations).
+  // On iOS the Info.plist ~ipad key already declares landscape for iPads.
+  final isTablet = WidgetsBinding.instance.platformDispatcher.views.first
+          .physicalSize
+          .shortestSide /
+      WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio >=
+      600;
+  await SystemChrome.setPreferredOrientations(
+    isTablet
+        ? [] // let the system / Info.plist decide for tablets
+        : [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown],
+  );
 
   // Configure system UI overlay to extend app background over status bar and navigation bar
   _setSystemUIOverlayStyle();
@@ -1608,6 +1617,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
       final shareService = ShareService();
 
+      // Compute labels upfront so they can be baked into the image footer
+      // while createShare runs in parallel.
+      final periodLabel = _buildPeriodHeaderLabel(pageIndex);
+      final locationLabel =
+          _displayLocation.isNotEmpty ? _displayLocation : _determinedLocation;
+      final footerText = '$locationLabel — $periodLabel';
+
       // Create the server-side share record and capture the chart in parallel.
       final shareUrlFuture = shareService.createShare(
         location: _determinedLocation,
@@ -1616,14 +1632,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         refYear: refYear,
         unit: unit,
       );
-      final imageFuture = shareService.captureWidget(captureKey);
+      final imageFuture = shareService.captureWidget(
+        captureKey,
+        footerText: footerText,
+      );
 
       final shareUrl = await shareUrlFuture;
       final imageFile = await imageFuture;
-
-      final periodLabel = _buildPeriodHeaderLabel(pageIndex);
-      final locationLabel =
-          _displayLocation.isNotEmpty ? _displayLocation : _determinedLocation;
 
       // Clear the spinner before opening the native sheet. The share future
       // may never resolve on iOS if the user dismisses without selecting an
@@ -1632,7 +1647,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
       await shareService.share(
         shareUrl: shareUrl,
-        text: 'Temperature history for $locationLabel — $periodLabel',
+        text: footerText,
         imageFile: imageFile,
         shareButtonKey: null,
       );

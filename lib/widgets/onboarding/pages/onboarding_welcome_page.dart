@@ -9,8 +9,8 @@ class OnboardingWelcomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return OnboardingPage(
-      title: 'How does today compare\nto years past?',
-      body: 'Was this week unusually warm? Has it been a cold winter? '
+      title: 'How does today compare\nto the same day in years past?',
+      body: 'Was this week unusually warm? How about the past month or the past year? '
           'TempHist shows you decades of temperature history for any location.',
       visual: SvgPicture.asset(
         'assets/logo.svg',

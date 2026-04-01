@@ -67,25 +67,77 @@ class ShareService {
 
   /// Captures the widget identified by [repaintKey] as a PNG file in the
   /// temporary directory. Returns null if capture fails.
-  Future<File?> captureWidget(GlobalKey repaintKey) async {
+  ///
+  /// If [footerText] is provided a footer strip is composited below the chart
+  /// so the description is baked into the image (avoiding Messages treating
+  /// the image and share text as separate messages).
+  Future<File?> captureWidget(GlobalKey repaintKey, {String? footerText}) async {
     try {
       final boundary = repaintKey.currentContext?.findRenderObject()
           as RenderRepaintBoundary?;
       if (boundary == null) return null;
 
-      final image = await boundary.toImage(pixelRatio: 2.0);
+      const double pixelRatio = 2.0;
+      final image = await boundary.toImage(pixelRatio: pixelRatio);
+
+      // Footer dimensions (logical → physical pixels).
+      const double footerLogicalHeight = 52.0;
+      const double footerPaddingLogical = 16.0;
+      final footerPx = footerText != null
+          ? (footerLogicalHeight * pixelRatio).round()
+          : 0;
+      final totalHeight = image.height + footerPx;
 
       // Composite onto a solid background so the PNG is opaque on any surface.
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
       canvas.drawRect(
-        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        Rect.fromLTWH(0, 0, image.width.toDouble(), totalHeight.toDouble()),
         Paint()..color = kBackgroundColour,
       );
       canvas.drawImage(image, Offset.zero, Paint());
+
+      if (footerText != null) {
+        // Darker footer strip below the chart.
+        canvas.drawRect(
+          Rect.fromLTWH(
+            0,
+            image.height.toDouble(),
+            image.width.toDouble(),
+            footerPx.toDouble(),
+          ),
+          Paint()..color = kBackgroundColourDark,
+        );
+
+        // Footer text (single line, ellipsised if too long).
+        final fontSize = 13.0 * pixelRatio;
+        final paddingPx = footerPaddingLogical * pixelRatio;
+        final paraBuilder = ui.ParagraphBuilder(
+          ui.ParagraphStyle(
+            fontSize: fontSize,
+            fontFamily: 'sans-serif',
+            maxLines: 1,
+            ellipsis: '…',
+          ),
+        )
+          ..pushStyle(ui.TextStyle(
+            color: const Color(0xFFECECEC),
+            fontSize: fontSize,
+            fontWeight: ui.FontWeight.w500,
+          ))
+          ..addText(footerText);
+        final para = paraBuilder.build()
+          ..layout(ui.ParagraphConstraints(
+            width: image.width - paddingPx * 2,
+          ));
+        // Vertically centre the text in the footer strip.
+        final textY = image.height + (footerPx - para.height) / 2;
+        canvas.drawParagraph(para, Offset(paddingPx, textY));
+      }
+
       final composited = await recorder
           .endRecording()
-          .toImage(image.width, image.height);
+          .toImage(image.width, totalHeight);
 
       final byteData =
           await composited.toByteData(format: ui.ImageByteFormat.png);
@@ -116,9 +168,12 @@ class ShareService {
 
     if (imageFile != null && await imageFile.exists()) {
       try {
+        // Pass only the URL as text — the description is baked into the image
+        // footer, so Messages receives a single image + a tappable link rather
+        // than three separate items.
         await Share.shareXFiles(
           [XFile(imageFile.path, mimeType: 'image/png')],
-          text: shareText,
+          text: shareUrl,
           sharePositionOrigin: rect,
         );
         return;
@@ -128,6 +183,7 @@ class ShareService {
       }
     }
 
+    // Text-only fallback: include description and URL together.
     await Share.share(
       shareText,
       sharePositionOrigin: rect,

@@ -1,4 +1,4 @@
-platform :ios, '16.0'
+platform :ios, '15.0'
 
 flutter_sdk_root = ENV['FLUTTER_ROOT'] or
   raise 'FLUTTER_ROOT env-var is not set; run `flutter` once or set it manually'
