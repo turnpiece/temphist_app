@@ -154,9 +154,18 @@ Future<void> _emergencyCacheCleanup() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Clear any orientation restrictions so iOS/Android use the orientations
-  // declared in Info.plist / AndroidManifest.xml (portrait + landscape).
-  await SystemChrome.setPreferredOrientations([]);
+  // Lock phones to portrait; tablets use system default (all orientations).
+  // On iOS the Info.plist ~ipad key already declares landscape for iPads.
+  final isTablet = WidgetsBinding.instance.platformDispatcher.views.first
+          .physicalSize
+          .shortestSide /
+      WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio >=
+      600;
+  await SystemChrome.setPreferredOrientations(
+    isTablet
+        ? [] // let the system / Info.plist decide for tablets
+        : [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown],
+  );
 
   // Configure system UI overlay to extend app background over status bar and navigation bar
   _setSystemUIOverlayStyle();
