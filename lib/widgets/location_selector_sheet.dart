@@ -249,6 +249,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
           _LocationRow(
             apiLocation: widget.gpsLocation,
             isSelected: widget.selectedLocation == widget.gpsLocation,
+            selectedColor: kBarCurrentYearColour,
             onTap: widget.selectedLocation == widget.gpsLocation
                 ? null
                 : () => _select(widget.gpsLocation),
@@ -260,6 +261,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
             _LocationRow(
               apiLocation: loc,
               isSelected: _isSelected(loc),
+              selectedColor: kAccentColour,
               onTap: _isSelected(loc) ? null : () => _select(loc),
             ),
           if (data.recentLocations.length > _initialCount && !_showAllRecent)
@@ -273,6 +275,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
             _LocationRow(
               apiLocation: loc,
               isSelected: _isSelected(loc),
+              selectedColor: kAverageColour,
               onTap: _isSelected(loc) ? null : () => _select(loc),
             ),
           if (data.popularLocations.length > _initialCount && !showAllPopular)
@@ -324,11 +327,14 @@ class _SectionHeader extends StatelessWidget {
 class _LocationRow extends StatelessWidget {
   final String apiLocation;
   final bool isSelected;
+  /// The colour used when this row is selected (matches the section colour).
+  final Color selectedColor;
   final VoidCallback? onTap;
 
   const _LocationRow({
     required this.apiLocation,
     required this.isSelected,
+    required this.selectedColor,
     required this.onTap,
   });
 
@@ -336,7 +342,7 @@ class _LocationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? kBarCurrentYearColour : kAccentColour;
+    final color = isSelected ? selectedColor : kTextPrimaryColour;
 
     return InkWell(
       onTap: onTap,

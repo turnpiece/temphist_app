@@ -115,7 +115,7 @@ class _OnboardingTemperatureUnitPageState
   }
 
   Widget _titleWidget() => const Text(
-        'Temperature units',
+        'Units',
         style: TextStyle(
           color: kAccentColour,
           fontSize: 24,

@@ -154,14 +154,9 @@ Future<void> _emergencyCacheCleanup() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Explicitly declare supported orientations so the app reorients correctly
-  // on physical devices (e.g. TestFlight), not just the simulator.
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
+  // Clear any orientation restrictions so iOS/Android use the orientations
+  // declared in Info.plist / AndroidManifest.xml (portrait + landscape).
+  await SystemChrome.setPreferredOrientations([]);
 
   // Configure system UI overlay to extend app background over status bar and navigation bar
   _setSystemUIOverlayStyle();
@@ -1637,7 +1632,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
       await shareService.share(
         shareUrl: shareUrl,
-        text: '$periodLabel in $locationLabel',
+        text: 'Temperature history for $locationLabel — $periodLabel',
         imageFile: imageFile,
         shareButtonKey: null,
       );

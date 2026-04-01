@@ -151,13 +151,29 @@ class _Body extends StatelessWidget {
         _Section(
           title: 'Location',
           body:
-              'TempHist uses your GPS location to show data from the nearest weather station. The current location is shown at the top of the screen.',
-          items: [
-            'Recent locations — places where you have opened the app. When you first install it this will just be your current location, but the list grows as you open the app in new places.',
-            'Popular locations — a curated list of cities you can browse and select manually.',
+              'You can view the temperature history of wherever you are now, all the places you\'ve been where you\'ve used the app, and also a selection of cities around the world.',
+          bullets: [
+            _Bullet(
+              color: kBarCurrentYearColour,
+              label: 'Current location',
+              description:
+                  'Your actual location, detected automatically.',
+            ),
+            _Bullet(
+              color: kAccentColour,
+              label: 'Recent locations',
+              description:
+                  'Places where you have opened the app. The list grows as you use TempHist in new places.',
+            ),
+            _Bullet(
+              color: kAverageColour,
+              label: 'Popular locations',
+              description:
+                  'A curated list of cities you can browse and select manually.',
+            ),
           ],
           footer:
-              'To change location: tap the location name or go to Settings → Location, then choose from your recent or popular cities.',
+              'The selected location is shown at the top of the screen. To change location: tap the location name or go to Settings → Location.',
         ),
         _Section(
           title: 'Settings',
@@ -267,11 +283,16 @@ class _Section extends StatelessWidget {
 }
 
 /// A colour-dot + label row used inside [_Section].
+///
+/// When [description] is provided the [label] is rendered in [color] (bold)
+/// and the description follows in the standard grey style.
 class _Bullet {
   final Color color;
   final String label;
+  /// Optional description shown after the label in grey.
+  final String? description;
 
-  const _Bullet({required this.color, required this.label});
+  const _Bullet({required this.color, required this.label, this.description});
 }
 
 class _BulletRow extends StatelessWidget {
@@ -287,7 +308,7 @@ class _BulletRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 5, right: 8),
+            padding: const EdgeInsets.only(top: 7, right: 8),
             child: Container(
               width: 10,
               height: 10,
@@ -298,14 +319,38 @@ class _BulletRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Text(
-              bullet.label,
-              style: const TextStyle(
-                color: kGreyLabelColour,
-                fontSize: kFontSizeBody,
-                height: 1.45,
-              ),
-            ),
+            child: bullet.description != null
+                ? RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: bullet.label,
+                          style: TextStyle(
+                            color: bullet.color,
+                            fontSize: kFontSizeBody,
+                            fontWeight: FontWeight.w600,
+                            height: 1.45,
+                          ),
+                        ),
+                        TextSpan(
+                          text: ' — ${bullet.description}',
+                          style: const TextStyle(
+                            color: kGreyLabelColour,
+                            fontSize: kFontSizeBody,
+                            height: 1.45,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Text(
+                    bullet.label,
+                    style: const TextStyle(
+                      color: kGreyLabelColour,
+                      fontSize: kFontSizeBody,
+                      height: 1.45,
+                    ),
+                  ),
           ),
         ],
       ),
