@@ -571,7 +571,8 @@ class TemperatureService {
         }
 
         final status = AsyncJobStatus.fromJson(jsonDecode(response.body));
-        DebugUtils.logLazy(() => 'Job $jobId poll #$pollCount: ${status.status}');
+        DebugUtils.verboseWithContextLazy('Job',
+            () => '$jobId poll #$pollCount: ${status.status}');
 
         if (status.isReady) {
           DebugUtils.logLazy(() => 'Job $jobId completed after $pollCount polls');

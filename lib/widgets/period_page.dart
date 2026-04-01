@@ -81,10 +81,15 @@ class PeriodPageState extends State<PeriodPage>
   @override
   void didUpdateWidget(PeriodPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.location != widget.location ||
-        oldWidget.isFahrenheit != widget.isFahrenheit) {
-      // Location or unit changed — increment generation so any in-flight fetch
-      // is discarded, clear stale data immediately, then re-fetch.
+    final locationChanged = oldWidget.location != widget.location;
+    final unitChanged = oldWidget.isFahrenheit != widget.isFahrenheit;
+    if (locationChanged || unitChanged) {
+      DebugUtils.logLazy(() =>
+          'PeriodPage(${widget.periodKey}): didUpdateWidget — '
+          '${locationChanged ? "location: ${oldWidget.location} → ${widget.location}" : ""}'
+          '${locationChanged && unitChanged ? ", " : ""}'
+          '${unitChanged ? "unit: ${oldWidget.isFahrenheit ? "°F" : "°C"} → ${widget.isFahrenheit ? "°F" : "°C"}" : ""}'
+          ' — clearing data and re-fetching');
       _fetchGeneration++;
       _lastFetchKey = '';
       _data = null;
@@ -128,6 +133,10 @@ class PeriodPageState extends State<PeriodPage>
       final lat = widget.latitude;
       final lon = widget.longitude;
 
+      DebugUtils.logLazy(() =>
+          'PeriodPage(${widget.periodKey}): fetching for ${widget.location}'
+          ' (coords: ${lat != null ? "${lat.toStringAsFixed(3)},${lon?.toStringAsFixed(3)}" : "none — Hive cache skipped"})');
+
       // Cache-first: serve from Hive when available, fall through on miss.
       // bypassCache is set when retrying to ensure fresh data from the API.
       final unitGroup = widget.isFahrenheit ? 'fahrenheit' : null;
@@ -155,6 +164,8 @@ class PeriodPageState extends State<PeriodPage>
       }
 
       if (data == null) {
+        DebugUtils.logLazy(() =>
+            'PeriodPage(${widget.periodKey}): fetching from API for ${widget.location}');
         final service = TemperatureService();
         data = await service.fetchPeriodData(
           widget.periodKey,

@@ -1040,28 +1040,24 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     final identifier = dateInfo['mmdd']!;
     final location = _determinedLocation;
     final service = TemperatureService();
-
-    // Skip 'daily' (already loaded by _loadChartDataProgressive) and the
-    // period currently visible in the PageView (its PeriodPage already started
-    // its own fetch via didUpdateWidget, so prefetching it would be redundant).
-    final currentPageIndex = _pageIndexNotifier.value;
-    final visiblePeriodKey = currentPageIndex > 0 && currentPageIndex < _periodKeys.length
-        ? _periodKeys[currentPageIndex]
-        : null;
-    final periods = ['week', 'month', 'year']
-        .where((p) => p != visiblePeriodKey)
-        .toList();
+    // 'daily' is already fetched by _loadChartDataProgressive — skip it here.
+    const periods = ['week', 'month', 'year'];
 
     // Capture the generation at the start of this prefetch so we can bail
     // out between polls if the location changes while we are running.
     final generation = _prefetchGeneration;
     bool isCancelled() => _prefetchGeneration != generation;
 
-    DebugUtils.logLazy(() => 'Prefetching period data in parallel for $location ($identifier)'
-        '${visiblePeriodKey != null ? " (skipping $visiblePeriodKey — already loading)" : ""}');
+    // Only write to Hive when the selected city matches the GPS location —
+    // same guard as _loadChartDataProgressive and _buildPeriodPage.
+    String cityOf(String l) => l.split(',').first.trim().toLowerCase();
+    final gps = _locationService.gpsLocation;
+    final isAtGpsLocation =
+        gps.isEmpty || cityOf(gps) == cityOf(location);
+    final lat = isAtGpsLocation ? _lastPosition?.latitude : null;
+    final lon = isAtGpsLocation ? _lastPosition?.longitude : null;
 
-    final lat = _lastPosition?.latitude;
-    final lon = _lastPosition?.longitude;
+    DebugUtils.logLazy(() => 'Prefetching period data in parallel for $location ($identifier)');
 
     await Future.wait(
       periods.map((period) async {
@@ -1566,6 +1562,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   /// Called when the user picks a location from the selector sheet.
   Future<void> _onLocationSelected(String apiLocation) async {
     if (apiLocation == _determinedLocation) return;
+
+    final currentPage = _pageIndexNotifier.value;
+    final currentPeriod = _periodKeys[currentPage];
+    DebugUtils.logLazy(() =>
+        '📍 Location switch: $_determinedLocation → $apiLocation '
+        '(on $currentPeriod page, gps: ${_locationService.gpsLocation})');
 
     // Purge the in-memory service cache so stale data for the old location
     // is never served to the new fetch.
@@ -2941,6 +2943,17 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     required String periodLabel,
     required ScrollController scrollController,
   }) {
+    // Only pass GPS coordinates for Hive cache when the selected city matches
+    // the GPS location — same guard as _loadChartDataProgressive. Without this,
+    // a manual city selection (e.g. Melbourne) would look up the cache with the
+    // old GPS coordinates (e.g. London) and get back stale data for the wrong city.
+    String cityOf(String l) => l.split(',').first.trim().toLowerCase();
+    final gps = _locationService.gpsLocation;
+    final isAtGpsLocation =
+        gps.isEmpty || cityOf(gps) == cityOf(_determinedLocation);
+    final lat = isAtGpsLocation ? _lastPosition?.latitude : null;
+    final lon = isAtGpsLocation ? _lastPosition?.longitude : null;
+
     final sidePad = _standardHorizontalPadding();
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2966,8 +2979,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 location: _determinedLocation,
                 displayLocation:
                     _displayLocation.isNotEmpty ? _displayLocation : null,
-                latitude: _lastPosition?.latitude,
-                longitude: _lastPosition?.longitude,
+                latitude: lat,
+                longitude: lon,
                 useInternalScroll: false,
                 isFahrenheit: _isFahrenheit,
               ),
