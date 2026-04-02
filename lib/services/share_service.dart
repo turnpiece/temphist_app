@@ -153,39 +153,22 @@ class ShareService {
     }
   }
 
-  /// Opens the system share sheet with the chart image (if available) and URL.
+  /// Opens the system share sheet with the share URL.
+  ///
+  /// Passes the URL as a native NSURL activity item on iOS so that iMessage
+  /// and other apps receive a tappable link rather than a plain string. Once
+  /// the share page has Open Graph meta tags, platforms will also show a rich
+  /// link-preview card (image + title + description) automatically.
   ///
   /// [shareButtonKey] is used to compute the popover anchor rect required on
   /// iPad. Pass the key attached to the share button widget.
   Future<void> share({
     required String shareUrl,
-    required String text,
-    File? imageFile,
     GlobalKey? shareButtonKey,
   }) async {
     final rect = _buttonRect(shareButtonKey);
-    final shareText = '$text\n$shareUrl';
-
-    if (imageFile != null && await imageFile.exists()) {
-      try {
-        // Pass only the URL as text — the description is baked into the image
-        // footer, so Messages receives a single image + a tappable link rather
-        // than three separate items.
-        await Share.shareXFiles(
-          [XFile(imageFile.path, mimeType: 'image/png')],
-          text: shareUrl,
-          sharePositionOrigin: rect,
-        );
-        return;
-      } catch (e) {
-        DebugUtils.logLazy(
-            () => 'ShareService: shareXFiles failed, falling back to text: $e');
-      }
-    }
-
-    // Text-only fallback: include description and URL together.
-    await Share.share(
-      shareText,
+    await Share.shareUri(
+      Uri.parse(shareUrl),
       sharePositionOrigin: rect,
     );
   }
