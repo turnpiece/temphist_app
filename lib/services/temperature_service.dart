@@ -8,6 +8,7 @@ import '../config/app_config.dart';
 import '../utils/debug_utils.dart';
 import '../constants/app_constants.dart';
 import '../models/app_exceptions.dart';
+import 'auth_service.dart';
 export '../models/app_exceptions.dart';
 
 /// Extension to capitalize the first letter of a string
@@ -19,6 +20,7 @@ extension StringExtension on String {
 }
 
 class TemperatureService {
+  static const int _kMaxCacheEntries = 20;
   static final Map<String, PeriodTemperatureData> _periodCache = {};
   static List<String>? _preapprovedLocationsCache;
   final String apiBaseUrl;
@@ -26,6 +28,15 @@ class TemperatureService {
   /// Clears all cached period data. Call on refresh so stale data is not served.
   static void clearCache() {
     _periodCache.clear();
+  }
+
+  /// Writes [value] to the cache under [key], evicting the oldest entry first
+  /// if the cache has reached [_kMaxCacheEntries].
+  static void _writeCache(String key, PeriodTemperatureData value) {
+    if (_periodCache.length >= _kMaxCacheEntries && !_periodCache.containsKey(key)) {
+      _periodCache.remove(_periodCache.keys.first);
+    }
+    _periodCache[key] = value;
   }
 
   /// Removes a single entry from the in-memory cache so the next call to
@@ -109,7 +120,7 @@ class TemperatureService {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         DebugUtils.logLazy(() => '⚠️ No Firebase user found, attempting to sign in...');
-        await _signInWithRetry();
+        await AuthService.signInAnonymously(maxRetries: 2);
         final newUser = FirebaseAuth.instance.currentUser;
         if (newUser == null) {
           throw const AuthException('no user after sign-in');
@@ -127,38 +138,6 @@ class TemperatureService {
     } catch (e) {
       DebugUtils.logLazy(() => '❌ Firebase authentication failed: $e');
       throw AuthException('Firebase auth failed', e);
-    }
-  }
-
-  /// Sign in with retry logic for service-level authentication
-  Future<void> _signInWithRetry({int maxRetries = 2}) async {
-    int attempts = 0;
-    
-    while (attempts < maxRetries) {
-      try {
-        attempts++;
-        DebugUtils.logLazy(() => '🔐 Service-level Firebase auth attempt $attempts/$maxRetries');
-        
-        await FirebaseAuth.instance.signInAnonymously().timeout(
-          const Duration(seconds: kFirebaseAuthTimeoutSeconds),
-          onTimeout: () {
-            throw TimeoutException('Firebase authentication timed out', const Duration(seconds: kFirebaseAuthTimeoutSeconds));
-          },
-        );
-        
-        DebugUtils.logLazy(() => '✅ Service-level Firebase authentication successful');
-        return;
-        
-      } catch (e) {
-        DebugUtils.logLazy(() => '❌ Service-level Firebase auth attempt $attempts failed: $e');
-
-        if (attempts >= maxRetries) {
-          throw AuthException('all $maxRetries auth attempts failed', e);
-        }
-
-        // Wait before retrying
-        await Future.delayed(Duration(seconds: attempts));
-      }
     }
   }
 
@@ -468,7 +447,7 @@ class TemperatureService {
         isCancelled: isCancelled,
       );
       DebugUtils.logLazy(() => 'Async fetch successful for $period data');
-      _periodCache[cacheKey] = result.data;
+      _writeCache(cacheKey, result.data);
       return result.data;
     } catch (e) {
       // Propagate cancellation without falling back to sync
@@ -490,7 +469,7 @@ class TemperatureService {
               await _fetchPeriodDataSync(period, location, identifier,
                   unitGroup: unitGroup);
           DebugUtils.logLazy(() => 'Synchronous fallback successful for $period data');
-          _periodCache[cacheKey] = fallback;
+          _writeCache(cacheKey, fallback);
           return fallback;
         } catch (fallbackError) {
           throw ApiException(0, '$period (async + sync fallback both failed)', fallbackError);
