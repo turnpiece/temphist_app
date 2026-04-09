@@ -71,6 +71,10 @@ const double kTabletBreakpointWidth = 768.0;
 const double kTabletMaxContentWidth = 600.0;
 const double kChartHeight = 800.0;
 const int kChartStartYear = 1975;
+// Visual Crossing currently limits historical API coverage to a 50-year window.
+// Keep this as a single source of truth so expanding coverage (e.g. 100 years)
+// only requires updating one constant.
+const int kHistoricalDataWindowYears = 50;
 
 /// Location constants
 const int kLocationDistanceFilterMeters = 500;

@@ -328,7 +328,7 @@ class PeriodPageState extends State<PeriodPage>
       if (periodKey == 'year') {
         return 'Has this past year been warmer or cooler than average in $displayCity?';
       }
-      return 'Getting temperature data over the past 50 years...';
+      return 'Getting temperature data over the past $kHistoricalDataWindowYears years...';
     }
     if (phase == 2) {
       if (periodKey == 'week') {
@@ -652,7 +652,7 @@ class PeriodPageState extends State<PeriodPage>
         final allMissing = [...metaMissing, ...absent]..sort();
         // Exclude the current year: API may return it but it has no full-year data yet.
         final effectiveLoaded = loadedYears.where((y) => y < currentYear && !metaMissing.contains(y)).length;
-        const totalExpected = 50; // rolling 50-year window
+        const totalExpected = kHistoricalDataWindowYears;
         final completeness = effectiveLoaded / totalExpected * 100;
 
         DebugUtils.logLazy(() =>

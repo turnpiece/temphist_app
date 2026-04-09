@@ -24,11 +24,11 @@ String formatMissingYearsList(List<int> years) {
       .join(', ');
 }
 
-/// Detects years in the expected rolling 50-year window that are entirely
+/// Detects years in the expected rolling historical data window that are entirely
 /// absent from the API response and not already accounted for in [metaMissing].
 List<int> detectAbsentYears(Set<int> loadedYears, List<int> metaMissing) {
   final currentYear = DateTime.now().year;
-  final apiStartYear = currentYear - 50;
+  final apiStartYear = currentYear - kHistoricalDataWindowYears;
   return List.generate(currentYear - apiStartYear, (i) => apiStartYear + i)
       .where((y) => !loadedYears.contains(y) && !metaMissing.contains(y))
       .toList();
