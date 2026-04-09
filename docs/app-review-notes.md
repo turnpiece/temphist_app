@@ -38,10 +38,10 @@ The main screen has four time periods navigated by **horizontal swipe**:
 
 | Period | Description |
 |--------|-------------|
-| Day | Today's temperature vs. the 30-year historical average |
-| Week | Last 7 days, each day vs. its historical average |
-| Month | Each month of the current year vs. historical monthly averages |
-| Year | Each year for the past 50 years vs. the long-term average |
+| Day | Today's temperature compared with the same date across each of the past 50 years |
+| Week | The average temperature of the 7 days ending today compared with the same 7-day window in each of the past 50 years |
+| Month | The average temperature of the 30 days ending today compared with the same 30-day window in each of the past 50 years |
+| Year | The average temperature of the 365 days ending today compared with the same 365-day window in each of the past 50 years |
 
 The swipe gesture is demonstrated during onboarding. There are no visible tab buttons — swiping left/right is the primary navigation method.
 
