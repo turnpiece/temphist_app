@@ -495,8 +495,11 @@ class PeriodPageState extends State<PeriodPage>
           // Error state
           if (_error != null) _buildErrorState(),
 
+          // Empty state — data returned but no values to display
+          if (_data != null && _data!.values.isEmpty) _buildEmptyState(),
+
           // Data loaded
-          if (_data != null) ..._buildDataContent(),
+          if (_data != null && _data!.values.isNotEmpty) ..._buildDataContent(),
         ],
       ),
     );
@@ -528,6 +531,24 @@ class PeriodPageState extends State<PeriodPage>
     );
   }
 
+  Widget _buildEmptyState() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 40),
+      child: Row(
+        children: [
+          const Icon(Icons.thermostat_outlined, color: kGreyLabelColour, size: 17),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'No ${widget.periodLabel.toLowerCase()} data available for this location. Try selecting a different location.',
+              style: const TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildErrorState() {
     return Padding(
       padding: const EdgeInsets.only(top: 40),
@@ -547,17 +568,21 @@ class PeriodPageState extends State<PeriodPage>
             ],
           ),
           const SizedBox(height: 16),
-          GestureDetector(
-            onTap: _fetchData,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: kAccentColour.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text(
-                'Retry',
-                style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w500),
+          Semantics(
+            label: 'Retry loading ${widget.periodLabel.toLowerCase()} data',
+            button: true,
+            child: GestureDetector(
+              onTap: _fetchData,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: kAccentColour.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'Retry',
+                  style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w500),
+                ),
               ),
             ),
           ),
