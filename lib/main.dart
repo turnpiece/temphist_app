@@ -1299,6 +1299,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               child: PageView(
                 controller: _pageController,
                 onPageChanged: (index) {
+                  HapticFeedback.selectionClick();
                   _pageIndexNotifier.value = index;
                   _dismissCoachmark();
                   final controllers = [
@@ -1483,15 +1484,19 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                         ),
                       ),
                       // Settings gear — always visible
-                      GestureDetector(
-                        onTap: _showSettings,
-                        behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          child: Icon(
-                            Icons.settings,
-                            color: kGreyLabelColour.withValues(alpha: 0.7),
-                            size: kIconSize + 8,
+                      Semantics(
+                        label: 'Open settings',
+                        button: true,
+                        child: GestureDetector(
+                          onTap: _showSettings,
+                          behavior: HitTestBehavior.opaque,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            child: Icon(
+                              Icons.settings,
+                              color: kGreyLabelColour.withValues(alpha: 0.7),
+                              size: kIconSize + 8,
+                            ),
                           ),
                         ),
                       ),
@@ -1596,8 +1601,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }
   }
 
+  static const List<String> _periodLabels = ['Daily', 'Past week', 'Past month', 'Past year'];
+
   Widget _buildDotsRow(int pageIndex) {
-    return Row(
+    return Semantics(
+      label: '${_periodLabels[pageIndex]}. Period ${pageIndex + 1} of ${_periodKeys.length}. Swipe to change.',
+      child: ExcludeSemantics(
+        child: Row(
       children: [
         for (int i = 0; i < _periodKeys.length; i++) ...[
           if (i > 0) const SizedBox(width: 8),
@@ -1626,6 +1636,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
           ),
         ),
       ],
+        ),
+      ),
     );
   }
 
@@ -1643,31 +1655,37 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        GestureDetector(
-          onTap: _isLocationDetermined ? _showLocationSelector : null,
-          behavior: HitTestBehavior.opaque,
-          child: Row(
-            children: [
-              Icon(
-                Icons.location_on_outlined,
-                color: locationColour.withValues(alpha: 0.8),
-                size: kIconSize + 2,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  headerText,
-                  style: TextStyle(
-                    color: locationColour,
-                    fontSize: kFontSizeLocation,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+        Semantics(
+          label: _isLocationDetermined
+              ? 'Change location. Currently: $headerText'
+              : headerText,
+          button: _isLocationDetermined,
+          child: GestureDetector(
+            onTap: _isLocationDetermined ? _showLocationSelector : null,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  color: locationColour.withValues(alpha: 0.8),
+                  size: kIconSize + 2,
                 ),
-              ),
-            ],
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    headerText,
+                    style: TextStyle(
+                      color: locationColour,
+                      fontSize: kFontSizeLocation,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 4),
