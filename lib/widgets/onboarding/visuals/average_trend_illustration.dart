@@ -55,7 +55,7 @@ class _AverageTrendPainter extends CustomPainter {
     final double chartWidth = size.width - chartStart;
 
     final barPaint = Paint()
-      ..color = kBarOtherYearColour.withOpacity(0.20)
+      ..color = kBarOtherYearColour.withValues(alpha: 0.20)
       ..style = PaintingStyle.fill;
 
     // --- Bars + year labels (every 5 years) ---

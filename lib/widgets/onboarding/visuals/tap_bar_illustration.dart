@@ -73,10 +73,10 @@ class _BarsPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paintOther = Paint()
-      ..color = kBarOtherYearColour.withOpacity(0.85)
+      ..color = kBarOtherYearColour.withValues(alpha: 0.85)
       ..style = PaintingStyle.fill;
     final paintCurrent = Paint()
-      ..color = kBarCurrentYearColour.withOpacity(0.9)
+      ..color = kBarCurrentYearColour.withValues(alpha: 0.9)
       ..style = PaintingStyle.fill;
     // Tapped bar at full opacity so it reads as "selected"
     final paintTapped = Paint()

@@ -39,10 +39,10 @@ class _DayChartPainter extends CustomPainter {
     final double chartWidth = size.width - yearLabelWidth - 8.0;
 
     final paintOther = Paint()
-      ..color = kBarOtherYearColour.withOpacity(0.85)
+      ..color = kBarOtherYearColour.withValues(alpha: 0.85)
       ..style = PaintingStyle.fill;
     final paintCurrent = Paint()
-      ..color = kBarCurrentYearColour.withOpacity(0.9)
+      ..color = kBarCurrentYearColour.withValues(alpha: 0.9)
       ..style = PaintingStyle.fill;
 
     for (int i = 0; i < barCount; i++) {
