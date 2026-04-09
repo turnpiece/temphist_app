@@ -250,7 +250,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
             apiLocation: widget.gpsLocation,
             isSelected: widget.selectedLocation == widget.gpsLocation,
             selectedColor: kBarCurrentYearColour,
-            onTap: widget.selectedLocation == widget.gpsLocation
+            onTap: widget.selectedLocation == widget.gpsLocation && widget.canDismiss
                 ? null
                 : () => _select(widget.gpsLocation),
           ),
@@ -262,7 +262,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
               apiLocation: loc,
               isSelected: _isSelected(loc),
               selectedColor: kAccentColour,
-              onTap: _isSelected(loc) ? null : () => _select(loc),
+              onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
             ),
           if (data.recentLocations.length > _initialCount && !_showAllRecent)
             _ShowMoreButton(
@@ -276,7 +276,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
               apiLocation: loc,
               isSelected: _isSelected(loc),
               selectedColor: kAverageColour,
-              onTap: _isSelected(loc) ? null : () => _select(loc),
+              onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
             ),
           if (data.popularLocations.length > _initialCount && !showAllPopular)
             _ShowMoreButton(
