@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
@@ -62,10 +64,20 @@ class PeriodPage extends StatefulWidget {
 
 class PeriodPageState extends State<PeriodPage>
     with AutomaticKeepAliveClientMixin {
+  static const int _connectingPhaseEndSeconds = 5;
+  static const int _questionPhaseEndSeconds = 15;
+  static const int _analyzingPhaseEndSeconds = 30;
+  static const int _generatingPhaseEndSeconds = 45;
+  static const int _longWaitPhaseEndSeconds = 60;
+  static const int _veryLongWaitPhaseEndSeconds = 90;
+
   PeriodTemperatureData? _data;
   bool _isLoading = false;
   String? _error;
   String _loadingMessage = '';
+  Timer? _loadingMessageTimer;
+  DateTime? _loadingStartTime;
+  int _minLoadingPhaseFromProgress = 0;
 
   // Cache key to avoid re-fetching when swiping back
   String _lastFetchKey = '';
@@ -100,9 +112,16 @@ class PeriodPageState extends State<PeriodPage>
       _data = null;
       _error = null;
       _isLoading = false;
-      _loadingMessage = 'Loading ${widget.periodLabel.toLowerCase()} temperature data...';
+      _stopLoadingMessageCycle();
+      _loadingMessage = _buildLoadingMessage(0, forcePhase: 0);
       _loadIfNeeded();
     }
+  }
+
+  @override
+  void dispose() {
+    _stopLoadingMessageCycle();
+    super.dispose();
   }
 
   String get _identifier {
@@ -131,8 +150,9 @@ class PeriodPageState extends State<PeriodPage>
     setState(() {
       _isLoading = true;
       _error = null;
-      _loadingMessage = 'Loading ${widget.periodLabel.toLowerCase()} temperature data...';
+      _loadingMessage = _buildLoadingMessage(0, forcePhase: 0);
     });
+    _startLoadingMessageCycle(generation);
 
     try {
       final lat = widget.latitude;
@@ -179,11 +199,11 @@ class PeriodPageState extends State<PeriodPage>
           unitGroup: unitGroup,
           onProgress: (status) {
             if (mounted && _fetchGeneration == generation) {
-              setState(() {
-                _loadingMessage = status.isPending
-                    ? 'Processing ${widget.periodLabel.toLowerCase()} data...'
-                    : 'Almost there...';
-              });
+              final floor = status.isPending ? 2 : 3;
+              if (floor > _minLoadingPhaseFromProgress) {
+                _minLoadingPhaseFromProgress = floor;
+                _updateLoadingMessage(generation);
+              }
             }
           },
         );
@@ -197,6 +217,7 @@ class PeriodPageState extends State<PeriodPage>
       }
 
       if (mounted && _fetchGeneration == generation) {
+        _stopLoadingMessageCycle();
         setState(() {
           _data = data;
           _isLoading = false;
@@ -206,6 +227,7 @@ class PeriodPageState extends State<PeriodPage>
       }
     } on RateLimitException {
       if (mounted && _fetchGeneration == generation) {
+        _stopLoadingMessageCycle();
         setState(() {
           _isLoading = false;
           _error = 'Rate limit exceeded. Please wait a moment and try again.';
@@ -214,6 +236,7 @@ class PeriodPageState extends State<PeriodPage>
     } catch (e) {
       DebugUtils.logLazy(() => 'PeriodPage error (${widget.periodKey}): $e');
       if (mounted && _fetchGeneration == generation) {
+        _stopLoadingMessageCycle();
         setState(() {
           _isLoading = false;
           _error = 'Failed to load ${widget.periodLabel.toLowerCase()} data. '
@@ -221,6 +244,112 @@ class PeriodPageState extends State<PeriodPage>
         });
       }
     }
+  }
+
+  void _startLoadingMessageCycle(int generation) {
+    _stopLoadingMessageCycle();
+    _loadingStartTime = DateTime.now();
+    _minLoadingPhaseFromProgress = 0;
+    _updateLoadingMessage(generation);
+    _loadingMessageTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _updateLoadingMessage(generation);
+    });
+  }
+
+  void _stopLoadingMessageCycle() {
+    _loadingMessageTimer?.cancel();
+    _loadingMessageTimer = null;
+    _loadingStartTime = null;
+    _minLoadingPhaseFromProgress = 0;
+  }
+
+  void _updateLoadingMessage(int generation) {
+    if (!mounted || !_isLoading || _fetchGeneration != generation) return;
+    final start = _loadingStartTime;
+    if (start == null) return;
+    final elapsedSeconds = DateTime.now().difference(start).inSeconds;
+    final nextMessage = _buildLoadingMessage(
+      elapsedSeconds,
+      forcePhase: _minLoadingPhaseFromProgress,
+    );
+    if (nextMessage != _loadingMessage) {
+      setState(() {
+        _loadingMessage = nextMessage;
+      });
+    }
+  }
+
+  String _buildLoadingMessage(int elapsedSeconds, {int forcePhase = 0}) {
+    final periodKey = widget.periodKey.toLowerCase();
+    final displayCity = _extractDisplayCity();
+    final elapsedPhase = _phaseIndexForElapsed(elapsedSeconds);
+    final phase = elapsedPhase > forcePhase ? elapsedPhase : forcePhase;
+
+    if (phase == 0) {
+      return 'Connecting to the temperature data server...';
+    }
+    if (phase == 1) {
+      if (periodKey == 'week') {
+        return 'Has this past week been warmer or cooler than average in $displayCity?';
+      }
+      if (periodKey == 'month') {
+        return 'Has this past month been warmer or cooler than average in $displayCity?';
+      }
+      if (periodKey == 'year') {
+        return 'Has this past year been warmer or cooler than average in $displayCity?';
+      }
+      return 'Getting temperature data over the past 50 years...';
+    }
+    if (phase == 2) {
+      if (periodKey == 'week') {
+        return 'Analysing this week\'s temperatures in $displayCity...';
+      }
+      if (periodKey == 'month') {
+        return 'Analysing this month\'s temperatures in $displayCity...';
+      }
+      if (periodKey == 'year') {
+        return 'Analysing this year\'s temperatures in $displayCity...';
+      }
+      return 'Analysing historical data for $displayCity...';
+    }
+    if (phase == 3) {
+      if (periodKey == 'week') {
+        return 'Generating weekly temperature comparison...';
+      }
+      if (periodKey == 'month') {
+        return 'Generating monthly temperature comparison...';
+      }
+      if (periodKey == 'year') {
+        return 'Generating yearly temperature comparison...';
+      }
+      return 'Generating temperature comparison chart...';
+    }
+    if (phase == 4) {
+      return 'You should be seeing a bar chart soon...';
+    }
+    if (phase == 5) {
+      return 'This is taking longer than usual. Please wait...';
+    }
+    return 'This really is taking a while, maybe due to a slow internet connection, high server load or something may have gone wrong.';
+  }
+
+  int _phaseIndexForElapsed(int elapsedSeconds) {
+    if (elapsedSeconds < _connectingPhaseEndSeconds) return 0;
+    if (elapsedSeconds < _questionPhaseEndSeconds) return 1;
+    if (elapsedSeconds < _analyzingPhaseEndSeconds) return 2;
+    if (elapsedSeconds < _generatingPhaseEndSeconds) return 3;
+    if (elapsedSeconds < _longWaitPhaseEndSeconds) return 4;
+    if (elapsedSeconds < _veryLongWaitPhaseEndSeconds) return 5;
+    return 6;
+  }
+
+  String _extractDisplayCity() {
+    final raw = (widget.displayLocation?.isNotEmpty ?? false)
+        ? widget.displayLocation!
+        : widget.location;
+    final parts = raw.split(',');
+    if (parts.isEmpty) return raw;
+    return parts.first.trim().isEmpty ? raw : parts.first.trim();
   }
 
   /// Called externally (e.g. on location change) to force a reload.
