@@ -27,7 +27,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app uses your location to show temperature data for where you are.</string>
+	<string>This app uses your location to show temperature data for where you are. Your location is shared with our weather data provider and is not stored permanently.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

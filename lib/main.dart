@@ -12,6 +12,7 @@ import 'dart:io' as io;
 import 'dart:async'; // Added for StreamSubscription and StreamController
 import 'dart:convert'; // Added for jsonEncode/jsonDecode
 
+import 'services/auth_service.dart';
 import 'services/temperature_service.dart';
 import 'services/share_service.dart';
 import 'services/location_service.dart';
@@ -212,48 +213,8 @@ void _setSystemUIOverlayStyle() {
 }
 
 Future<void> _ensureSignedIn() async {
-  final auth = FirebaseAuth.instance;
-  if (auth.currentUser == null) {
-    await _signInWithRetry();
-  }
-}
-
-/// Sign in with retry logic and error handling
-Future<void> _signInWithRetry({int maxRetries = 3}) async {
-  int attempts = 0;
-  
-  while (attempts < maxRetries) {
-    try {
-      attempts++;
-      DebugUtils.logLazy(() => '🔐 Firebase auth attempt $attempts/$maxRetries');
-      
-      final auth = FirebaseAuth.instance;
-      await auth.signInAnonymously().timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw TimeoutException('Firebase authentication timed out', const Duration(seconds: 30));
-        },
-      );
-      
-      DebugUtils.logLazy(() => '✅ Firebase authentication successful');
-      return;
-      
-    } catch (e) {
-      DebugUtils.logLazy(() => '❌ Firebase auth attempt $attempts failed: $e');
-      
-      // If this is the last attempt, rethrow the error
-      if (attempts >= maxRetries) {
-        DebugUtils.logLazy(() => '🚨 All Firebase auth attempts failed, app will continue without authentication');
-        // Don't crash the app - continue without authentication
-        // The app should still work for basic functionality
-        return;
-      }
-      
-      // Wait before retrying (exponential backoff)
-      final delay = Duration(seconds: attempts * 2);
-      DebugUtils.logLazy(() => '⏳ Waiting ${delay.inSeconds}s before retry...');
-      await Future.delayed(delay);
-    }
+  if (FirebaseAuth.instance.currentUser == null) {
+    await AuthService.signInAnonymously(maxRetries: 3, rethrowOnFailure: false);
   }
 }
 
@@ -268,7 +229,7 @@ class TempHist extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: kAppTitle,
-      home: TemperatureScreen(),
+      home: const TemperatureScreen(),
       // Add a custom loading screen theme
       theme: ThemeData(
         scaffoldBackgroundColor: kBackgroundColour,
