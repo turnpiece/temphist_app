@@ -199,6 +199,13 @@ class PeriodPageState extends State<PeriodPage>
           unitGroup: unitGroup,
           onProgress: (status) {
             if (mounted && _fetchGeneration == generation) {
+              final start = _loadingStartTime;
+              final elapsedSeconds = start == null
+                  ? 0
+                  : DateTime.now().difference(start).inSeconds;
+              // Preserve the early web-style narrative phases (connecting +
+              // question) before allowing backend progress to accelerate copy.
+              if (elapsedSeconds < _questionPhaseEndSeconds) return;
               final floor = status.isPending ? 2 : 3;
               if (floor > _minLoadingPhaseFromProgress) {
                 _minLoadingPhaseFromProgress = floor;
@@ -239,8 +246,7 @@ class PeriodPageState extends State<PeriodPage>
         _stopLoadingMessageCycle();
         setState(() {
           _isLoading = false;
-          _error = 'Failed to load ${widget.periodLabel.toLowerCase()} data. '
-              'Please check your connection and try again.';
+          _error = _buildErrorMessage(e);
         });
       }
     }
@@ -302,13 +308,13 @@ class PeriodPageState extends State<PeriodPage>
     }
     if (phase == 2) {
       if (periodKey == 'week') {
-        return 'Analysing this week\'s temperatures in $displayCity...';
+        return 'Analysing weekly temperatures in $displayCity...';
       }
       if (periodKey == 'month') {
-        return 'Analysing this month\'s temperatures in $displayCity...';
+        return 'Analysing monthly temperatures in $displayCity...';
       }
       if (periodKey == 'year') {
-        return 'Analysing this year\'s temperatures in $displayCity...';
+        return 'Analysing yearly temperatures in $displayCity...';
       }
       return 'Analysing historical data for $displayCity...';
     }
@@ -325,12 +331,12 @@ class PeriodPageState extends State<PeriodPage>
       return 'Generating temperature comparison chart...';
     }
     if (phase == 4) {
-      return 'You should be seeing a bar chart soon...';
+      return 'Still working on your ${widget.periodLabel.toLowerCase()} temperature comparison...';
     }
     if (phase == 5) {
-      return 'This is taking longer than usual. Please wait...';
+      return 'This is taking longer than usual. We are still waiting for the server response...';
     }
-    return 'This really is taking a while, maybe due to a slow internet connection, high server load or something may have gone wrong.';
+    return 'Still loading. If this does not finish soon, please try retrying.';
   }
 
   int _phaseIndexForElapsed(int elapsedSeconds) {
@@ -350,6 +356,35 @@ class PeriodPageState extends State<PeriodPage>
     final parts = raw.split(',');
     if (parts.isEmpty) return raw;
     return parts.first.trim().isEmpty ? raw : parts.first.trim();
+  }
+
+  String _buildErrorMessage(Object error) {
+    final periodName = widget.periodLabel.toLowerCase();
+
+    if (error is TimeoutException || error is ApiTimeoutException) {
+      return 'Request timed out while loading $periodName data. Please try again.';
+    }
+    if (error is JobPollingException) {
+      return 'Server processing took too long for $periodName data. Please try again.';
+    }
+    if (error is AuthException) {
+      return 'Authentication issue while loading $periodName data. Please try again.';
+    }
+    if (error is ApiException) {
+      final status = error.statusCode;
+      if (status == 429) {
+        return 'Rate limit exceeded. Please wait a moment and try again.';
+      }
+      if (status >= 500) {
+        return 'Server error while loading $periodName data. Please try again shortly.';
+      }
+      if (status == 0 && error.cause is TimeoutException) {
+        return 'Request timed out while loading $periodName data. Please try again.';
+      }
+      return 'Unable to load $periodName data right now. Please try again.';
+    }
+
+    return 'Failed to load $periodName data. Please check your connection and try again.';
   }
 
   /// Called externally (e.g. on location change) to force a reload.
