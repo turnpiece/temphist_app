@@ -59,9 +59,9 @@ Location works in two modes:
 - A search field for free-text entry of any city
 
 The location indicator uses a colour coding system:
-- Green — GPS-detected location
-- Blue — manually selected location
-- Red — location could not be determined
+- Green — the user's current GPS-detected location
+- Blue — a popular location selected from the app's pre-approved list
+- Red — a recently visited location (previously used in the app, but not the user's current GPS location)
 
 ---
 
