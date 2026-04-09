@@ -440,12 +440,15 @@ class TemperatureService {
   /// [identifier] is the MM-DD date string (e.g. "02-06").
   /// [unitGroup] optional unit preference ('fahrenheit' or null for Celsius).
   /// [onProgress] optional callback invoked while the job is processing.
+  /// [onFallbackToSync] optional callback invoked when async polling fails and
+  /// the service switches to the synchronous fallback endpoint.
   Future<PeriodTemperatureData> fetchPeriodData(
     String period,
     String location,
     String identifier, {
     String? unitGroup,
     void Function(AsyncJobStatus)? onProgress,
+    void Function()? onFallbackToSync,
     bool Function()? isCancelled,
   }) async {
     final unitSuffix = (unitGroup != null && unitGroup != 'celsius') ? '|$unitGroup' : '';
@@ -480,6 +483,7 @@ class TemperatureService {
         if (isCancelled != null && isCancelled()) {
           throw const CancelledOperationException();
         }
+        onFallbackToSync?.call();
         DebugUtils.logLazy(() => 'Async job failed ($e), falling back to sync API...');
         try {
           final fallback =
