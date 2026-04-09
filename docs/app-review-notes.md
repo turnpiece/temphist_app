@@ -1,4 +1,4 @@
-# TempHist — App Review Notes
+# TempHist — APP REVIEW NOTES
 
 These notes are intended to help reviewers understand how TempHist works and how to test its key features.
 
@@ -10,7 +10,7 @@ TempHist shows historical temperature data for any location — today's high/low
 
 ---
 
-## Test Account / Credentials
+## Test account / credentials
 
 No test account is needed. The app signs in anonymously via Firebase on launch and works immediately. Reviewers do not need to create an account or enter any credentials.
 
@@ -36,12 +36,12 @@ The same information is available at any time via the Help page, accessible from
 
 The main screen has four time periods navigated by **horizontal swipe**:
 
-| Period | Description |
-|--------|-------------|
-| Day | Today's temperature compared with the same date across each of the past 50 years |
-| Week | The average temperature of the 7 days ending today compared with the same 7-day window in each of the past 50 years |
-| Month | The average temperature of the 30 days ending today compared with the same 30-day window in each of the past 50 years |
-| Year | The average temperature of the 365 days ending today compared with the same 365-day window in each of the past 50 years |
+| Period | Description                                                                                                             |
+| ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| Day    | Today's temperature compared with the same date across each of the past 50 years                                        |
+| Week   | The average temperature of the 7 days ending today compared with the same 7-day window in each of the past 50 years     |
+| Month  | The average temperature of the 30 days ending today compared with the same 30-day window in each of the past 50 years   |
+| Year   | The average temperature of the 365 days ending today compared with the same 365-day window in each of the past 50 years |
 
 The swipe gesture is demonstrated during onboarding. There are no visible tab buttons — swiping left/right is the primary navigation method.
 
@@ -54,18 +54,20 @@ Location works in two modes:
 **GPS (automatic)** — on first launch the app requests "Allow While Using App" location permission. If granted, it detects the nearest city automatically. If the permission is denied, the app falls back to a default location and prompts the user to set one manually.
 
 **Manual selection** — tapping the location name at the top of the screen opens the location selector. It shows:
+
 - Recent locations (previously visited)
 - A list of pre-approved popular locations
 - A search field for free-text entry of any city
 
 The location indicator uses a colour coding system:
+
 - Green — the user's current GPS-detected location
 - Blue — a popular location selected from the app's pre-approved list
 - Red — a recently visited location (previously used in the app, but not the user's current GPS location)
 
 ---
 
-## Cache-First Architecture
+## Cache-first architecture
 
 Temperature data is fetched from the API on the first view of each time period and cached to disk for up to 7 days. On subsequent visits within a session (or after reopening the app), data may load instantly from cache rather than the network — this is intentional behaviour, not a bug.
 
@@ -91,9 +93,10 @@ The app relies on Flutter's built-in accessibility support, which provides Voice
 
 ---
 
-## Network Requirements
+## Network requirements
 
 The app requires a network connection for:
+
 - Initial data load for each time period
 - Location search (fetching the pre-approved locations list)
 - Creating share records
