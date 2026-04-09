@@ -28,7 +28,7 @@ On first launch, a 7-screen onboarding flow introduces the app's key concepts:
 6. **Location** — explains how location is detected and how to change it
 7. **Temperature unit** — °C / °F preference, which can be changed at any time
 
-Onboarding can be replayed at any time from the Settings panel (gear icon, top right).
+The same information is available at any time via the Help page, accessible from the Settings panel (gear icon, top right).
 
 ---
 
