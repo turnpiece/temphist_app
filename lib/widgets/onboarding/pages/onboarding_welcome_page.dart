@@ -17,6 +17,7 @@ class OnboardingWelcomePage extends StatelessWidget {
         width: 120,
         height: 120,
       ),
+      centerVisual: false,
     );
   }
 }

@@ -154,67 +154,79 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
             colors: [kBackgroundColour, kBackgroundColourDark],
           ),
         ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header row with title and optional close button
-              Padding(
-                padding: EdgeInsets.fromLTRB(20, 16, widget.canDismiss ? 8 : 20, 12),
-                child: Row(
+        child: LayoutBuilder(builder: (context, constraints) {
+          final screenWidth = MediaQuery.of(context).size.width;
+          final isTablet = screenWidth >= kTabletBreakpointWidth;
+          final contentWidth = isTablet
+              ? kTabletMaxContentWidth.clamp(0.0, constraints.maxWidth)
+              : constraints.maxWidth;
+          return Center(
+            child: SizedBox(
+              width: contentWidth,
+              child: SafeArea(
+                child: Column(
                   children: [
-                    Text(
-                      widget.canDismiss ? 'Choose location' : 'Choose your location',
-                      style: TextStyle(
-                        color: kTextPrimaryColour,
-                        fontSize: kFontSizeBody,
-                        fontWeight: FontWeight.w600,
+                    // Header row with title and optional close button
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(20, 16, widget.canDismiss ? 8 : 20, 12),
+                      child: Row(
+                        children: [
+                          Text(
+                            widget.canDismiss ? 'Choose location' : 'Choose your location',
+                            style: TextStyle(
+                              color: kTextPrimaryColour,
+                              fontSize: kFontSizeBody,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (widget.canDismiss)
+                            IconButton(
+                              icon: Icon(
+                                Icons.close,
+                                color: kGreyLabelColour,
+                                size: kIconSize + 2,
+                              ),
+                              onPressed: () => Navigator.of(context).pop(),
+                            ),
+                        ],
                       ),
                     ),
-                    const Spacer(),
-                    if (widget.canDismiss)
-                      IconButton(
-                        icon: Icon(
-                          Icons.close,
-                          color: kGreyLabelColour,
-                          size: kIconSize + 2,
-                        ),
-                        onPressed: () => Navigator.of(context).pop(),
+                    Divider(
+                      color: kGreyLabelColour.withValues(alpha: 0.3),
+                      height: 1,
+                    ),
+                    // Scrollable content
+                    Expanded(
+                      child: FutureBuilder<_SheetData>(
+                        future: _dataFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState != ConnectionState.done) {
+                            return const Center(
+                              child: CircularProgressIndicator(color: kAccentColour),
+                            );
+                          }
+                          if (snapshot.hasError || !snapshot.hasData) {
+                            return Center(
+                              child: Text(
+                                'Could not load locations',
+                                style: TextStyle(
+                                  color: kGreyLabelColour,
+                                  fontSize: kFontSizeBody,
+                                ),
+                              ),
+                            );
+                          }
+                          return _buildContent(snapshot.data!, isTablet: isTablet);
+                        },
                       ),
+                    ),
                   ],
                 ),
               ),
-              Divider(
-                color: kGreyLabelColour.withValues(alpha: 0.3),
-                height: 1,
-              ),
-              // Scrollable content
-              Expanded(
-                child: FutureBuilder<_SheetData>(
-                  future: _dataFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(
-                        child: CircularProgressIndicator(color: kAccentColour),
-                      );
-                    }
-                    if (snapshot.hasError || !snapshot.hasData) {
-                      return Center(
-                        child: Text(
-                          'Could not load locations',
-                          style: TextStyle(
-                            color: kGreyLabelColour,
-                            fontSize: kFontSizeBody,
-                          ),
-                        ),
-                      );
-                    }
-                    return _buildContent(snapshot.data!);
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -226,9 +238,63 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     return [all[i], ...all.sublist(0, i), ...all.sublist(i + 1)];
   }
 
-  Widget _buildContent(_SheetData data) {
+  Widget _buildContent(_SheetData data, {bool isTablet = false}) {
     final orderedRecent = _withSelectedFirst(data.recentLocations);
     final orderedPopular = _withSelectedFirst(data.popularLocations);
+
+    // On tablets with both sections present, show a two-column layout.
+    if (isTablet && data.recentLocations.isNotEmpty && data.popularLocations.isNotEmpty) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                if (widget.gpsLocation.isNotEmpty) ...[
+                  _SectionHeader('Current', color: kBarCurrentYearColour),
+                  _LocationRow(
+                    apiLocation: widget.gpsLocation,
+                    isSelected: widget.selectedLocation == widget.gpsLocation,
+                    selectedColor: kBarCurrentYearColour,
+                    onTap: widget.selectedLocation == widget.gpsLocation && widget.canDismiss
+                        ? null
+                        : () => _select(widget.gpsLocation),
+                  ),
+                ],
+                _SectionHeader('Recent', color: kAccentColour),
+                for (final loc in orderedRecent)
+                  _LocationRow(
+                    apiLocation: loc,
+                    isSelected: _isSelected(loc),
+                    selectedColor: kAccentColour,
+                    onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
+                  ),
+              ],
+            ),
+          ),
+          VerticalDivider(
+            color: kGreyLabelColour.withValues(alpha: 0.3),
+            width: 1,
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                _SectionHeader('Popular', color: kAverageColour),
+                for (final loc in orderedPopular)
+                  _LocationRow(
+                    apiLocation: loc,
+                    isSelected: _isSelected(loc),
+                    selectedColor: kAverageColour,
+                    onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
 
     final visibleRecent = _showAllRecent
         ? orderedRecent

@@ -78,10 +78,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Stack(
             children: [
               // Full-height layout: pages + dots + button
-              Builder(builder: (context) {
+              LayoutBuilder(builder: (context, constraints) {
+                final screenWidth = MediaQuery.of(context).size.width;
+                final isTablet = screenWidth >= kTabletBreakpointWidth;
+                final contentWidth = isTablet
+                    ? kTabletMaxContentWidth.clamp(0.0, constraints.maxWidth)
+                    : constraints.maxWidth;
                 final isLandscape = MediaQuery.of(context).orientation ==
                     Orientation.landscape;
-                return Column(
+                return Center(
+                  child: SizedBox(
+                    width: contentWidth,
+                    child: Column(
                   children: [
                     // In landscape, add top breathing room so the content sits
                     // roughly as far from the top as the button is from the bottom.
@@ -135,7 +143,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                     SizedBox(height: isLandscape ? 12 : 40),
                   ],
-                );
+                ),
+              ),
+            );
               }),
               // Skip button floats over content in top-right corner
               if (_currentPage < _pages.length - 1)

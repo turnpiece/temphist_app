@@ -79,7 +79,15 @@ class _SettingsSheetState extends State<SettingsSheet> {
       color: Colors.transparent,
       child: Align(
         alignment: Alignment.bottomCenter,
-        child: DecoratedBox(
+        child: LayoutBuilder(builder: (context, constraints) {
+          final screenWidth = MediaQuery.of(context).size.width;
+          final isTablet = screenWidth >= kTabletBreakpointWidth;
+          final contentWidth = isTablet
+              ? kTabletMaxContentWidth.clamp(0.0, constraints.maxWidth)
+              : constraints.maxWidth;
+          return SizedBox(
+            width: contentWidth,
+            child: DecoratedBox(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -187,6 +195,8 @@ class _SettingsSheetState extends State<SettingsSheet> {
             ),
           ),
         ),
+          );
+        }),
       ),
     );
   }

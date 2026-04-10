@@ -51,6 +51,7 @@ const double kIconSize = 17.0;
 const double kSummaryFontSize = kFontSizeBody; // Changed from -2 for consistency
 const double kSummaryLineHeight = 1.2;
 const double kSummaryMinLines = 4;
+const double kSummaryMinLinesTablet = 2;
 
 /// Enable verbose logging in production builds via dart-define.
 /// Usage: flutter build ios --dart-define=VERBOSE_LOGS=true
