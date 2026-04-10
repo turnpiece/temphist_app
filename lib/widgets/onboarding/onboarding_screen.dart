@@ -144,7 +144,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               _buildDots(),
                               SizedBox(height: isLandscape ? 12 : 28),
                               _buildNextButton(),
-                              SizedBox(height: isLandscape ? 16 : 32),
+                              SizedBox(height: isLandscape ? 32 : 48),
                             ],
                           ),
                         ),
