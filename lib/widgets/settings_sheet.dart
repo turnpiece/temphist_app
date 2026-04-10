@@ -79,15 +79,9 @@ class _SettingsSheetState extends State<SettingsSheet> {
       color: Colors.transparent,
       child: Align(
         alignment: Alignment.bottomCenter,
-        child: LayoutBuilder(builder: (context, constraints) {
-          final screenWidth = MediaQuery.of(context).size.width;
-          final isTablet = screenWidth >= kTabletBreakpointWidth;
-          final contentWidth = isTablet
-              ? kTabletMaxContentWidth.clamp(0.0, constraints.maxWidth)
-              : constraints.maxWidth;
-          return SizedBox(
-            width: contentWidth,
-            child: DecoratedBox(
+        child: DecoratedBox(
+          // Background spans the full screen width; content is constrained
+          // inside via a centred SizedBox.
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -98,9 +92,18 @@ class _SettingsSheetState extends State<SettingsSheet> {
           ),
           child: SafeArea(
             top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+            child: LayoutBuilder(builder: (context, constraints) {
+              final screenWidth = MediaQuery.of(context).size.width;
+              final isTablet = screenWidth >= kTabletBreakpointWidth;
+              final contentWidth = isTablet
+                  ? kTabletMaxContentWidth.clamp(0.0, constraints.maxWidth)
+                  : constraints.maxWidth;
+              return Center(
+                child: SizedBox(
+                  width: contentWidth,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                 // Header
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
@@ -189,14 +192,15 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   },
                 ),
 
-                // Bottom spacing
-                const SizedBox(height: 12),
-              ],
-            ),
+                    // Bottom spacing
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+            );
+            }),
           ),
         ),
-          );
-        }),
       ),
     );
   }

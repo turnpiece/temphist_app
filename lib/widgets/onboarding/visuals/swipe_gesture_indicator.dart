@@ -64,30 +64,37 @@ class _SwipeGestureIndicatorState extends State<SwipeGestureIndicator>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        return Opacity(
-          opacity: _fade.value,
-          child: Transform.translate(
-            offset: Offset(_slide.value, 0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.swipe_right_outlined, color: kAccentColour, size: 28),
-                const SizedBox(width: 10),
-                const Text(
-                  'swipe right to explore',
-                  style: TextStyle(
-                    color: kGreyLabelColour,
-                    fontSize: kFontSizeBody,
-                  ),
+    // SizedBox + ClipRect ensure the sliding animation never overflows its
+    // parent — the content fades out before the right edge clip is visible.
+    return SizedBox(
+      width: double.infinity,
+      child: ClipRect(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            return Opacity(
+              opacity: _fade.value,
+              child: Transform.translate(
+                offset: Offset(_slide.value, 0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.swipe_right_outlined, color: kAccentColour, size: 28),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'swipe right to explore',
+                      style: TextStyle(
+                        color: kGreyLabelColour,
+                        fontSize: kFontSizeBody,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-        );
-      },
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
