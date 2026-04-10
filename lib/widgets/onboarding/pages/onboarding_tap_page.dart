@@ -8,11 +8,7 @@ class OnboardingTapPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OrientationBuilder(
-      builder: (context, orientation) => orientation == Orientation.landscape
-          ? _buildLandscape()
-          : _buildPortrait(),
-    );
+    return _buildPortrait();
   }
 
   Widget _buildPortrait() {
@@ -37,32 +33,6 @@ class OnboardingTapPage extends StatelessWidget {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildLandscape() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const Expanded(
-            flex: 2,
-            child: TapBarIllustration(),
-          ),
-          const SizedBox(width: 24),
-          Expanded(
-            flex: 3,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: _textContent(),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -17,16 +17,13 @@ class OnboardingSwipePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final date = _dateLabel();
-    return OrientationBuilder(
-      builder: (context, orientation) =>
-          orientation == Orientation.landscape
-              ? _buildLandscape(date)
-              : _buildPortrait(date),
-    );
+    // Always use the stacked portrait layout — the side-by-side landscape
+    // layout gives the swipe indicator too little horizontal room and triggers
+    // an overflow warning on narrow devices / constrained columns.
+    return _buildContent(_dateLabel());
   }
 
-  Widget _buildPortrait(String date) {
+  Widget _buildContent(String date) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32.0),
       child: LayoutBuilder(
@@ -50,42 +47,6 @@ class OnboardingSwipePage extends StatelessWidget {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildLandscape(String date) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            flex: 2,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _titleWidget(),
-                  const SizedBox(height: 20),
-                  const SwipeGestureIndicator(),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 24),
-          Expanded(
-            flex: 3,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: _rowWidgets(date),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

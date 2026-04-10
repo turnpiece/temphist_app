@@ -8,11 +8,9 @@ class OnboardingAverageTrendPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OrientationBuilder(
-      builder: (context, orientation) => orientation == Orientation.landscape
-          ? _buildLandscape()
-          : _buildPortrait(),
-    );
+    // Always use the stacked portrait layout — gives the illustration full
+    // content width and uses vertical space effectively even in landscape.
+    return _buildPortrait();
   }
 
   Widget _buildPortrait() {
@@ -39,36 +37,6 @@ class OnboardingAverageTrendPage extends StatelessWidget {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildLandscape() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const Expanded(
-            flex: 2,
-            child: AverageTrendIllustration(),
-          ),
-          const SizedBox(width: 24),
-          Expanded(
-            flex: 3,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _titleWidget(),
-                  const SizedBox(height: 16),
-                  ..._legendWidgets(),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

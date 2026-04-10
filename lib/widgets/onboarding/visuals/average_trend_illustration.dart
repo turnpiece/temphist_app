@@ -11,7 +11,7 @@ class AverageTrendIllustration extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 190,
+      height: 240,
       width: double.infinity,
       child: CustomPaint(
         painter: _AverageTrendPainter(),
