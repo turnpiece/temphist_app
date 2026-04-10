@@ -75,30 +75,39 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: DecoratedBox(
-          // Background spans the full screen width; content is constrained
-          // inside via a centred SizedBox.
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [kBackgroundColour, kBackgroundColourDark],
+    // Align at the root so touches above the sheet pass through to the
+    // barrier (barrierDismissible: true in showGeneralDialog).  Material
+    // wraps only the sheet content — not the whole screen — so it doesn't
+    // absorb taps in the empty space above the sheet.
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth >= kTabletBreakpointWidth;
+    final contentWidth = isTablet
+        ? kTabletMaxContentWidth.clamp(0.0, screenWidth)
+        : screenWidth;
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Material(
+        color: Colors.transparent,
+        child: SizedBox(
+          // Force full screen width so the gradient spans edge-to-edge.
+          width: double.infinity,
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [kBackgroundColour, kBackgroundColourDark],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: LayoutBuilder(builder: (context, constraints) {
-              final screenWidth = MediaQuery.of(context).size.width;
-              final isTablet = screenWidth >= kTabletBreakpointWidth;
-              final contentWidth = isTablet
-                  ? kTabletMaxContentWidth.clamp(0.0, constraints.maxWidth)
-                  : constraints.maxWidth;
-              return Center(
+            child: SafeArea(
+              top: false,
+              child: Align(
+                // heightFactor: 1 sizes Align to exactly its child's height,
+                // preventing it from expanding to fill the available space.
+                alignment: Alignment.topCenter,
+                heightFactor: 1.0,
                 child: SizedBox(
                   width: contentWidth,
                   child: Column(
@@ -195,14 +204,14 @@ class _SettingsSheetState extends State<SettingsSheet> {
                     // Bottom spacing
                     const SizedBox(height: 12),
                   ],
-                ),
-              ),
-            );
-            }),
-          ),
-        ),
-      ),
-    );
+                ),   // Column
+              ),     // SizedBox(contentWidth)
+            ),       // Align(heightFactor)
+          ),         // SafeArea
+        ),           // DecoratedBox
+      ),             // SizedBox(infinity)
+    ),               // Material
+  );                 // Align(bottomCenter)
   }
 }
 

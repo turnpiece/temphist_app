@@ -23,7 +23,7 @@ class OnboardingDayPage extends StatelessWidget {
 
   Widget _buildPortrait(String date, int year) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+      padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(

@@ -21,16 +21,12 @@ class OnboardingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OrientationBuilder(
-      builder: (context, orientation) => orientation == Orientation.landscape
-          ? _buildLandscape()
-          : _buildPortrait(),
-    );
+    return _buildPortrait();
   }
 
   Widget _buildPortrait() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+      padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
@@ -54,43 +50,6 @@ class OnboardingPage extends StatelessWidget {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildLandscape() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32.0),
-      child: Row(
-        // When the visual is left-aligned (welcome page logo) it looks better
-        // anchored to the top of the text block rather than floating in the
-        // vertical centre of the row.
-        crossAxisAlignment: centerVisual
-            ? CrossAxisAlignment.center
-            : CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 2,
-            child: centerVisual ? Center(child: visual) : visual,
-          ),
-          const SizedBox(width: 32),
-          Expanded(
-            flex: 3,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _titleWidget(),
-                  if (body.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _bodyWidget(),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
