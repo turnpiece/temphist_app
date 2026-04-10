@@ -9,12 +9,14 @@ class OnboardingPage extends StatelessWidget {
   final String title;
   final String body;
   final Widget visual;
+  final bool centerVisual;
 
   const OnboardingPage({
     super.key,
     required this.title,
     required this.body,
     required this.visual,
+    this.centerVisual = true,
   });
 
   @override
@@ -39,7 +41,7 @@ class OnboardingPage extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Center(child: visual),
+                    if (centerVisual) Center(child: visual) else visual,
                     const SizedBox(height: 40),
                     _titleWidget(),
                     if (body.isNotEmpty) ...[

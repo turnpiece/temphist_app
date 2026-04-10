@@ -474,6 +474,8 @@ class PeriodPageState extends State<PeriodPage>
   }
 
   Widget _buildContent(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth >= kTabletBreakpointWidth;
     final leftPadding = kScreenPadding + kContentHorizontalMargin;
     final rightPadding = leftPadding;
 
@@ -499,7 +501,7 @@ class PeriodPageState extends State<PeriodPage>
           if (_data != null && _data!.values.isEmpty) _buildEmptyState(),
 
           // Data loaded
-          if (_data != null && _data!.values.isNotEmpty) ..._buildDataContent(),
+          if (_data != null && _data!.values.isNotEmpty) ..._buildDataContent(isTablet: isTablet),
         ],
       ),
     );
@@ -591,7 +593,7 @@ class PeriodPageState extends State<PeriodPage>
     );
   }
 
-  List<Widget> _buildDataContent() {
+  List<Widget> _buildDataContent({bool isTablet = false}) {
     final data = _data!;
     final currentYear = DateTime.now().year;
 
@@ -611,8 +613,9 @@ class PeriodPageState extends State<PeriodPage>
         Padding(
           padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: kSummaryFontSize * kSummaryLineHeight * kSummaryMinLines + 8,
+            constraints: BoxConstraints(
+              minHeight: kSummaryFontSize * kSummaryLineHeight *
+                  (isTablet ? kSummaryMinLinesTablet : kSummaryMinLines) + 8,
             ),
             child: Text(
               data.summary,
