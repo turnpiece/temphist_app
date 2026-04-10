@@ -242,8 +242,8 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     final orderedRecent = _withSelectedFirst(data.recentLocations);
     final orderedPopular = _withSelectedFirst(data.popularLocations);
 
-    // On tablets with both sections present, show a two-column layout.
-    if (isTablet && data.recentLocations.isNotEmpty && data.popularLocations.isNotEmpty) {
+    // On tablets with popular locations available, show a two-column layout.
+    if (isTablet && data.popularLocations.isNotEmpty) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -262,14 +262,16 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                         : () => _select(widget.gpsLocation),
                   ),
                 ],
-                _SectionHeader('Recent', color: kAccentColour),
-                for (final loc in orderedRecent)
-                  _LocationRow(
-                    apiLocation: loc,
-                    isSelected: _isSelected(loc),
-                    selectedColor: kAccentColour,
-                    onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
-                  ),
+                if (data.recentLocations.isNotEmpty) ...[
+                  _SectionHeader('Recent', color: kAccentColour),
+                  for (final loc in orderedRecent)
+                    _LocationRow(
+                      apiLocation: loc,
+                      isSelected: _isSelected(loc),
+                      selectedColor: kAccentColour,
+                      onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
+                    ),
+                ],
               ],
             ),
           ),
