@@ -84,17 +84,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             final isLandscape = MediaQuery.of(context).orientation ==
                 Orientation.landscape;
 
-            // On tablets the PageView is given a fixed height so the dots and
-            // button follow naturally beneath the content.  The whole group is
-            // then centred vertically by the parent Column, keeping it away
-            // from the bottom edge on large screens.
+            // On tablets the PageView is given a fixed height that fills most
+            // of the screen.  Content starts just below the skip button; the
+            // dots + next-button group is pinned to the bottom of the remaining
+            // space via an Expanded + Align(bottomCenter).
             //
-            // The height is derived from what's available after the skip-button
-            // row (~48 px) and the controls below the PageView (spacing + dots
-            // + spacing + button + bottom breathing room ≈ 170–180 px).
+            // Using 72 % of available height in landscape and 70 % in portrait
+            // ensures even the tallest page (Average & Trend, ~440 px) fits
+            // without scrolling on all current iPad sizes.
             final double tabletPageViewHeight = isLandscape
-                ? ((constraints.maxHeight - 48) * 0.52).clamp(200.0, 380.0)
-                : ((constraints.maxHeight - 48) * 0.58).clamp(300.0, 540.0);
+                ? ((constraints.maxHeight - 48) * 0.72).clamp(200.0, 560.0)
+                : ((constraints.maxHeight - 48) * 0.70).clamp(300.0, 660.0);
 
             final skipButton = Align(
               alignment: Alignment.centerRight,
@@ -130,22 +130,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   children: [
                     // Skip always at the top, within the constrained width.
                     skipButton,
-                    if (isTablet)
-                      // Tablet: fixed-height PageView; the Column centres the
-                      // whole group (content + dots + button) vertically.
+                    if (isTablet) ...[
+                      // Tablet: large fixed-height PageView sits near the top;
+                      // dots + button are pinned to the bottom of the remaining
+                      // space so the button always appears low on the screen.
+                      SizedBox(height: tabletPageViewHeight, child: pageView),
                       Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(height: tabletPageViewHeight, child: pageView),
-                            SizedBox(height: isLandscape ? 16 : 48),
-                            _buildDots(),
-                            SizedBox(height: isLandscape ? 12 : 28),
-                            _buildNextButton(),
-                            SizedBox(height: isLandscape ? 8 : 24),
-                          ],
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildDots(),
+                              SizedBox(height: isLandscape ? 12 : 28),
+                              _buildNextButton(),
+                              SizedBox(height: isLandscape ? 16 : 32),
+                            ],
+                          ),
                         ),
-                      )
+                      ),
+                    ]
                     else ...[
                       // Phone: PageView fills remaining space; dots and button
                       // sit at the bottom.
