@@ -28,13 +28,10 @@ class SplashScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Logo
-                Transform.translate(
-                  offset: const Offset(-30.0, 0.0),
-                  child: SvgPicture.asset(
-                    'assets/logo.svg',
-                    width: 150,
-                    height: 150,
-                  ),
+                SvgPicture.asset(
+                  'assets/logo.svg',
+                  width: 150,
+                  height: 150,
                 ),
                 const SizedBox(height: 24),
                 // App title
