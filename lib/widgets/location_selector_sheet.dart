@@ -422,9 +422,10 @@ class _LocationRow extends StatelessWidget {
               color: color,
             ),
             const SizedBox(width: 14),
-            Expanded(
+            Flexible(
               child: Text(
                 _displayName,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: color,
                   fontSize: kFontSizeBody,
@@ -433,12 +434,14 @@ class _LocationRow extends StatelessWidget {
                 ),
               ),
             ),
-            if (isSelected)
+            if (isSelected) ...[
+              const SizedBox(width: 6),
               Icon(
                 Icons.check,
                 size: kIconSize + 3,
                 color: kBarCurrentYearColour,
               ),
+            ],
           ],
         ),
       ),
