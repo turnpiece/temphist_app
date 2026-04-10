@@ -84,13 +84,11 @@ class _OnboardingTemperatureUnitPageState
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32.0),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             flex: 2,
-            child: Center(
-              child: UnitToggleIllustration(isFahrenheit: _isFahrenheit),
-            ),
+            child: UnitToggleIllustration(isFahrenheit: _isFahrenheit),
           ),
           const SizedBox(width: 32),
           Expanded(

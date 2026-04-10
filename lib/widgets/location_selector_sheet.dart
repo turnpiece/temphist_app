@@ -415,11 +415,15 @@ class _LocationRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.location_on_outlined,
-              size: kIconSize + 3,
-              color: color,
+            Padding(
+              padding: const EdgeInsets.only(top: 1.0),
+              child: Icon(
+                Icons.location_on_outlined,
+                size: kIconSize + 3,
+                color: color,
+              ),
             ),
             const SizedBox(width: 14),
             Flexible(

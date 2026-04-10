@@ -62,11 +62,16 @@ class OnboardingPage extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32.0),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        // When the visual is left-aligned (welcome page logo) it looks better
+        // anchored to the top of the text block rather than floating in the
+        // vertical centre of the row.
+        crossAxisAlignment: centerVisual
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
         children: [
           Expanded(
             flex: 2,
-            child: Center(child: visual),
+            child: centerVisual ? Center(child: visual) : visual,
           ),
           const SizedBox(width: 32),
           Expanded(
