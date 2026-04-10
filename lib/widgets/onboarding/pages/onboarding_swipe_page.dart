@@ -25,7 +25,7 @@ class OnboardingSwipePage extends StatelessWidget {
 
   Widget _buildContent(String date) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+      padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
