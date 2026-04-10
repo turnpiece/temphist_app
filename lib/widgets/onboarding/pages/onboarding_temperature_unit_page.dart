@@ -41,11 +41,7 @@ class _OnboardingTemperatureUnitPageState
 
   @override
   Widget build(BuildContext context) {
-    return OrientationBuilder(
-      builder: (context, orientation) => orientation == Orientation.landscape
-          ? _buildLandscape()
-          : _buildPortrait(),
-    );
+    return _buildPortrait();
   }
 
   Widget _buildPortrait() {
@@ -76,38 +72,6 @@ class _OnboardingTemperatureUnitPageState
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildLandscape() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 2,
-            child: UnitToggleIllustration(isFahrenheit: _isFahrenheit),
-          ),
-          const SizedBox(width: 32),
-          Expanded(
-            flex: 3,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _titleWidget(),
-                  const SizedBox(height: 12),
-                  _bodyWidget(),
-                  const SizedBox(height: 20),
-                  _unitToggle(),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

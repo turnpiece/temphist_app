@@ -18,12 +18,7 @@ class OnboardingDayPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final date = _dateLabel();
     final year = DateTime.now().year;
-    return OrientationBuilder(
-      builder: (context, orientation) =>
-          orientation == Orientation.landscape
-              ? _buildLandscape(date, year)
-              : _buildPortrait(date, year),
-    );
+    return _buildPortrait(date, year);
   }
 
   Widget _buildPortrait(String date, int year) {
@@ -44,32 +39,6 @@ class OnboardingDayPage extends StatelessWidget {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildLandscape(String date, int year) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const Expanded(
-            flex: 2,
-            child: DayChartIllustration(),
-          ),
-          const SizedBox(width: 24),
-          Expanded(
-            flex: 3,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: _textContent(date, year),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

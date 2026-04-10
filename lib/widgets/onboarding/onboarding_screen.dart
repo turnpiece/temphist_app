@@ -138,11 +138,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             SizedBox(height: tabletPageViewHeight, child: pageView),
-                            SizedBox(height: isLandscape ? 6 : 20),
+                            SizedBox(height: isLandscape ? 16 : 36),
                             _buildDots(),
                             SizedBox(height: isLandscape ? 12 : 28),
                             _buildNextButton(),
-                            SizedBox(height: isLandscape ? 16 : 48),
+                            SizedBox(height: isLandscape ? 8 : 24),
                           ],
                         ),
                       )
@@ -151,11 +151,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       // sit at the bottom.
                       if (isLandscape) const SizedBox(height: 4),
                       Expanded(child: pageView),
-                      SizedBox(height: isLandscape ? 6 : 20),
+                      SizedBox(height: isLandscape ? 16 : 36),
                       _buildDots(),
                       SizedBox(height: isLandscape ? 12 : 28),
                       _buildNextButton(),
-                      SizedBox(height: isLandscape ? 12 : 40),
+                      SizedBox(height: isLandscape ? 6 : 20),
                     ],
                   ],
                 ),
