@@ -75,39 +75,48 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
         ),
         child: SafeArea(
-          child: Stack(
-            children: [
-              // Full-height layout: pages + dots + button
-              LayoutBuilder(builder: (context, constraints) {
-                final screenWidth = MediaQuery.of(context).size.width;
-                final isTablet = screenWidth >= kTabletBreakpointWidth;
-                final contentWidth = isTablet
-                    ? kTabletMaxContentWidth.clamp(0.0, constraints.maxWidth)
-                    : constraints.maxWidth;
-                final isLandscape = MediaQuery.of(context).orientation ==
-                    Orientation.landscape;
-                return Center(
-                  child: SizedBox(
-                    width: contentWidth,
-                    child: Column(
+          child: LayoutBuilder(builder: (context, constraints) {
+            final screenWidth = MediaQuery.of(context).size.width;
+            final isTablet = screenWidth >= kTabletBreakpointWidth;
+            final contentWidth = isTablet
+                ? kTabletMaxContentWidth.clamp(0.0, constraints.maxWidth)
+                : constraints.maxWidth;
+            final isLandscape = MediaQuery.of(context).orientation ==
+                Orientation.landscape;
+            return Center(
+              child: SizedBox(
+                width: contentWidth,
+                child: Column(
                   children: [
-                    // In landscape, add top breathing room so the content sits
-                    // roughly as far from the top as the button is from the bottom.
-                    if (isLandscape) const SizedBox(height: 12),
-                    Expanded(
-                      child: Padding(
-                        // Pull back the right edge so content doesn't slide
-                        // under the floating Skip button in landscape.
-                        padding: isLandscape
-                            ? const EdgeInsets.only(right: 72)
-                            : EdgeInsets.zero,
-                        child: PageView(
-                          controller: _controller,
-                          onPageChanged: (i) {
-                            if (mounted) setState(() => _currentPage = i);
-                          },
-                          children: _pages,
+                    // Skip button — right-aligned within the content width.
+                    // Always occupies its row height to keep layout stable.
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Opacity(
+                        opacity: _currentPage < _pages.length - 1 ? 1.0 : 0.0,
+                        child: TextButton(
+                          onPressed: _currentPage < _pages.length - 1
+                              ? widget.onComplete
+                              : null,
+                          child: const Text(
+                            'Skip',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: kFontSizeBody,
+                            ),
+                          ),
                         ),
+                      ),
+                    ),
+                    // In landscape, add breathing room between skip and content.
+                    if (isLandscape) const SizedBox(height: 4),
+                    Expanded(
+                      child: PageView(
+                        controller: _controller,
+                        onPageChanged: (i) {
+                          if (mounted) setState(() => _currentPage = i);
+                        },
+                        children: _pages,
                       ),
                     ),
                     SizedBox(height: isLandscape ? 6 : 24),
@@ -146,25 +155,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
             );
-              }),
-              // Skip button floats over content in top-right corner
-              if (_currentPage < _pages.length - 1)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: TextButton(
-                    onPressed: widget.onComplete,
-                    child: const Text(
-                      'Skip',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontSize: kFontSizeBody,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          }),
         ),
       ),
     );

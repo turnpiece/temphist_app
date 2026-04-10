@@ -242,68 +242,12 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     final orderedRecent = _withSelectedFirst(data.recentLocations);
     final orderedPopular = _withSelectedFirst(data.popularLocations);
 
-    // On tablets with popular locations available, show a two-column layout.
-    if (isTablet && data.popularLocations.isNotEmpty) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 24),
-              children: [
-                if (widget.gpsLocation.isNotEmpty) ...[
-                  _SectionHeader('Current', color: kBarCurrentYearColour),
-                  _LocationRow(
-                    apiLocation: widget.gpsLocation,
-                    isSelected: widget.selectedLocation == widget.gpsLocation,
-                    selectedColor: kBarCurrentYearColour,
-                    onTap: widget.selectedLocation == widget.gpsLocation && widget.canDismiss
-                        ? null
-                        : () => _select(widget.gpsLocation),
-                  ),
-                ],
-                if (data.recentLocations.isNotEmpty) ...[
-                  _SectionHeader('Recent', color: kAccentColour),
-                  for (final loc in orderedRecent)
-                    _LocationRow(
-                      apiLocation: loc,
-                      isSelected: _isSelected(loc),
-                      selectedColor: kAccentColour,
-                      onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
-                    ),
-                ],
-              ],
-            ),
-          ),
-          VerticalDivider(
-            color: kGreyLabelColour.withValues(alpha: 0.3),
-            width: 1,
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 24),
-              children: [
-                _SectionHeader('Popular', color: kAverageColour),
-                for (final loc in orderedPopular)
-                  _LocationRow(
-                    apiLocation: loc,
-                    isSelected: _isSelected(loc),
-                    selectedColor: kAverageColour,
-                    onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-
-    final visibleRecent = _showAllRecent
+    final visibleRecent = isTablet || _showAllRecent
         ? orderedRecent
         : orderedRecent.take(_initialCount).toList();
     // Show all popular locations when there are no recent locations — the
     // limit only makes sense when the list is already long due to recent items.
-    final showAllPopular = _showAllPopular || data.recentLocations.isEmpty;
+    final showAllPopular = isTablet || _showAllPopular || data.recentLocations.isEmpty;
     final visiblePopular = showAllPopular
         ? orderedPopular
         : orderedPopular.take(_initialCount).toList();
@@ -312,6 +256,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
       padding: const EdgeInsets.only(bottom: 24),
       children: [
         // "Current location" shows the physical GPS location, if known.
+        // Always a single full-width row.
         if (widget.gpsLocation.isNotEmpty) ...[
           _SectionHeader('Current', color: kBarCurrentYearColour),
           _LocationRow(
@@ -323,36 +268,87 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                 : () => _select(widget.gpsLocation),
           ),
         ],
+        // Recent — two-column grid on tablets, single column on phones.
         if (data.recentLocations.isNotEmpty) ...[
           _SectionHeader('Recent', color: kAccentColour),
-          for (final loc in visibleRecent)
-            _LocationRow(
-              apiLocation: loc,
-              isSelected: _isSelected(loc),
-              selectedColor: kAccentColour,
-              onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
-            ),
-          if (data.recentLocations.length > _initialCount && !_showAllRecent)
-            _ShowMoreButton(
-              onTap: () => setState(() => _showAllRecent = true),
-            ),
+          if (isTablet)
+            _buildTwoColumnGrid(visibleRecent, kAccentColour)
+          else ...[
+            for (final loc in visibleRecent)
+              _LocationRow(
+                apiLocation: loc,
+                isSelected: _isSelected(loc),
+                selectedColor: kAccentColour,
+                onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
+              ),
+            if (data.recentLocations.length > _initialCount && !_showAllRecent)
+              _ShowMoreButton(
+                onTap: () => setState(() => _showAllRecent = true),
+              ),
+          ],
         ],
+        // Popular — two-column grid on tablets, single column on phones.
         if (data.popularLocations.isNotEmpty) ...[
           _SectionHeader('Popular', color: kAverageColour),
-          for (final loc in visiblePopular)
-            _LocationRow(
-              apiLocation: loc,
-              isSelected: _isSelected(loc),
-              selectedColor: kAverageColour,
-              onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
-            ),
-          if (data.popularLocations.length > _initialCount && !showAllPopular)
-            _ShowMoreButton(
-              onTap: () => setState(() => _showAllPopular = true),
-            ),
+          if (isTablet)
+            _buildTwoColumnGrid(visiblePopular, kAverageColour)
+          else ...[
+            for (final loc in visiblePopular)
+              _LocationRow(
+                apiLocation: loc,
+                isSelected: _isSelected(loc),
+                selectedColor: kAverageColour,
+                onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
+              ),
+            if (data.popularLocations.length > _initialCount && !showAllPopular)
+              _ShowMoreButton(
+                onTap: () => setState(() => _showAllPopular = true),
+              ),
+          ],
         ],
       ],
     );
+  }
+
+  /// Renders [locations] as pairs of side-by-side [_LocationRow]s.
+  Widget _buildTwoColumnGrid(List<String> locations, Color selectedColor) {
+    final rows = <Widget>[];
+    for (int i = 0; i < locations.length; i += 2) {
+      final left = locations[i];
+      final right = i + 1 < locations.length ? locations[i + 1] : null;
+      rows.add(
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _LocationRow(
+                  apiLocation: left,
+                  isSelected: _isSelected(left),
+                  selectedColor: selectedColor,
+                  onTap: _isSelected(left) && widget.canDismiss ? null : () => _select(left),
+                ),
+              ),
+              VerticalDivider(
+                color: kGreyLabelColour.withValues(alpha: 0.15),
+                width: 1,
+              ),
+              Expanded(
+                child: right != null
+                    ? _LocationRow(
+                        apiLocation: right,
+                        isSelected: _isSelected(right),
+                        selectedColor: selectedColor,
+                        onTap: _isSelected(right) && widget.canDismiss ? null : () => _select(right),
+                      )
+                    : const SizedBox(),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Column(children: rows);
   }
 
   /// True when [loc] is the currently active selected location.
