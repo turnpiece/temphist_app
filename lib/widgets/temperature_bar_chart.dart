@@ -148,6 +148,13 @@ class TemperatureBarChart extends StatelessWidget {
             yAxisMax = maxTemp + yAxisInterval * 0.2;
           }
 
+          // Minimum bar: if the shortest bar would be less than 5% of the visible
+          // axis range, drop yAxisMin by one more step so it stays tappable.
+          const double kMinBarFraction = 0.05;
+          if ((minTemp - yAxisMin) / (yAxisMax - yAxisMin) < kMinBarFraction) {
+            yAxisMin -= yAxisInterval;
+          }
+
           final availableWidth = isTablet ? kTabletMaxContentWidth : screenWidth;
           final contentPadding = kScreenPadding + kContentHorizontalMargin;
           final chartWidth = availableWidth - kChartRightMargin - (contentPadding * 2);
