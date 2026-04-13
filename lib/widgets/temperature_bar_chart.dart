@@ -125,8 +125,10 @@ class TemperatureBarChart extends StatelessWidget {
             yAxisInterval = 3;
           } else if (yRange / 5 <= maxIntervals) {
             yAxisInterval = 5;
-          } else {
+          } else if (yRange / 10 <= maxIntervals) {
             yAxisInterval = 10;
+          } else {
+            yAxisInterval = 20;
           }
 
           // Snap lower bound to the interval and guarantee one step of headroom below.
