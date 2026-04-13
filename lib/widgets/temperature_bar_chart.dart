@@ -129,12 +129,22 @@ class TemperatureBarChart extends StatelessWidget {
             yAxisInterval = 10;
           }
 
-          // Snap bounds to the interval so there are no lone ticks past the last step.
+          // Snap lower bound to the interval and guarantee one step of headroom below.
           yAxisMin = (yAxisMin / yAxisInterval).floor() * yAxisInterval;
-          yAxisMax = (yAxisMax / yAxisInterval).ceil() * yAxisInterval;
-          // Guarantee at least one full step of headroom on each side.
-          if (yAxisMax <= maxTemp) yAxisMax += yAxisInterval;
           if (yAxisMin >= minTemp) yAxisMin -= yAxisInterval;
+
+          // Upper bound: only include the tick above maxTemp if the data is more than
+          // 1/3 of the way into that interval step. Otherwise, stop at the last tick
+          // and add just enough visual padding so the bar isn't flush with the axis end.
+          const double kUpperTickThreshold = 1.0 / 3.0;
+          final lastTickBeforeMax = (maxTemp / yAxisInterval).floor() * yAxisInterval;
+          final fractionIntoNextStep = (maxTemp - lastTickBeforeMax) / yAxisInterval;
+          if (fractionIntoNextStep > kUpperTickThreshold) {
+            yAxisMax = lastTickBeforeMax + yAxisInterval;
+          } else {
+            // No upper tick — axis extends past the bar with a small visual gap.
+            yAxisMax = maxTemp + yAxisInterval * 0.2;
+          }
 
           final availableWidth = isTablet ? kTabletMaxContentWidth : screenWidth;
           final contentPadding = kScreenPadding + kContentHorizontalMargin;
