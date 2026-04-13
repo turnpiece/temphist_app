@@ -128,6 +128,14 @@ class TemperatureBarChart extends StatelessWidget {
           } else {
             yAxisInterval = 10;
           }
+
+          // Snap bounds to the interval so there are no lone ticks past the last step.
+          yAxisMin = (yAxisMin / yAxisInterval).floor() * yAxisInterval;
+          yAxisMax = (yAxisMax / yAxisInterval).ceil() * yAxisInterval;
+          // Guarantee at least one full step of headroom on each side.
+          if (yAxisMax <= maxTemp) yAxisMax += yAxisInterval;
+          if (yAxisMin >= minTemp) yAxisMin -= yAxisInterval;
+
           final availableWidth = isTablet ? kTabletMaxContentWidth : screenWidth;
           final contentPadding = kScreenPadding + kContentHorizontalMargin;
           final chartWidth = availableWidth - kChartRightMargin - (contentPadding * 2);
