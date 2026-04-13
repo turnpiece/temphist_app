@@ -130,7 +130,9 @@ class TemperatureBarChart extends StatelessWidget {
           }
 
           // Snap lower bound to the interval and guarantee one step of headroom below.
-          yAxisMin = (yAxisMin / yAxisInterval).floor() * yAxisInterval;
+          // Snap from minTemp directly (not the pre-buffered yAxisMin) so the ±2 buffer
+          // used for interval selection above doesn't cause a double-step of waste.
+          yAxisMin = (minTemp / yAxisInterval).floor() * yAxisInterval;
           if (yAxisMin >= minTemp) yAxisMin -= yAxisInterval;
 
           // Upper bound: only include the tick above maxTemp if the data is more than
