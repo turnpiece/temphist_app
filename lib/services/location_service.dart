@@ -326,6 +326,15 @@ class LocationService extends ChangeNotifier {
                 location_utils.buildLocationFromPlacemark(placemarks.first);
             newCity = location_utils.cleanupLocationString(newCity);
 
+            // The stream gave us a real GPS fix — update _gpsLocation
+            // immediately. determineLocation() may short-circuit via the
+            // 30-min cache and never reach the assignment there, so we must
+            // do it here while we have the resolved position in hand.
+            if (!location_utils.isLocationSuspicious(newCity)) {
+              _gpsLocation = newCity;
+              _gpsCityNames.add(_cityName(newCity));
+            }
+
             if (newCity != _determinedLocation) {
               DebugUtils.logLazy(
                   () => 'City changed: $_determinedLocation → $newCity');
