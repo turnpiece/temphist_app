@@ -185,7 +185,7 @@ class TemperatureBarChart extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    '${d.year}: ${displayTemp.toStringAsFixed(isFahrenheit ? 0 : 1)}$unitLabel',
+                    '${d.year}: ${displayTemp.toStringAsFixed(1)}$unitLabel',
                     style: const TextStyle(
                         color: Colors.white, fontSize: kFontSizeBody - 4),
                   ),
