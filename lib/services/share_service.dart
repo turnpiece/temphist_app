@@ -167,9 +167,11 @@ class ShareService {
     GlobalKey? shareButtonKey,
   }) async {
     final rect = _buttonRect(shareButtonKey);
-    await Share.shareUri(
-      Uri.parse(shareUrl),
-      sharePositionOrigin: rect,
+    await SharePlus.instance.share(
+      ShareParams(
+        uri: Uri.parse(shareUrl),
+        sharePositionOrigin: rect,
+      ),
     );
   }
 
