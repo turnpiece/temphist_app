@@ -53,7 +53,7 @@ dependencies:
 
   # Added geolocator
   geolocator: ^14.0.2
-  geocoding: ^5.0.0
+  geocoding: ^4.0.0
 
   # For caching
   shared_preferences: ^2.2.2
