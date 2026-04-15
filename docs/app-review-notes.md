@@ -55,9 +55,9 @@ Location works in two modes:
 
 **Manual selection** — tapping the location name at the top of the screen opens the location selector. It shows:
 
+- Current location (if GPS permission is granted)
 - Recent locations (previously visited)
 - A list of pre-approved popular locations
-- A search field for free-text entry of any city
 
 The location indicator uses a colour coding system:
 
@@ -79,11 +79,10 @@ Reviewers can force a fresh network fetch by pulling down to refresh on any peri
 
 The share button (top right on each period screen) does the following:
 
-1. Captures the chart as an image with a description footer baked in
-2. Creates a share record on the TempHist API and returns a short URL
-3. Opens the iOS share sheet with the URL, allowing the user to share via Messages, Mail, or any other app
+1. Creates a share record on the TempHist API and returns a short URL
+2. Opens the iOS share sheet with that URL, allowing the user to share via Messages, Mail, or any other app
 
-Sharing requires an active network connection. The share URL resolves to a web page showing the same chart with Open Graph metadata for rich link previews.
+Sharing requires an active network connection. The URL resolves to a web page showing the same chart and includes Open Graph metadata so link previews in Messages, Mail, etc. render a title, description, and preview image.
 
 ---
 

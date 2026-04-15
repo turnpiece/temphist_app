@@ -27,9 +27,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app uses your location to show temperature data for where you are. Your location is shared with our weather data provider and is not stored permanently.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>This app uses your location to show temperature data for where you are. Your location is shared with our weather data provider and is not stored permanently. This app does not use background location.</string>
+	<string>TempHist uses your location to show temperature data for where you are. The detected city is sent to our weather data provider and saved on this device so the app opens at your most recent location and keeps a short list of recent places for quick access.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
