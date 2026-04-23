@@ -153,13 +153,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     else ...[
                       // Phone: PageView fills remaining space; dots and button
                       // sit at the bottom.
+                      // On small screens (iPhone SE: ~647px available) the
+                      // bottom controls are tightened so the PageView gets
+                      // more room and content is less likely to be clipped.
                       if (isLandscape) const SizedBox(height: 4),
                       Expanded(child: pageView),
-                      SizedBox(height: isLandscape ? 16 : 48),
+                      SizedBox(height: isLandscape ? 16 : (constraints.maxHeight < 700 ? 20 : 48)),
                       _buildDots(),
-                      SizedBox(height: isLandscape ? 12 : 28),
+                      SizedBox(height: isLandscape ? 12 : (constraints.maxHeight < 700 ? 12 : 28)),
                       _buildNextButton(),
-                      SizedBox(height: isLandscape ? 6 : 20),
+                      SizedBox(height: isLandscape ? 6 : (constraints.maxHeight < 700 ? 8 : 20)),
                     ],
                   ],
                 ),
