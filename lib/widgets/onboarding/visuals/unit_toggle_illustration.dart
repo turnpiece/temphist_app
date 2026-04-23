@@ -6,13 +6,18 @@ import '../../../constants/app_constants.dart';
 /// Shows °C and °F side by side, with the active unit highlighted.
 class UnitToggleIllustration extends StatelessWidget {
   final bool isFahrenheit;
+  final double height;
 
-  const UnitToggleIllustration({super.key, required this.isFahrenheit});
+  const UnitToggleIllustration({
+    super.key,
+    required this.isFahrenheit,
+    this.height = 160,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 160,
+      height: height,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
