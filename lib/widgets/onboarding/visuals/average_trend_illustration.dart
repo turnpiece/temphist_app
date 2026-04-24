@@ -6,12 +6,13 @@ import '../../../constants/app_constants.dart';
 /// trend (yellow) lines emphasised, matching what users see in the app.
 /// Year labels shown every 5 years only, like the actual chart.
 class AverageTrendIllustration extends StatelessWidget {
-  const AverageTrendIllustration({super.key});
+  final double height;
+  const AverageTrendIllustration({super.key, this.height = 240});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 240,
+      height: height,
       width: double.infinity,
       child: CustomPaint(
         painter: _AverageTrendPainter(),

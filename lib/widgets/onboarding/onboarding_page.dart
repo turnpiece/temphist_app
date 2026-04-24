@@ -39,7 +39,7 @@ class OnboardingPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (centerVisual) Center(child: visual) else visual,
-                    SizedBox(height: isSmall ? 16 : 40),
+                    SizedBox(height: isSmall ? 12 : 40),
                     _titleWidget(fontSize: isSmall ? 20.0 : 24.0),
                     if (body.isNotEmpty) ...[
                       SizedBox(height: isSmall ? 10 : 16),

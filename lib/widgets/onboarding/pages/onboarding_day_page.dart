@@ -26,6 +26,7 @@ class OnboardingDayPage extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final isSmall = constraints.maxHeight < 500;
           return SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -33,7 +34,7 @@ class OnboardingDayPage extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _content(date, year),
+                  children: _content(date, year, isSmall: isSmall),
                 ),
               ),
             ),
@@ -43,41 +44,46 @@ class OnboardingDayPage extends StatelessWidget {
     );
   }
 
-  List<Widget> _content(String date, int year) => [
-        const DayChartIllustration(),
-        const SizedBox(height: 24),
-        ..._textContent(date, year),
+  List<Widget> _content(String date, int year, {required bool isSmall}) => [
+        DayChartIllustration(height: isSmall ? 100.0 : 120.0),
+        SizedBox(height: isSmall ? 16 : 24),
+        ..._textContent(date, year, isSmall: isSmall),
       ];
 
-  List<Widget> _textContent(String date, int year) => [
-        const Text(
-          'Today in history',
-          style: TextStyle(
-            color: kAccentColour,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.3,
-          ),
+  List<Widget> _textContent(String date, int year, {required bool isSmall}) {
+    final titleSize = isSmall ? 20.0 : 24.0;
+    final bodySize = isSmall ? 15.0 : kFontSizeBody;
+    final gap = isSmall ? 8.0 : 12.0;
+    return [
+      Text(
+        'Today in history',
+        style: TextStyle(
+          color: kAccentColour,
+          fontSize: titleSize,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.3,
         ),
-        const SizedBox(height: 12),
-        Text(
-          'The main screen shows today\'s date across multiple years — '
-          'so on $date you\'ll see $date $year, $date ${year - 1}, '
-          '$date ${year - 2} and so on.',
-          style: const TextStyle(
-            color: kTextPrimaryColour,
-            fontSize: kFontSizeBody,
-            height: 1.5,
-          ),
+      ),
+      SizedBox(height: gap),
+      Text(
+        'The main screen shows today\'s date across multiple years — '
+        'so on $date you\'ll see $date $year, $date ${year - 1}, '
+        '$date ${year - 2} and so on.',
+        style: TextStyle(
+          color: kTextPrimaryColour,
+          fontSize: bodySize,
+          height: 1.5,
         ),
-        const SizedBox(height: 12),
-        const Text(
-          'Green bar = this year.',
-          style: TextStyle(color: kBarCurrentYearColour, fontSize: kFontSizeBody),
-        ),
-        const Text(
-          'Red bars = previous years.',
-          style: TextStyle(color: kBarOtherYearColour, fontSize: kFontSizeBody),
-        ),
-      ];
+      ),
+      SizedBox(height: gap),
+      Text(
+        'Green bar = this year.',
+        style: TextStyle(color: kBarCurrentYearColour, fontSize: bodySize),
+      ),
+      Text(
+        'Red bars = previous years.',
+        style: TextStyle(color: kBarOtherYearColour, fontSize: bodySize),
+      ),
+    ];
+  }
 }

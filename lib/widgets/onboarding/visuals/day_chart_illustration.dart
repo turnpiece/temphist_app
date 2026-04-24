@@ -6,12 +6,13 @@ import '../../../constants/app_constants.dart';
 /// Horizontal bars, years listed top-to-bottom with the most recent at the top,
 /// matching the actual app layout.
 class DayChartIllustration extends StatelessWidget {
-  const DayChartIllustration({super.key});
+  final double height;
+  const DayChartIllustration({super.key, this.height = 120});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 120,
+      height: height,
       width: double.infinity,
       child: CustomPaint(
         painter: _DayChartPainter(),
