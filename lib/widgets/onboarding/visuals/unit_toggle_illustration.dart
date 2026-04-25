@@ -18,19 +18,22 @@ class UnitToggleIllustration extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: height,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _unitDisplay('22', '°C', isSelected: !isFahrenheit),
-          const SizedBox(width: 16),
-          Container(
-            height: 60,
-            width: 1,
-            color: kGreyLabelColour.withValues(alpha: 0.3),
-          ),
-          const SizedBox(width: 16),
-          _unitDisplay('72', '°F', isSelected: isFahrenheit),
-        ],
+      child: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.0,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _unitDisplay('22', '°C', isSelected: !isFahrenheit),
+            const SizedBox(width: 16),
+            Container(
+              height: 60,
+              width: 1,
+              color: kGreyLabelColour.withValues(alpha: 0.3),
+            ),
+            const SizedBox(width: 16),
+            _unitDisplay('72', '°F', isSelected: isFahrenheit),
+          ],
+        ),
       ),
     );
   }

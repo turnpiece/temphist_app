@@ -230,13 +230,15 @@ class TempHist extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: kAppTitle,
       home: const TemperatureScreen(),
-      // Cap Dynamic Type at 1.3× — beyond this the chart labels, location
-      // header, and settings sheet overflow badly. Content that matters for
-      // readability (summary, body text) still gets a useful size bump.
-      builder: (context, child) => MediaQuery.withClampedTextScaling(
-        maxScaleFactor: 1.3,
-        child: child!,
-      ),
+      // Cap Dynamic Type — beyond the limit chart labels, location header, and
+      // settings sheet overflow. iPads have more room so allow a higher cap.
+      builder: (context, child) {
+        final isIpad = MediaQuery.of(context).size.shortestSide >= 768;
+        return MediaQuery.withClampedTextScaling(
+          maxScaleFactor: isIpad ? 1.6 : 1.3,
+          child: child!,
+        );
+      },
       // Add a custom loading screen theme
       theme: ThemeData(
         scaffoldBackgroundColor: kBackgroundColour,

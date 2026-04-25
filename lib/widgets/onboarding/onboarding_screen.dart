@@ -141,7 +141,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              _buildDots(),
+                              _buildDots(isTablet: true),
                               SizedBox(height: isLandscape ? 12 : 28),
                               _buildNextButton(),
                               SizedBox(height: isLandscape ? 32 : 48),
@@ -201,7 +201,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _buildDots() {
+  Widget _buildDots({bool isTablet = false}) {
+    final double activeSize = isTablet ? 14 : 10;
+    final double inactiveSize = isTablet ? 11 : 8;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(_pages.length, (i) {
@@ -209,8 +211,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.symmetric(horizontal: 4),
-          width: active ? 10 : 8,
-          height: active ? 10 : 8,
+          width: active ? activeSize : inactiveSize,
+          height: active ? activeSize : inactiveSize,
           decoration: BoxDecoration(
             color: active ? kBarCurrentYearColour : kGreyLabelColour,
             shape: BoxShape.circle,
