@@ -77,7 +77,7 @@ class OnboardingSwipePage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 2.0),
+            padding: const EdgeInsets.only(top: 8.0),
             child: Icon(icon, color: kAccentColour, size: kIconSize + 2),
           ),
           const SizedBox(width: 14),
