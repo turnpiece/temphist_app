@@ -7,28 +7,25 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
-    let launched = super.application(application, didFinishLaunchingWithOptions: launchOptions)
-
-    // Register platform channel after super so that window/rootViewController are set up.
-    let controller = window?.rootViewController as! FlutterViewController
-    let channel = FlutterMethodChannel(
-      name: "com.turnpiece.temphist/system_prefs",
-      binaryMessenger: controller.binaryMessenger
-    )
-    channel.setMethodCallHandler { call, result in
-      if call.method == "getTemperatureUnitIsFahrenheit" {
-        let formatter = MeasurementFormatter()
-        let measurement = Measurement(value: 0, unit: UnitTemperature.celsius)
-        let formatted = formatter.string(from: measurement)
-        // MeasurementFormatter converts to the system-preferred unit.
-        // On iOS 16+ this respects the explicit Temperature setting in Language & Region;
-        // on iOS 15 it falls back to the region default.
-        result(!formatted.contains("°C") && !formatted.contains("C"))
-      } else {
-        result(FlutterMethodNotImplemented)
-      }
+    // Write iOS system temperature unit preference to UserDefaults before the
+    // Flutter engine starts so Dart can read it via shared_preferences.
+    // MeasurementFormatter respects the iOS 16+ explicit Temperature setting;
+    // on iOS 15 it falls back to the region default.
+    // iOS 16+ stores the explicit temperature unit preference as "AppleTemperatureUnit"
+    // in NSUserDefaults ("Celsius" or "Fahrenheit"), separate from the regional locale.
+    // MeasurementFormatter uses the regional default and ignores this override.
+    let explicitUnit = UserDefaults.standard.string(forKey: "AppleTemperatureUnit")
+    let isFahrenheit: Bool
+    if let unit = explicitUnit {
+      isFahrenheit = (unit == "Fahrenheit")
+    } else {
+      // Not explicitly set — fall back to regional locale heuristic.
+      isFahrenheit = Locale.current.regionCode == "US"
     }
-    return launched
+    // shared_preferences stores keys with a "flutter." prefix in NSUserDefaults.
+    UserDefaults.standard.set(isFahrenheit, forKey: "flutter.ios_system_temperature_fahrenheit")
+
+    GeneratedPluginRegistrant.register(with: self)
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 }
