@@ -18,6 +18,7 @@ class OnboardingAverageTrendPage extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final isSmall = constraints.maxHeight < 500;
           return SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -26,10 +27,10 @@ class OnboardingAverageTrendPage extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _titleWidget(),
-                    const SizedBox(height: 24),
-                    const AverageTrendIllustration(),
-                    const SizedBox(height: 24),
+                    _titleWidget(fontSize: isSmall ? 20.0 : 24.0),
+                    SizedBox(height: isSmall ? 16 : 24),
+                    AverageTrendIllustration(height: isSmall ? 160.0 : 240.0),
+                    SizedBox(height: isSmall ? 16 : 24),
                     ..._legendWidgets(),
                   ],
                 ),
@@ -41,11 +42,11 @@ class OnboardingAverageTrendPage extends StatelessWidget {
     );
   }
 
-  Widget _titleWidget() => const Text(
+  Widget _titleWidget({double fontSize = 24.0}) => Text(
         'Average and trend',
         style: TextStyle(
           color: kAccentColour,
-          fontSize: 24,
+          fontSize: fontSize,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.3,
         ),

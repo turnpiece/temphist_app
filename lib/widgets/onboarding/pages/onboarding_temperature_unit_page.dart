@@ -49,6 +49,7 @@ class _OnboardingTemperatureUnitPageState
       padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final isSmall = constraints.maxHeight < 500;
           return SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -58,13 +59,16 @@ class _OnboardingTemperatureUnitPageState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Center(
-                      child: UnitToggleIllustration(isFahrenheit: _isFahrenheit),
+                      child: UnitToggleIllustration(
+                        isFahrenheit: _isFahrenheit,
+                        height: isSmall ? 110 : 160,
+                      ),
                     ),
-                    const SizedBox(height: 40),
-                    _titleWidget(),
-                    const SizedBox(height: 16),
+                    SizedBox(height: isSmall ? 16 : 40),
+                    _titleWidget(fontSize: isSmall ? 20.0 : 24.0),
+                    SizedBox(height: isSmall ? 10 : 16),
                     _bodyWidget(),
-                    const SizedBox(height: 28),
+                    SizedBox(height: isSmall ? 16 : 28),
                     Center(child: _unitToggle()),
                   ],
                 ),
@@ -76,11 +80,11 @@ class _OnboardingTemperatureUnitPageState
     );
   }
 
-  Widget _titleWidget() => const Text(
+  Widget _titleWidget({double fontSize = 24.0}) => Text(
         'Units',
         style: TextStyle(
           color: kAccentColour,
-          fontSize: 24,
+          fontSize: fontSize,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.3,
         ),

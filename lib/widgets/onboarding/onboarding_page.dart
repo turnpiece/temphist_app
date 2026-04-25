@@ -29,6 +29,7 @@ class OnboardingPage extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final isSmall = constraints.maxHeight < 500;
           return SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -38,10 +39,10 @@ class OnboardingPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (centerVisual) Center(child: visual) else visual,
-                    const SizedBox(height: 40),
-                    _titleWidget(),
+                    SizedBox(height: isSmall ? 12 : 40),
+                    _titleWidget(fontSize: isSmall ? 20.0 : 24.0),
                     if (body.isNotEmpty) ...[
-                      const SizedBox(height: 16),
+                      SizedBox(height: isSmall ? 10 : 16),
                       _bodyWidget(),
                     ],
                   ],
@@ -54,11 +55,11 @@ class OnboardingPage extends StatelessWidget {
     );
   }
 
-  Widget _titleWidget() => Text(
+  Widget _titleWidget({double fontSize = 24.0}) => Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           color: kAccentColour,
-          fontSize: 24,
+          fontSize: fontSize,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.3,
         ),

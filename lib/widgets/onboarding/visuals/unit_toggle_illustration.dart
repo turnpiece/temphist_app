@@ -6,13 +6,18 @@ import '../../../constants/app_constants.dart';
 /// Shows °C and °F side by side, with the active unit highlighted.
 class UnitToggleIllustration extends StatelessWidget {
   final bool isFahrenheit;
+  final double height;
 
-  const UnitToggleIllustration({super.key, required this.isFahrenheit});
+  const UnitToggleIllustration({
+    super.key,
+    required this.isFahrenheit,
+    this.height = 160,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 160,
+      height: height,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -31,6 +36,8 @@ class UnitToggleIllustration extends StatelessWidget {
   }
 
   Widget _unitDisplay(String number, String unit, {required bool isSelected}) {
+    final numberFontSize = height < 130 ? 36.0 : 56.0;
+    final unitFontSize = height < 130 ? 18.0 : 28.0;
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 200),
       opacity: isSelected ? 1.0 : 0.35,
@@ -41,7 +48,7 @@ class UnitToggleIllustration extends StatelessWidget {
             number,
             style: TextStyle(
               color: isSelected ? kBarCurrentYearColour : kTextPrimaryColour,
-              fontSize: 56,
+              fontSize: numberFontSize,
               fontWeight: FontWeight.w300,
               letterSpacing: -2,
             ),
@@ -50,7 +57,7 @@ class UnitToggleIllustration extends StatelessWidget {
             unit,
             style: TextStyle(
               color: isSelected ? kBarCurrentYearColour : kTextPrimaryColour,
-              fontSize: 28,
+              fontSize: unitFontSize,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.w300,
             ),
           ),

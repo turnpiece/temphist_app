@@ -8,14 +8,15 @@ class OnboardingWelcomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final logoSize = MediaQuery.of(context).size.height < 700 ? 80.0 : 120.0;
     return OnboardingPage(
       title: 'How does today compare\nto the same day in years past?',
       body: 'Was this week unusually warm? How about the past month or the past year? '
           'TempHist shows you decades of temperature history for any location.',
       visual: SvgPicture.asset(
         'assets/logo.svg',
-        width: 120,
-        height: 120,
+        width: logoSize,
+        height: logoSize,
       ),
       centerVisual: false,
     );
