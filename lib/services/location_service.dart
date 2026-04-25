@@ -333,6 +333,10 @@ class LocationService extends ChangeNotifier {
             if (!location_utils.isLocationSuspicious(newCity)) {
               _gpsLocation = newCity;
               _gpsCityNames.add(_cityName(newCity));
+              // determineLocation() may short-circuit via the 30-min cache
+              // and never reach LocationHistoryService.add(), so persist here
+              // while we have the resolved position in hand.
+              await LocationHistoryService.add(newCity);
             }
 
             if (newCity != _determinedLocation) {

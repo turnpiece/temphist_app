@@ -245,12 +245,12 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     final visibleRecent = isTablet || _showAllRecent
         ? orderedRecent
         : orderedRecent.take(_initialCount).toList();
-    // Show all popular locations when there are no recent locations — the
-    // limit only makes sense when the list is already long due to recent items.
-    final showAllPopular = isTablet || _showAllPopular || data.recentLocations.isEmpty;
+    final popularInitialCount =
+        (10 - data.recentLocations.length).clamp(_initialCount, 10);
+    final showAllPopular = isTablet || _showAllPopular;
     final visiblePopular = showAllPopular
         ? orderedPopular
-        : orderedPopular.take(_initialCount).toList();
+        : orderedPopular.take(popularInitialCount).toList();
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
@@ -300,7 +300,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                 selectedColor: kAverageColour,
                 onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
               ),
-            if (data.popularLocations.length > _initialCount && !showAllPopular)
+            if (data.popularLocations.length > popularInitialCount && !showAllPopular)
               _ShowMoreButton(
                 onTap: () => setState(() => _showAllPopular = true),
               ),
