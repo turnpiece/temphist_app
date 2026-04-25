@@ -12,11 +12,15 @@ import '../utils/debug_utils.dart';
 class TemperatureUnitService {
   static const _key = 'temperature_unit_fahrenheit';
 
+  // Written by AppDelegate before the Flutter engine starts (iOS only).
+  // Reflects MeasurementFormatter, which honours the iOS 16+ explicit
+  // Temperature setting and falls back to the region default on iOS 15.
+  static const _iosSystemKey = 'ios_system_temperature_fahrenheit';
+
   /// `true` when the user prefers Fahrenheit; `false` for Celsius.
   final ValueNotifier<bool> isFahrenheit = ValueNotifier(false);
 
-  /// Load the stored preference, or auto-detect from the platform locale
-  /// on first launch (Fahrenheit for US, Celsius otherwise).
+  /// Load the stored preference, or auto-detect on first launch.
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -24,13 +28,15 @@ class TemperatureUnitService {
       if (stored != null) {
         isFahrenheit.value = stored;
       } else {
-        // First launch — auto-detect from device locale.
+        // First launch — use the iOS system preference written to UserDefaults
+        // by native code (null on Android), then fall back to locale country code.
+        final systemPref = prefs.getBool(_iosSystemKey);
         final locale = PlatformDispatcher.instance.locale;
-        isFahrenheit.value = (locale.countryCode == 'US');
+        isFahrenheit.value = systemPref ?? (locale.countryCode == 'US');
         DebugUtils.logLazy(() =>
             '🌡️ No stored unit preference — auto-detected '
             '${isFahrenheit.value ? "Fahrenheit" : "Celsius"} '
-            '(locale: ${locale.toLanguageTag()})');
+            '(systemPref: $systemPref, locale: ${locale.toLanguageTag()})');
       }
     } catch (e) {
       DebugUtils.logLazy(() => '🌡️ Failed to load unit preference: $e');
