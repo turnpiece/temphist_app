@@ -320,8 +320,8 @@ class _BulletRow extends StatelessWidget {
           ),
           Expanded(
             child: bullet.description != null
-                ? RichText(
-                    text: TextSpan(
+                ? Text.rich(
+                    TextSpan(
                       children: [
                         TextSpan(
                           text: bullet.label,
