@@ -310,7 +310,7 @@ class _BulletRow extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: SizedBox(
-              height: kFontSizeBody * 1.85,
+              height: kFontSizeBody * 1.55,
               child: Center(
                 child: Container(
                   width: 10,
