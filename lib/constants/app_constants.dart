@@ -68,7 +68,7 @@ const int kLocationTimeoutSeconds = 10;
 const int kConnectivityTestTimeoutSeconds = 5;
 
 /// Chart constants
-const double kTabletBreakpointWidth = 768.0;
+const double kTabletBreakpointWidth = 700.0;
 const double kTabletMaxContentWidth = 600.0;
 const double kChartHeight = 800.0;
 const int kChartStartYear = 1975;
