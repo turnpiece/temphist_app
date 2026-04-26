@@ -163,13 +163,13 @@ class _Body extends StatelessWidget {
               color: kAccentColour,
               label: 'Recent locations',
               description:
-                  'Places where you have opened the app. The list grows as you use TempHist in new places.',
+                  'Places where you have opened the app. The list grows as you use it in new places.',
             ),
             _Bullet(
               color: kAverageColour,
               label: 'Popular locations',
               description:
-                  'A curated list of cities you can browse and select manually.',
+                  'A list of cities you can browse and select manually.',
             ),
           ],
           footer:
@@ -308,13 +308,18 @@ class _BulletRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 7, right: 8),
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: bullet.color,
-                shape: BoxShape.circle,
+            padding: const EdgeInsets.only(right: 8),
+            child: SizedBox(
+              height: kFontSizeBody * 1.85,
+              child: Center(
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: bullet.color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
               ),
             ),
           ),
