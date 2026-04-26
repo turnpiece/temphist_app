@@ -358,9 +358,9 @@ class PeriodPageState extends State<PeriodPage>
       return 'Still working on your ${widget.periodLabel.toLowerCase()} temperature comparison...';
     }
     if (phase == 5) {
-      return 'This is taking longer than usual. We are still waiting for the server response...';
+      return 'This is taking a while.';
     }
-    return 'Still loading. If this does not finish soon, please try retrying.';
+    return 'Still loading...';
   }
 
   int _phaseIndexForElapsed(int elapsedSeconds) {
