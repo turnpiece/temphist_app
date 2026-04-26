@@ -231,25 +231,29 @@ class _SettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, color: kGreyLabelColour, size: kIconSize + 3),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: kTextPrimaryColour,
-                  fontSize: kFontSizeBody,
+    return Semantics(
+      label: label,
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, color: kGreyLabelColour, size: kIconSize + 3),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: kTextPrimaryColour,
+                    fontSize: kFontSizeBody,
+                  ),
                 ),
               ),
-            ),
-            trailing,
-          ],
+              trailing,
+            ],
+          ),
         ),
       ),
     );
@@ -284,20 +288,25 @@ class _UnitToggle extends StatelessWidget {
   }
 
   Widget _segment(String label, {required bool isActive, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: isActive ? kBarCurrentYearColour.withValues(alpha: 0.25) : Colors.transparent,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isActive ? kBarCurrentYearColour : kGreyLabelColour,
-            fontSize: kFontSizeBody,
-            fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+    return Semantics(
+      label: label,
+      button: true,
+      selected: isActive,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: isActive ? kBarCurrentYearColour.withValues(alpha: 0.25) : Colors.transparent,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isActive ? kBarCurrentYearColour : kGreyLabelColour,
+              fontSize: kFontSizeBody,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+            ),
           ),
         ),
       ),

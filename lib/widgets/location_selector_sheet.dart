@@ -408,45 +408,49 @@ class _LocationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = isSelected ? selectedColor : kTextPrimaryColour;
 
-    return InkWell(
-      onTap: onTap,
-      splashColor: kAccentColour.withValues(alpha: 0.1),
-      highlightColor: kAccentColour.withValues(alpha: 0.05),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 1.0),
-              child: Icon(
-                Icons.location_on_outlined,
-                size: kIconSize + 3,
-                color: color,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Flexible(
-              child: Text(
-                _displayName,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+    return Semantics(
+      label: isSelected ? '$_displayName, selected' : _displayName,
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        splashColor: kAccentColour.withValues(alpha: 0.1),
+        highlightColor: kAccentColour.withValues(alpha: 0.05),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1.0),
+                child: Icon(
+                  Icons.location_on_outlined,
+                  size: kIconSize + 3,
                   color: color,
-                  fontSize: kFontSizeBody,
-                  fontWeight:
-                      isSelected ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
-            ),
-            if (isSelected) ...[
-              const SizedBox(width: 6),
-              Icon(
-                Icons.check,
-                size: kIconSize + 3,
-                color: kBarCurrentYearColour,
+              const SizedBox(width: 14),
+              Flexible(
+                child: Text(
+                  _displayName,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: kFontSizeBody,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
               ),
+              if (isSelected) ...[
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.check,
+                  size: kIconSize + 3,
+                  color: kBarCurrentYearColour,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
