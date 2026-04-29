@@ -1458,7 +1458,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                                   opacity: (1.0 - t).clamp(0.0, 1.0),
                                   child: IgnorePointer(
                                     ignoring: t > 0.5,
-                                    child: _buildDotsRow(pageIndex),
+                                    child: _buildPeriodTabs(pageIndex),
                                   ),
                                 ),
                               ),
@@ -1611,40 +1611,60 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   static const List<String> _periodLabels = ['Daily', 'Past week', 'Past month', 'Past year'];
+  static const List<String> _tabLabels = ['Today', 'Week', 'Month', 'Year'];
 
-  Widget _buildDotsRow(int pageIndex) {
+  Widget _buildPeriodTabs(int pageIndex) {
     return Semantics(
-      label: '${_periodLabels[pageIndex]}. Period ${pageIndex + 1} of ${_periodKeys.length}. Swipe to change.',
+      label: '${_periodLabels[pageIndex]}. Period ${pageIndex + 1} of ${_periodKeys.length}. Tap or swipe to change.',
       child: ExcludeSemantics(
         child: Row(
-      children: [
-        for (int i = 0; i < _periodKeys.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Container(
-            width: i == pageIndex ? 12 : 10,
-            height: i == pageIndex ? 12 : 10,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: i == pageIndex
-                  ? kBarCurrentYearColour
-                  : kGreyLabelColour.withValues(alpha: 0.4),
-            ),
-          ),
-        ],
-        const SizedBox(width: 10),
-        AnimatedOpacity(
-          opacity: (_showSwipeCoachmark && !_coachmarkFadingOut) ? 1.0 : 0.0,
-          duration: const Duration(milliseconds: 600),
-          onEnd: () {
-            if (_coachmarkFadingOut && mounted) {
-              setState(() => _showSwipeCoachmark = false);
-            }
-          },
-          child: _DotsSwipeHint(
-            running: _showSwipeCoachmark && !_coachmarkFadingOut,
-          ),
-        ),
-      ],
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int i = 0; i < _tabLabels.length; i++) ...[
+              if (i > 0) const SizedBox(width: 4),
+              GestureDetector(
+                onTap: () => _pageController.animateToPage(
+                  i,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                ),
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: i == 0 ? 0 : 6,
+                    right: 6,
+                    top: 4,
+                    bottom: 4,
+                  ),
+                  child: IntrinsicWidth(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          _tabLabels[i],
+                          style: TextStyle(
+                            color: i == pageIndex
+                                ? kBarCurrentYearColour
+                                : kAccentColour,
+                            fontSize: kSummaryFontSize,
+                            fontWeight: i == pageIndex ? FontWeight.w600 : FontWeight.w400,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Container(
+                          height: 1.5,
+                          color: i == pageIndex
+                              ? kBarCurrentYearColour
+                              : Colors.transparent,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
