@@ -413,6 +413,9 @@ class PeriodPageState extends State<PeriodPage>
       if (status == 429) {
         return 'Rate limit exceeded. Please wait a moment and try again.';
       }
+      if (status == 422) {
+        return 'Location not recognised. Check the spelling and try a more specific name (e.g. "Tokyo, Japan").';
+      }
       if (status >= 500) {
         return 'Server error while loading $periodName data. Please try again shortly.';
       }

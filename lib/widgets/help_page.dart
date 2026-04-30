@@ -151,13 +151,12 @@ class _Body extends StatelessWidget {
         _Section(
           title: 'Location',
           body:
-              'You can view the temperature history of wherever you are now, all the places you\'ve been where you\'ve used the app, and also a selection of cities around the world.',
+              'You can view the temperature history of wherever you are now, all the places you\'ve been, or any city in the world by searching for it.',
           bullets: [
             _Bullet(
               color: kBarCurrentYearColour,
               label: 'Current location',
-              description:
-                  'Your actual location, detected automatically.',
+              description: 'Your actual location, detected automatically.',
             ),
             _Bullet(
               color: kAccentColour,
@@ -169,11 +168,11 @@ class _Body extends StatelessWidget {
               color: kAverageColour,
               label: 'Popular locations',
               description:
-                  'A list of cities you can browse and select manually.',
+                  'A list of cities you can browse and select.',
             ),
           ],
           footer:
-              'The selected location is shown at the top of the screen. To change location: tap the location name or go to Settings → Location.',
+              'Use the search box to find any city by name. The selected location is shown at the top of the screen. To change location: tap the location name or go to Settings → Location.',
         ),
         _Section(
           title: 'Settings',

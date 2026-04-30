@@ -14,8 +14,8 @@ class OnboardingLocationPage extends StatelessWidget {
         return OnboardingPage(
           title: 'Location',
           body: 'View the temperature history of wherever you are now, all the '
-              'places you\'ve been where you\'ve used the app, and also a '
-              'selection of cities around the world.\n\n'
+              'places you\'ve been, or any city in the world — just search by '
+              'name.\n\n'
               'Tap the location name at the top of the screen at any time to '
               'switch location.',
           visual: Icon(

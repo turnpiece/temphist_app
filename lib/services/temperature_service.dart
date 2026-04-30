@@ -23,6 +23,160 @@ class TemperatureService {
   static const int _kMaxCacheEntries = 20;
   static final Map<String, PeriodTemperatureData> _periodCache = {};
   static List<String>? _preapprovedLocationsCache;
+  // Keyed by the full "City, Country" location string → ISO 3166-1 alpha-2 CC.
+  // Populated alongside [_preapprovedLocationsCache] on first fetch.
+  static Map<String, String>? _locationCountryCodeCache;
+  // Keyed by country name (as returned by the API) → ISO 3166-1 alpha-2 CC.
+  // Used as a fallback for GPS location strings that don't match the preapproved
+  // list exactly (e.g. "Dubai, United Arab Emirates" or
+  // "London, Greater London, United Kingdom").
+  static Map<String, String>? _countryNameToCodeCache;
+
+  /// Static fallback map of English country names → ISO 3166-1 alpha-2 codes.
+  ///
+  /// Used by [countryCodeFor] when the API-sourced [_countryNameToCodeCache]
+  /// is unavailable (e.g. network failure) or does not cover the country.
+  /// Includes all ISO 3166-1 entries plus common aliases (Turkey/Türkiye etc.).
+  static const Map<String, String> _kCountryNameToCode = {
+    'Afghanistan': 'AF', 'Albania': 'AL',
+    'Algeria': 'DZ', 'American Samoa': 'AS',
+    'Andorra': 'AD', 'Angola': 'AO',
+    'Anguilla': 'AI', 'Antarctica': 'AQ',
+    'Antigua and Barbuda': 'AG', 'Argentina': 'AR',
+    'Armenia': 'AM', 'Aruba': 'AW',
+    'Australia': 'AU', 'Austria': 'AT',
+    'Azerbaijan': 'AZ', 'Bahamas': 'BS',
+    'Bahrain': 'BH', 'Bangladesh': 'BD',
+    'Barbados': 'BB', 'Belarus': 'BY',
+    'Belgium': 'BE', 'Belize': 'BZ',
+    'Benin': 'BJ', 'Bermuda': 'BM',
+    'Bhutan': 'BT', 'Bolivia': 'BO',
+    'Bolivia, Plurinational State of': 'BO', 'Bonaire, Sint Eustatius and Saba': 'BQ',
+    'Bosnia and Herzegovina': 'BA', 'Botswana': 'BW',
+    'Bouvet Island': 'BV', 'Brazil': 'BR',
+    'British Indian Ocean Territory': 'IO', 'Brunei': 'BN',
+    'Brunei Darussalam': 'BN', 'Bulgaria': 'BG',
+    'Burkina Faso': 'BF', 'Burundi': 'BI',
+    'Cabo Verde': 'CV', 'Cambodia': 'KH',
+    'Cameroon': 'CM', 'Canada': 'CA',
+    'Cape Verde': 'CV', 'Cayman Islands': 'KY',
+    'Central African Republic': 'CF', 'Chad': 'TD',
+    'Chile': 'CL', 'China': 'CN',
+    'Christmas Island': 'CX', 'Cocos (Keeling) Islands': 'CC',
+    'Colombia': 'CO', 'Comoros': 'KM',
+    'Congo': 'CG', 'Congo, The Democratic Republic of the': 'CD',
+    'Cook Islands': 'CK', 'Costa Rica': 'CR',
+    'Croatia': 'HR', 'Cuba': 'CU',
+    'Curaçao': 'CW', 'Cyprus': 'CY',
+    'Czech Republic': 'CZ', 'Czechia': 'CZ',
+    "Côte d'Ivoire": 'CI', 'Democratic Republic of the Congo': 'CD',
+    'Denmark': 'DK', 'Djibouti': 'DJ',
+    'Dominica': 'DM', 'Dominican Republic': 'DO',
+    'East Timor': 'TL', 'Ecuador': 'EC',
+    'Egypt': 'EG', 'El Salvador': 'SV',
+    'Equatorial Guinea': 'GQ', 'Eritrea': 'ER',
+    'Estonia': 'EE', 'Eswatini': 'SZ',
+    'Ethiopia': 'ET', 'Falkland Islands (Malvinas)': 'FK',
+    'Faroe Islands': 'FO', 'Fiji': 'FJ',
+    'Finland': 'FI', 'France': 'FR',
+    'French Guiana': 'GF', 'French Polynesia': 'PF',
+    'French Southern Territories': 'TF', 'Gabon': 'GA',
+    'Gambia': 'GM', 'Georgia': 'GE',
+    'Germany': 'DE', 'Ghana': 'GH',
+    'Gibraltar': 'GI', 'Greece': 'GR',
+    'Greenland': 'GL', 'Grenada': 'GD',
+    'Guadeloupe': 'GP', 'Guam': 'GU',
+    'Guatemala': 'GT', 'Guernsey': 'GG',
+    'Guinea': 'GN', 'Guinea-Bissau': 'GW',
+    'Guyana': 'GY', 'Haiti': 'HT',
+    'Heard Island and McDonald Islands': 'HM', 'Holy See (Vatican City State)': 'VA',
+    'Honduras': 'HN', 'Hong Kong': 'HK',
+    'Hungary': 'HU', 'Iceland': 'IS',
+    'India': 'IN', 'Indonesia': 'ID',
+    'Iran': 'IR', 'Iran, Islamic Republic of': 'IR',
+    'Iraq': 'IQ', 'Ireland': 'IE',
+    'Isle of Man': 'IM', 'Israel': 'IL',
+    'Italy': 'IT', 'Ivory Coast': 'CI',
+    'Jamaica': 'JM', 'Japan': 'JP',
+    'Jersey': 'JE', 'Jordan': 'JO',
+    'Kazakhstan': 'KZ', 'Kenya': 'KE',
+    'Kiribati': 'KI', "Korea, Democratic People's Republic of": 'KP',
+    'Korea, Republic of': 'KR', 'Kuwait': 'KW',
+    'Kyrgyzstan': 'KG', "Lao People's Democratic Republic": 'LA',
+    'Laos': 'LA', 'Latvia': 'LV',
+    'Lebanon': 'LB', 'Lesotho': 'LS',
+    'Liberia': 'LR', 'Libya': 'LY',
+    'Liechtenstein': 'LI', 'Lithuania': 'LT',
+    'Luxembourg': 'LU', 'Macao': 'MO',
+    'Macau': 'MO', 'Madagascar': 'MG',
+    'Malawi': 'MW', 'Malaysia': 'MY',
+    'Maldives': 'MV', 'Mali': 'ML',
+    'Malta': 'MT', 'Marshall Islands': 'MH',
+    'Martinique': 'MQ', 'Mauritania': 'MR',
+    'Mauritius': 'MU', 'Mayotte': 'YT',
+    'Mexico': 'MX', 'Micronesia': 'FM',
+    'Micronesia, Federated States of': 'FM', 'Moldova': 'MD',
+    'Moldova, Republic of': 'MD', 'Monaco': 'MC',
+    'Mongolia': 'MN', 'Montenegro': 'ME',
+    'Montserrat': 'MS', 'Morocco': 'MA',
+    'Mozambique': 'MZ', 'Myanmar': 'MM',
+    'Namibia': 'NA', 'Nauru': 'NR',
+    'Nepal': 'NP', 'Netherlands': 'NL',
+    'New Caledonia': 'NC', 'New Zealand': 'NZ',
+    'Nicaragua': 'NI', 'Niger': 'NE',
+    'Nigeria': 'NG', 'Niue': 'NU',
+    'Norfolk Island': 'NF', 'North Korea': 'KP',
+    'North Macedonia': 'MK', 'Northern Mariana Islands': 'MP',
+    'Norway': 'NO', 'Oman': 'OM',
+    'Pakistan': 'PK', 'Palau': 'PW',
+    'Palestine': 'PS', 'Palestine, State of': 'PS',
+    'Panama': 'PA', 'Papua New Guinea': 'PG',
+    'Paraguay': 'PY', 'Peru': 'PE',
+    'Philippines': 'PH', 'Pitcairn': 'PN',
+    'Poland': 'PL', 'Portugal': 'PT',
+    'Puerto Rico': 'PR', 'Qatar': 'QA',
+    'Republic of Korea': 'KR', 'Republic of the Congo': 'CG',
+    'Romania': 'RO', 'Russia': 'RU',
+    'Russian Federation': 'RU', 'Rwanda': 'RW',
+    'Réunion': 'RE', 'Saint Barthélemy': 'BL',
+    'Saint Helena, Ascension and Tristan da Cunha': 'SH', 'Saint Kitts and Nevis': 'KN',
+    'Saint Lucia': 'LC', 'Saint Martin (French part)': 'MF',
+    'Saint Pierre and Miquelon': 'PM', 'Saint Vincent and the Grenadines': 'VC',
+    'Samoa': 'WS', 'San Marino': 'SM',
+    'Sao Tome and Principe': 'ST', 'Saudi Arabia': 'SA',
+    'Senegal': 'SN', 'Serbia': 'RS',
+    'Seychelles': 'SC', 'Sierra Leone': 'SL',
+    'Singapore': 'SG', 'Sint Maarten (Dutch part)': 'SX',
+    'Slovakia': 'SK', 'Slovenia': 'SI',
+    'Solomon Islands': 'SB', 'Somalia': 'SO',
+    'South Africa': 'ZA', 'South Georgia and the South Sandwich Islands': 'GS',
+    'South Korea': 'KR', 'South Sudan': 'SS',
+    'Spain': 'ES', 'Sri Lanka': 'LK',
+    'Sudan': 'SD', 'Suriname': 'SR',
+    'Svalbard and Jan Mayen': 'SJ', 'Swaziland': 'SZ',
+    'Sweden': 'SE', 'Switzerland': 'CH',
+    'Syria': 'SY', 'Syrian Arab Republic': 'SY',
+    'Taiwan': 'TW', 'Taiwan, Province of China': 'TW',
+    'Tajikistan': 'TJ', 'Tanzania': 'TZ',
+    'Tanzania, United Republic of': 'TZ', 'Thailand': 'TH',
+    'Timor-Leste': 'TL', 'Togo': 'TG',
+    'Tokelau': 'TK', 'Tonga': 'TO',
+    'Trinidad and Tobago': 'TT', 'Tunisia': 'TN',
+    'Turkey': 'TR', 'Turkmenistan': 'TM',
+    'Turks and Caicos Islands': 'TC', 'Tuvalu': 'TV',
+    'Türkiye': 'TR', 'Uganda': 'UG',
+    'Ukraine': 'UA', 'United Arab Emirates': 'AE',
+    'United Kingdom': 'GB', 'United States': 'US',
+    'United States Minor Outlying Islands': 'UM', 'United States of America': 'US',
+    'Uruguay': 'UY', 'Uzbekistan': 'UZ',
+    'Vanuatu': 'VU', 'Venezuela': 'VE',
+    'Venezuela, Bolivarian Republic of': 'VE', 'Viet Nam': 'VN',
+    'Vietnam': 'VN', 'Virgin Islands, British': 'VG',
+    'Virgin Islands, U.S.': 'VI', 'Wallis and Futuna': 'WF',
+    'Western Sahara': 'EH', 'Yemen': 'YE',
+    'Zambia': 'ZM', 'Zimbabwe': 'ZW',
+    'Åland Islands': 'AX',
+  };
   final String apiBaseUrl;
 
   /// Clears all cached period data. Call on refresh so stale data is not served.
@@ -59,7 +213,11 @@ class TemperatureService {
   /// sheet opens do not make additional network calls.
   /// Throws on network or auth failure — callers should handle and fall back.
   Future<List<String>> fetchPreapprovedLocations() async {
-    if (_preapprovedLocationsCache != null) return _preapprovedLocationsCache!;
+    // Return early only when all derived caches are also populated, so a
+    // hot-reload that adds new caches doesn't silently skip populating them.
+    if (_preapprovedLocationsCache != null && _locationCountryCodeCache != null) {
+      return _preapprovedLocationsCache!;
+    }
 
     final token = await getAuthToken();
     final url = Uri.parse('$apiBaseUrl/v1/locations/preapproved');
@@ -95,19 +253,104 @@ class TemperatureService {
     // The API returns rich objects; we use name + country_name (e.g.
     // "Auckland, New Zealand"). toList() forces eager evaluation so any errors
     // surface here rather than propagating lazily to the caller.
+    // We also capture country_code into [_locationCountryCodeCache] so that
+    // flag emojis can be displayed without an extra network call.
+    final ccMap = <String, String>{};
+    final countryNameMap = <String, String>{};
     _preapprovedLocationsCache = raw.map<String>((e) {
       if (e is String) return e;
       if (e is Map) {
         final name = e['name']?.toString() ?? '';
         final country = e['country_name']?.toString() ?? '';
-        if (name.isNotEmpty && country.isNotEmpty) return '$name, $country';
+        final cc = e['country_code']?.toString() ?? '';
+        if (name.isNotEmpty && country.isNotEmpty) {
+          final loc = '$name, $country';
+          if (cc.length == 2) {
+            ccMap[loc] = cc.toUpperCase();
+            // Also map "United Arab Emirates" → "AE" etc. for GPS lookups.
+            countryNameMap[country] = cc.toUpperCase();
+          }
+          return loc;
+        }
         // Fallback for unexpected shape
         return (e['location'] ?? name).toString();
       }
       return e.toString();
     }).where((s) => s.isNotEmpty).toList();
+    _locationCountryCodeCache = ccMap;
+    _countryNameToCodeCache = countryNameMap;
 
     return _preapprovedLocationsCache!;
+  }
+
+  /// Search for locations matching [query] (min 2 characters).
+  ///
+  /// Filters the preapproved API list client-side (cached after first load).
+  /// Throws if the list is unavailable so the UI can show an honest error.
+  /// Returns up to 10 matches ranked: exact city name → starts-with → contains.
+  Future<List<String>> searchLocations(String query) async {
+    if (query.trim().length < 2) return [];
+
+    final pool = await fetchPreapprovedLocations();
+    final q = query.trim().toLowerCase();
+
+    final exact = <String>[];
+    final starts = <String>[];
+    final contains = <String>[];
+
+    for (final loc in pool) {
+      final city = loc.split(',').first.trim().toLowerCase();
+      if (city == q) {
+        exact.add(loc);
+      } else if (city.startsWith(q)) {
+        starts.add(loc);
+      } else if (city.contains(q) || loc.toLowerCase().contains(q)) {
+        contains.add(loc);
+      }
+    }
+
+    exact.sort();
+    starts.sort();
+    contains.sort();
+
+    return [...exact, ...starts, ...contains].take(10).toList();
+  }
+
+  /// Returns the ISO 3166-1 alpha-2 country code for [location], or null if
+  /// unknown.
+  ///
+  /// First tries an exact match against the preapproved list (e.g.
+  /// "Auckland, New Zealand" → "NZ").  If that fails, extracts the last
+  /// comma-segment and looks it up as a country name — this handles GPS
+  /// strings like "London, Greater London, United Kingdom" and
+  /// "Dubai, United Arab Emirates" that aren't in the preapproved list.
+  ///
+  /// Only populated after [fetchPreapprovedLocations] has been called.
+  static String? countryCodeFor(String location) {
+    final exact = _locationCountryCodeCache?[location];
+    if (exact != null) return exact;
+
+    // Fallback: use the last comma-segment as the country name.
+    final parts = location.split(',');
+    if (parts.length < 2) return null;
+    final lastSegment = parts.last.trim();
+
+    // Try the API-sourced cache first (covers exactly the preapproved countries),
+    // then fall back to the hardcoded map so GPS strings always get a flag even
+    // when fetchPreapprovedLocations has not been called or the API is unavailable.
+    return _countryNameToCodeCache?[lastSegment] ?? _kCountryNameToCode[lastSegment];
+  }
+
+  /// Converts a 2-letter ISO 3166-1 alpha-2 country code to a Unicode flag
+  /// emoji using Regional Indicator Symbol letters (U+1F1E6–U+1F1FF).
+  /// Returns an empty string for invalid or unsupported codes.
+  static String flagEmoji(String countryCode) {
+    if (countryCode.length != 2) return '';
+    // Regional Indicator A = U+1F1E6; Latin A = 0x41. Offset every letter.
+    const int base = 0x1F1E6 - 0x41;
+    return String.fromCharCodes(
+      countryCode.toUpperCase().codeUnits.map((c) => c + base),
+    );
   }
 
   TemperatureService({

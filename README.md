@@ -2,6 +2,17 @@
 
 A Flutter app that visualises historical average temperatures using interactive charts. Supports daily, weekly, monthly, and yearly views with location-aware data.
 
+## Features
+
+- **Temperature history charts** — bar chart showing the same date/week/month/year across all recorded years
+- **Four time-period views** — Day, Week, Month, Year, swipeable
+- **Average & trend lines** — historical mean and long-term temperature trend
+- **Location search** — search any city in the world by name
+- **Automatic location detection** — uses GPS when permission is granted; falls back to a picker if not
+- **Recent & popular locations** — quick access to places you've been and a curated global list
+- **°C / °F toggle** — US locations default to Fahrenheit
+- **Social sharing** — shareable snapshot links with Open Graph previews
+
 ## Getting Started
 
 ### Prerequisites

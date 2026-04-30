@@ -1,7 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
-import '../constants/popular_locations.dart';
 import '../services/location_history_service.dart';
 import '../services/temperature_service.dart';
 
@@ -89,12 +90,95 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
   bool _showAllRecent = false;
   bool _showAllPopular = false;
 
+  // Search state
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  List<String> _searchResults = [];
+  bool _searchLoading = false;
+  Timer? _debounceTimer;
+  // Title-cases a raw query string (e.g. "new york" → "New York").
+  static String _titleCase(String s) => s
+      .split(' ')
+      .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+      .join(' ');
+
   static const int _initialCount = 5;
 
   @override
   void initState() {
     super.initState();
     _dataFuture = _loadData();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    final query = value.trim();
+    _debounceTimer?.cancel();
+
+    if (query.length < 2) {
+      setState(() {
+        _searchQuery = '';
+        _searchResults = [];
+        _searchLoading = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _searchQuery = query;
+      _searchLoading = true;
+    });
+
+    _debounceTimer = Timer(
+      const Duration(milliseconds: 350),
+      () => _runSearch(query),
+    );
+  }
+
+  Future<void> _runSearch(String query) async {
+    if (!mounted) return;
+    try {
+      final results = await TemperatureService().searchLocations(query);
+      if (!mounted || _searchQuery != query) return;
+      setState(() {
+        _searchResults = results;
+        _searchLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || _searchQuery != query) return;
+      setState(() {
+        _searchLoading = false;
+      });
+    }
+  }
+
+  void _onSearchSubmitted(String value) {
+    final query = value.trim();
+    if (query.length < 2) return;
+    _debounceTimer?.cancel();
+    // If there's exactly one result, or no preapproved results at all, select
+    // the top candidate immediately — mirroring standard autocomplete behaviour.
+    if (_searchResults.isNotEmpty) {
+      _select(_searchResults.first);
+    } else {
+      _select(_titleCase(query));
+    }
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    _debounceTimer?.cancel();
+    setState(() {
+      _searchQuery = '';
+      _searchResults = [];
+      _searchLoading = false;
+    });
   }
 
   Future<_SheetData> _loadData() async {
@@ -131,10 +215,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
           .toList()
         ..shuffle();
     } catch (_) {
-      popular = kPopularLocations
-          .where((l) => !isExcludedFromPopular(l))
-          .toList()
-        ..shuffle();
+      popular = [];
     }
 
     return _SheetData(recentLocations: recent, popularLocations: popular);
@@ -196,30 +277,42 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                       color: kGreyLabelColour.withValues(alpha: 0.3),
                       height: 1,
                     ),
-                    // Scrollable content
-                    Expanded(
-                      child: FutureBuilder<_SheetData>(
-                        future: _dataFuture,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState != ConnectionState.done) {
-                            return const Center(
-                              child: CircularProgressIndicator(color: kAccentColour),
-                            );
-                          }
-                          if (snapshot.hasError || !snapshot.hasData) {
-                            return Center(
-                              child: Text(
-                                'Could not load locations',
-                                style: TextStyle(
-                                  color: kGreyLabelColour,
-                                  fontSize: kFontSizeBody,
-                                ),
-                              ),
-                            );
-                          }
-                          return _buildContent(snapshot.data!, isTablet: isTablet);
-                        },
+                    // Search field
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+                      child: _SearchField(
+                        controller: _searchController,
+                        onChanged: _onSearchChanged,
+                        onSubmitted: _onSearchSubmitted,
+                        onClear: _clearSearch,
                       ),
+                    ),
+                    // Scrollable content — search results or normal lists
+                    Expanded(
+                      child: _searchQuery.isNotEmpty
+                          ? _buildSearchContent()
+                          : FutureBuilder<_SheetData>(
+                              future: _dataFuture,
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState != ConnectionState.done) {
+                                  return const Center(
+                                    child: CircularProgressIndicator(color: kAccentColour),
+                                  );
+                                }
+                                if (snapshot.hasError || !snapshot.hasData) {
+                                  return Center(
+                                    child: Text(
+                                      'Could not load locations',
+                                      style: TextStyle(
+                                        color: kGreyLabelColour,
+                                        fontSize: kFontSizeBody,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return _buildContent(snapshot.data!, isTablet: isTablet);
+                              },
+                            ),
                     ),
                   ],
                 ),
@@ -228,6 +321,49 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
           );
         }),
       ),
+    );
+  }
+
+  Widget _buildSearchContent() {
+    if (_searchLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: kAccentColour),
+      );
+    }
+
+    // Title-case the raw query for display/selection (e.g. "paris" → "Paris").
+    final titledQuery = _titleCase(_searchQuery);
+
+    // Only suppress the free-text row when a result is an exact full-string
+    // match (e.g. user typed "Auckland, New Zealand" verbatim). Matching by
+    // city name alone was too aggressive — it hid "Birmingham" when only
+    // "Birmingham, United Kingdom" was in the list, preventing the user from
+    // reaching e.g. Birmingham, Alabama via free-text.
+    final queryAlreadyListed = _searchResults.any(
+      (loc) => loc.toLowerCase() == titledQuery.toLowerCase(),
+    );
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        for (final loc in _searchResults)
+          _LocationRow(
+            apiLocation: loc,
+            isSelected: _isSelected(loc),
+            selectedColor: kBarCurrentYearColour,
+            // Always tappable in search — tapping a selected result just dismisses.
+            onTap: () => _select(loc),
+          ),
+        // Always offer the typed query as a plain row so any location works,
+        // not just those in the preapproved list.
+        if (!queryAlreadyListed)
+          _LocationRow(
+            apiLocation: titledQuery,
+            isSelected: _isSelected(titledQuery),
+            selectedColor: kBarCurrentYearColour,
+            onTap: () => _select(titledQuery),
+          ),
+      ],
     );
   }
 
@@ -407,6 +543,8 @@ class _LocationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = isSelected ? selectedColor : kTextPrimaryColour;
+    final cc = TemperatureService.countryCodeFor(apiLocation);
+    final flag = cc != null ? TemperatureService.flagEmoji(cc) : null;
 
     return Semantics(
       label: isSelected ? '$_displayName, selected' : _displayName,
@@ -418,16 +556,24 @@ class _LocationRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 1.0),
-                child: Icon(
+              // Flag emoji when a country code is known; pin icon otherwise.
+              if (flag != null)
+                SizedBox(
+                  width: kIconSize + 3,
+                  child: Text(
+                    flag,
+                    style: const TextStyle(fontSize: 20),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else
+                Icon(
                   Icons.location_on_outlined,
                   size: kIconSize + 3,
                   color: color,
                 ),
-              ),
               const SizedBox(width: 14),
               Flexible(
                 child: Text(
@@ -478,6 +624,66 @@ class _ShowMoreButton extends StatelessWidget {
             color: kGreyLabelColour,
             fontSize: kFontSizeBody - 2,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final void Function(String) onChanged;
+  final void Function(String) onSubmitted;
+  final VoidCallback onClear;
+
+  const _SearchField({
+    required this.controller,
+    required this.onChanged,
+    required this.onSubmitted,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      onSubmitted: onSubmitted,
+      textInputAction: TextInputAction.go,
+      autofocus: false,
+      autocorrect: false,
+      enableSuggestions: false,
+      style: const TextStyle(
+        color: kTextPrimaryColour,
+        fontSize: kFontSizeBody,
+      ),
+      decoration: InputDecoration(
+        hintText: 'Search…',
+        hintStyle: TextStyle(
+          color: kGreyLabelColour.withValues(alpha: 0.7),
+          fontSize: kFontSizeBody,
+        ),
+        prefixIcon: const Icon(Icons.search, color: kGreyLabelColour, size: kIconSize + 3),
+        suffixIcon: controller.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.close, color: kGreyLabelColour, size: kIconSize + 1),
+                onPressed: onClear,
+              )
+            : null,
+        filled: true,
+        fillColor: kBackgroundColour.withValues(alpha: 0.6),
+        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: kGreyLabelColour.withValues(alpha: 0.3)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: kGreyLabelColour.withValues(alpha: 0.3)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: kAccentColour.withValues(alpha: 0.6)),
         ),
       ),
     );
