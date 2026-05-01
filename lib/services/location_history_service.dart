@@ -2,37 +2,55 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/location_visit.dart';
 import '../utils/debug_utils.dart';
 
-/// Persists a list of GPS-detected locations visited by the user.
+/// Persists a list of GPS-detected location visits (location + timestamp).
 ///
 /// Only locations resolved via GPS are stored here. Manually selected
 /// locations (from the location selector) are never added.
 class LocationHistoryService {
   static const String _kHistoryKey = 'locationHistory';
-  static const int _kMaxEntries = 10;
+  static const int _kMaxEntries = 50;
 
-  /// Add [location] (API string, e.g. "London, UK") to the front of the
-  /// history list, deduplicating and capping at [_kMaxEntries].
-  static Future<void> add(String location) async {
-    if (location.isEmpty) return;
+  /// Add [visit] to the front of the history list.
+  ///
+  /// Skips silently if the same location was already recorded today (same
+  /// calendar day in local time), to avoid duplicate entries for a single
+  /// session. Caps the list at [_kMaxEntries].
+  static Future<void> add(LocationVisit visit) async {
+    if (visit.location.isEmpty) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final current = _decode(prefs.getString(_kHistoryKey));
-      current.remove(location); // deduplicate
-      current.insert(0, location);
+      final current = await _decode(prefs.getString(_kHistoryKey));
+
+      // Deduplicate: skip if this location was already recorded today.
+      final today = _calendarDay(visit.visitedAt);
+      final alreadyToday = current.any(
+        (v) =>
+            v.location == visit.location && _calendarDay(v.visitedAt) == today,
+      );
+      if (alreadyToday) {
+        DebugUtils.logLazy(() =>
+            'LocationHistoryService: skipping duplicate for today: ${visit.location}');
+        return;
+      }
+
+      current.insert(0, visit);
       if (current.length > _kMaxEntries) {
         current.removeRange(_kMaxEntries, current.length);
       }
-      await prefs.setString(_kHistoryKey, jsonEncode(current));
-      DebugUtils.logLazy(() => 'Location history updated: ${current.length} entries');
+      await prefs.setString(
+          _kHistoryKey, jsonEncode(current.map((v) => v.toJson()).toList()));
+      DebugUtils.logLazy(
+          () => 'Location history updated: ${current.length} entries');
     } catch (e) {
       DebugUtils.logLazy(() => 'LocationHistoryService.add failed: $e');
     }
   }
 
-  /// Returns all stored locations, newest first. Empty list on any error.
-  static Future<List<String>> getAll() async {
+  /// Returns all stored visits, newest first. Empty list on any error.
+  static Future<List<LocationVisit>> getAll() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       return _decode(prefs.getString(_kHistoryKey));
@@ -52,14 +70,35 @@ class LocationHistoryService {
     }
   }
 
-  static List<String> _decode(String? raw) {
+  /// Parses stored JSON into a list of [LocationVisit].
+  ///
+  /// Handles the legacy format (a JSON array of plain strings) by converting
+  /// each string into a [LocationVisit] with [DateTime.now()] as a fallback
+  /// timestamp, so existing users don't lose their history on upgrade.
+  static Future<List<LocationVisit>> _decode(String? raw) async {
     if (raw == null) return [];
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is List) return decoded.cast<String>();
+      if (decoded is! List) return [];
+
+      return decoded.map<LocationVisit>((item) {
+        if (item is String) {
+          // Legacy format: plain location string with no timestamp.
+          return LocationVisit(
+            location: item,
+            displayLocation: item.split(',').first.trim(),
+            visitedAt: DateTime.now(),
+          );
+        }
+        return LocationVisit.fromJson(item as Map<String, dynamic>);
+      }).toList();
     } catch (e) {
       DebugUtils.logLazy(() => 'LocationHistoryService._decode failed: $e');
+      return [];
     }
-    return [];
   }
+
+  /// Returns a comparable string for the calendar day of [dt] in local time.
+  static String _calendarDay(DateTime dt) =>
+      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 }

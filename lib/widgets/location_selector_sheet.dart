@@ -180,7 +180,8 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
   }
 
   Future<_SheetData> _loadData() async {
-    final history = await LocationHistoryService.getAll();
+    final visits = await LocationHistoryService.getAll();
+    final history = visits.map((v) => v.location).toList();
 
     // Build a set of excluded city names (first comma-segment, lower-cased) so
     // that format differences between GPS results ("London, Greater London, UK")

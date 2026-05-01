@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/app_constants.dart';
 import '../utils/debug_utils.dart';
 import '../utils/location_utils.dart' as location_utils;
+import '../models/location_visit.dart';
 import 'location_history_service.dart';
 
 /// How the currently determined location was sourced — used for colour coding.
@@ -135,8 +136,8 @@ class LocationService extends ChangeNotifier {
       if (_gpsLocation.isEmpty || _gpsCityNames.isEmpty) {
         try {
           final history = await LocationHistoryService.getAll();
-          for (final loc in history) {
-            _gpsCityNames.add(_cityName(loc));
+          for (final visit in history) {
+            _gpsCityNames.add(_cityName(visit.location));
           }
           if (_gpsLocation.isEmpty && history.isNotEmpty) {
             // Prefer the dedicated GPS key; fall back to history if absent.
@@ -144,7 +145,7 @@ class LocationService extends ChangeNotifier {
             final saved = prefs.getString(_kGpsLocationKey);
             _gpsLocation = (saved != null && saved.isNotEmpty)
                 ? saved
-                : history.first;
+                : history.first.location;
           }
         } catch (e) {
           DebugUtils.logLazy(() => 'Failed to restore GPS history: $e');
@@ -271,7 +272,11 @@ class LocationService extends ChangeNotifier {
       // Only add to GPS history and persist the GPS key when a real position
       // was obtained — manual selections and default fallbacks are excluded.
       if (gpsResolved) {
-        await LocationHistoryService.add(city);
+        await LocationHistoryService.add(LocationVisit(
+          location: city,
+          displayLocation: _displayLocation,
+          visitedAt: DateTime.now(),
+        ));
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_kGpsLocationKey, city);
       }
@@ -336,7 +341,11 @@ class LocationService extends ChangeNotifier {
               // determineLocation() may short-circuit via the 30-min cache
               // and never reach LocationHistoryService.add(), so persist here
               // while we have the resolved position in hand.
-              await LocationHistoryService.add(newCity);
+              await LocationHistoryService.add(LocationVisit(
+                location: newCity,
+                displayLocation: newCity.split(',').first.trim(),
+                visitedAt: DateTime.now(),
+              ));
             }
 
             if (newCity != _determinedLocation) {
