@@ -545,7 +545,7 @@ class PeriodPageState extends State<PeriodPage>
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'No ${widget.periodLabel.toLowerCase()} data available for this location. Try selecting a different location.',
+              'No temperature data found for this location. The area may not have coverage — try a more specific name, e.g. "London, United Kingdom".',
               style: const TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
             ),
           ),

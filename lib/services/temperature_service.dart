@@ -285,35 +285,78 @@ class TemperatureService {
 
   /// Search for locations matching [query] (min 2 characters).
   ///
-  /// Filters the preapproved API list client-side (cached after first load).
-  /// Throws if the list is unavailable so the UI can show an honest error.
-  /// Returns up to 10 matches ranked: exact city name → starts-with → contains.
+  /// Delegates to the API's `/v1/locations/search` endpoint, which uses the
+  /// Mapbox Geocoding API when configured and falls back to the preapproved
+  /// list in dev/CI environments.
+  ///
+  /// Returns up to 10 location strings of the form:
+  ///   "City, State, Country"   (when a state/province is known)
+  ///   "City, Country"          (otherwise)
+  ///
+  /// Also caches country codes for any returned locations so that flag emojis
+  /// work without requiring a separate preapproved-list fetch.
   Future<List<String>> searchLocations(String query) async {
     if (query.trim().length < 2) return [];
 
-    final pool = await fetchPreapprovedLocations();
-    final q = query.trim().toLowerCase();
+    final token = await getAuthToken();
+    final url = Uri.parse(
+      '$apiBaseUrl/v1/locations/search'
+      '?q=${Uri.encodeQueryComponent(query.trim())}&limit=10',
+    );
 
-    final exact = <String>[];
-    final starts = <String>[];
-    final contains = <String>[];
+    DebugUtils.logLazy(() => 'Searching locations: $url');
 
-    for (final loc in pool) {
-      final city = loc.split(',').first.trim().toLowerCase();
-      if (city == q) {
-        exact.add(loc);
-      } else if (city.startsWith(q)) {
-        starts.add(loc);
-      } else if (city.contains(q) || loc.toLowerCase().contains(q)) {
-        contains.add(loc);
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: kApiTimeoutSeconds));
+
+    DebugUtils.logLazy(() =>
+        'Location search response: ${response.statusCode} — ${response.body}');
+
+    if (response.statusCode != 200) {
+      throw ApiException(response.statusCode, 'v1/locations/search');
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final List<dynamic> raw =
+        data['locations'] as List<dynamic>? ?? const [];
+
+    // Ensure caches exist so countryCodeFor() works for search results.
+    _locationCountryCodeCache ??= {};
+    _countryNameToCodeCache ??= {};
+
+    final List<String> results = [];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final name = item['name']?.toString() ?? '';
+      if (name.isEmpty) continue;
+      final admin1 = item['admin1']?.toString() ?? '';
+      final countryName = item['country_name']?.toString() ?? '';
+      final countryCode = item['country_code']?.toString() ?? '';
+      if (countryName.isEmpty) continue;
+
+      // Build location string: include admin1 only when it adds disambiguation.
+      final String loc;
+      if (admin1.isNotEmpty && admin1 != name && admin1 != countryName) {
+        loc = '$name, $admin1, $countryName';
+      } else {
+        loc = '$name, $countryName';
+      }
+
+      results.add(loc);
+
+      // Cache country code so flags render without a separate API call.
+      if (countryCode.length == 2) {
+        _locationCountryCodeCache![loc] = countryCode.toUpperCase();
+        _countryNameToCodeCache![countryName] = countryCode.toUpperCase();
       }
     }
 
-    exact.sort();
-    starts.sort();
-    contains.sort();
-
-    return [...exact, ...starts, ...contains].take(10).toList();
+    return results;
   }
 
   /// Returns the ISO 3166-1 alpha-2 country code for [location], or null if

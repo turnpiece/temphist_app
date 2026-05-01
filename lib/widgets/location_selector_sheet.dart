@@ -162,13 +162,11 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     final query = value.trim();
     if (query.length < 2) return;
     _debounceTimer?.cancel();
-    // If there's exactly one result, or no preapproved results at all, select
-    // the top candidate immediately — mirroring standard autocomplete behaviour.
+    // Select the top result on Enter/Go — only if there are verified results.
     if (_searchResults.isNotEmpty) {
       _select(_searchResults.first);
-    } else {
-      _select(_titleCase(query));
     }
+    // No results → do nothing; the user can refine their query.
   }
 
   void _clearSearch() {
@@ -331,17 +329,15 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
       );
     }
 
-    // Title-case the raw query for display/selection (e.g. "paris" → "Paris").
-    final titledQuery = _titleCase(_searchQuery);
-
-    // Only suppress the free-text row when a result is an exact full-string
-    // match (e.g. user typed "Auckland, New Zealand" verbatim). Matching by
-    // city name alone was too aggressive — it hid "Birmingham" when only
-    // "Birmingham, United Kingdom" was in the list, preventing the user from
-    // reaching e.g. Birmingham, Alabama via free-text.
-    final queryAlreadyListed = _searchResults.any(
-      (loc) => loc.toLowerCase() == titledQuery.toLowerCase(),
-    );
+    if (_searchResults.isEmpty) {
+      return Center(
+        child: Text(
+          'No locations found.\nTry a more specific search, e.g. "Birmingham, Alabama, US".',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
+        ),
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
@@ -351,17 +347,9 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
             apiLocation: loc,
             isSelected: _isSelected(loc),
             selectedColor: kBarCurrentYearColour,
+            showDetails: true,
             // Always tappable in search — tapping a selected result just dismisses.
             onTap: () => _select(loc),
-          ),
-        // Always offer the typed query as a plain row so any location works,
-        // not just those in the preapproved list.
-        if (!queryAlreadyListed)
-          _LocationRow(
-            apiLocation: titledQuery,
-            isSelected: _isSelected(titledQuery),
-            selectedColor: kBarCurrentYearColour,
-            onTap: () => _select(titledQuery),
           ),
       ],
     );
@@ -530,15 +518,28 @@ class _LocationRow extends StatelessWidget {
   /// The colour used when this row is selected (matches the section colour).
   final Color selectedColor;
   final VoidCallback? onTap;
+  /// When true, show state/country as a secondary line below the city name.
+  /// Used in search results to disambiguate same-named cities.
+  final bool showDetails;
 
   const _LocationRow({
     required this.apiLocation,
     required this.isSelected,
     required this.selectedColor,
     required this.onTap,
+    this.showDetails = false,
   });
 
   String get _displayName => apiLocation.split(',').first.trim();
+
+  /// The state/country portion of the location string (everything after the
+  /// first comma), or empty if there is none (e.g. a free-text query with no
+  /// country suffix).
+  String get _subtitle {
+    final comma = apiLocation.indexOf(',');
+    if (comma == -1) return '';
+    return apiLocation.substring(comma + 1).trim();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -576,15 +577,32 @@ class _LocationRow extends StatelessWidget {
                 ),
               const SizedBox(width: 14),
               Flexible(
-                child: Text(
-                  _displayName,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: kFontSizeBody,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _displayName,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: kFontSizeBody,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                    if (showDetails && _subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        _subtitle,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: kGreyLabelColour,
+                          fontSize: kFontSizeBody - 3,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               if (isSelected) ...[
