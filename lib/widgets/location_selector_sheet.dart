@@ -96,11 +96,6 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
   List<String> _searchResults = [];
   bool _searchLoading = false;
   Timer? _debounceTimer;
-  // Title-cases a raw query string (e.g. "new york" → "New York").
-  static String _titleCase(String s) => s
-      .split(' ')
-      .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
-      .join(' ');
 
   static const int _initialCount = 5;
 
