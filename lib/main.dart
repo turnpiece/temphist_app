@@ -1389,8 +1389,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             // Location row: flag + city name + share + settings
             Padding(
               padding: EdgeInsets.only(
-                top: kContentVerticalPadding,
-                bottom: kTitleRowBottomPadding,
+                top: 14,
+                bottom: 8,
                 left: kScreenPadding + kContentHorizontalMargin,
                 right: kScreenPadding + kContentHorizontalMargin,
               ),
