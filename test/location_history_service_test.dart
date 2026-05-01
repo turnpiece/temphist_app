@@ -1,7 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:temphist_app/models/location_visit.dart';
 import 'package:temphist_app/services/location_history_service.dart';
+
+LocationVisit _visit(String location, {DateTime? date}) => LocationVisit(
+      location: location,
+      displayLocation: location.split(',').first.trim(),
+      visitedAt: date ?? DateTime(2024, 3, 15),
+    );
 
 void main() {
   setUp(() {
@@ -17,49 +24,62 @@ void main() {
       expect(await LocationHistoryService.getAll(), isEmpty);
     });
 
-    test('add stores a location', () async {
-      await LocationHistoryService.add('London, United Kingdom');
-      expect(await LocationHistoryService.getAll(), ['London, United Kingdom']);
+    test('add stores a visit', () async {
+      await LocationHistoryService.add(_visit('London, United Kingdom'));
+      final result = await LocationHistoryService.getAll();
+      expect(result.length, 1);
+      expect(result.first.location, 'London, United Kingdom');
+      expect(result.first.displayLocation, 'London');
     });
 
-    test('add ignores empty string', () async {
-      await LocationHistoryService.add('');
+    test('add ignores empty location', () async {
+      await LocationHistoryService.add(_visit(''));
       expect(await LocationHistoryService.getAll(), isEmpty);
     });
 
-    test('add stores multiple locations newest-first', () async {
-      await LocationHistoryService.add('London, United Kingdom');
-      await LocationHistoryService.add('Paris, France');
-      await LocationHistoryService.add('Tokyo, Japan');
-      expect(await LocationHistoryService.getAll(), [
+    test('add stores multiple visits newest-first', () async {
+      await LocationHistoryService.add(_visit('London, United Kingdom', date: DateTime(2024, 1, 1)));
+      await LocationHistoryService.add(_visit('Paris, France', date: DateTime(2024, 2, 1)));
+      await LocationHistoryService.add(_visit('Tokyo, Japan', date: DateTime(2024, 3, 1)));
+      final result = await LocationHistoryService.getAll();
+      expect(result.map((v) => v.location).toList(), [
         'Tokyo, Japan',
         'Paris, France',
         'London, United Kingdom',
       ]);
     });
 
-    test('add deduplicates — re-adding a city moves it to front', () async {
-      await LocationHistoryService.add('London, United Kingdom');
-      await LocationHistoryService.add('Paris, France');
-      await LocationHistoryService.add('London, United Kingdom');
+    test('add skips duplicate location on same calendar day', () async {
+      final day = DateTime(2024, 3, 15);
+      await LocationHistoryService.add(_visit('London, United Kingdom', date: day));
+      await LocationHistoryService.add(_visit('London, United Kingdom', date: day));
       final result = await LocationHistoryService.getAll();
-      expect(result, ['London, United Kingdom', 'Paris, France']);
-      expect(result.length, 2);
+      expect(result.length, 1);
     });
 
-    test('add caps history at 10 entries, dropping oldest', () async {
-      for (var i = 1; i <= 12; i++) {
-        await LocationHistoryService.add('City $i, Country');
+    test('add allows same location on different calendar days', () async {
+      await LocationHistoryService.add(_visit('London, United Kingdom', date: DateTime(2024, 3, 15)));
+      await LocationHistoryService.add(_visit('London, United Kingdom', date: DateTime(2024, 3, 16)));
+      final result = await LocationHistoryService.getAll();
+      expect(result.length, 2);
+      expect(result.first.visitedAt.day, 16);
+    });
+
+    test('add caps history at 50 entries, dropping oldest', () async {
+      for (var i = 1; i <= 52; i++) {
+        await LocationHistoryService.add(
+          _visit('City $i, Country', date: DateTime(2024, 1, i)),
+        );
       }
       final result = await LocationHistoryService.getAll();
-      expect(result.length, 10);
-      expect(result.first, 'City 12, Country');
-      expect(result.last, 'City 3, Country');
+      expect(result.length, 50);
+      expect(result.first.location, 'City 52, Country');
+      expect(result.last.location, 'City 3, Country');
     });
 
     test('clear removes all stored history', () async {
-      await LocationHistoryService.add('London, United Kingdom');
-      await LocationHistoryService.add('Paris, France');
+      await LocationHistoryService.add(_visit('London, United Kingdom'));
+      await LocationHistoryService.add(_visit('Paris, France', date: DateTime(2024, 4, 1)));
       await LocationHistoryService.clear();
       expect(await LocationHistoryService.getAll(), isEmpty);
     });
