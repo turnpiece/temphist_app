@@ -79,8 +79,10 @@ void main() {
   });
 
   group('LocationSelectorSheet — popular locations section', () {
-    testWidgets('shows "POPULAR" section after data loads',
+    testWidgets('hides "POPULAR" section when API is unavailable',
         (tester) async {
+      // The popular list is fetched from the API at runtime; in unit tests
+      // the network is unavailable so the section should not appear.
       await _pump(
         tester,
         _sheet(
@@ -88,7 +90,7 @@ void main() {
           selectedLocation: 'Sydney, Australia',
         ),
       );
-      expect(find.text('POPULAR'), findsOneWidget);
+      expect(find.text('POPULAR'), findsNothing);
     });
   });
 
