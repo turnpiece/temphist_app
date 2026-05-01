@@ -532,13 +532,15 @@ class _LocationRow extends StatelessWidget {
 
   String get _displayName => apiLocation.split(',').first.trim();
 
-  /// The state/country portion of the location string (everything after the
-  /// first comma), or empty if there is none (e.g. a free-text query with no
-  /// country suffix).
-  String get _subtitle {
-    final comma = apiLocation.indexOf(',');
-    if (comma == -1) return '';
-    return apiLocation.substring(comma + 1).trim();
+  /// City + admin1 for search results, e.g.:
+  ///   "Birmingham, Alabama, United States" → "Birmingham, Alabama"
+  ///   "Birmingham, United States"          → "Birmingham"
+  String get _displayNameWithAdmin1 {
+    final parts = apiLocation.split(',');
+    if (parts.length >= 3) {
+      return '${parts[0].trim()}, ${parts[1].trim()}';
+    }
+    return parts[0].trim();
   }
 
   @override
@@ -547,8 +549,10 @@ class _LocationRow extends StatelessWidget {
     final cc = TemperatureService.countryCodeFor(apiLocation);
     final flag = cc != null ? TemperatureService.flagEmoji(cc) : null;
 
+    final label = showDetails ? _displayNameWithAdmin1 : _displayName;
+
     return Semantics(
-      label: isSelected ? '$_displayName, selected' : _displayName,
+      label: isSelected ? '$label, selected' : label,
       button: true,
       child: InkWell(
         onTap: onTap,
@@ -577,32 +581,15 @@ class _LocationRow extends StatelessWidget {
                 ),
               const SizedBox(width: 14),
               Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _displayName,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: color,
-                        fontSize: kFontSizeBody,
-                        fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                    ),
-                    if (showDetails && _subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        _subtitle,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: kGreyLabelColour,
-                          fontSize: kFontSizeBody - 3,
-                        ),
-                      ),
-                    ],
-                  ],
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: kFontSizeBody,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
                 ),
               ),
               if (isSelected) ...[

@@ -1371,154 +1371,120 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   }
 
   Widget _buildPageHeader(BuildContext context) {
-    return ValueListenableBuilder<double>(
-      valueListenable: _scrollOffsetNotifier,
-      builder: (context, offset, _) {
-        const collapseThreshold = 80.0;
-        final t = (offset / collapseThreshold).clamp(0.0, 1.0);
+    return ValueListenableBuilder<int>(
+      valueListenable: _pageIndexNotifier,
+      builder: (context, pageIndex, _) {
+        final locationColour = _locationColour;
+        final headerText = _displayLocation.isNotEmpty
+            ? _displayLocation
+            : (_determinedLocation.isNotEmpty
+                ? _determinedLocation
+                : 'Loading location...');
+        final headerCc = TemperatureService.countryCodeFor(_determinedLocation);
+        final headerFlag = headerCc != null ? TemperatureService.flagEmoji(headerCc) : null;
 
-        return ValueListenableBuilder<int>(
-          valueListenable: _pageIndexNotifier,
-          builder: (context, pageIndex, _) {
-            final locationColour = _locationColour;
-            final headerText = _displayLocation.isNotEmpty
-                ? _displayLocation
-                : (_determinedLocation.isNotEmpty
-                    ? _determinedLocation
-                    : 'Loading location...');
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsets.only(
-                    top: kContentVerticalPadding,
-                    bottom: kTitleRowBottomPadding,
-                    left: kScreenPadding + kContentHorizontalMargin,
-                    right: kScreenPadding + kContentHorizontalMargin,
-                  ),
-                  child: Row(
-                    children: [
-                      // Cross-fade: dots (t=0) → location+period (t=1)
-                      Expanded(
-                        child: Stack(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Location row: flag + city name + share + settings
+            Padding(
+              padding: EdgeInsets.only(
+                top: kContentVerticalPadding,
+                bottom: kTitleRowBottomPadding,
+                left: kScreenPadding + kContentHorizontalMargin,
+                right: kScreenPadding + kContentHorizontalMargin,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      label: _isLocationDetermined
+                          ? 'Change location. Currently: $headerText'
+                          : headerText,
+                      button: _isLocationDetermined,
+                      child: GestureDetector(
+                        onTap: _isLocationDetermined ? _showLocationSelector : null,
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
                           children: [
-                            // Location + period — always laid out (sets Stack height),
-                            // fades in as user scrolls.
-                            Opacity(
-                              opacity: t,
-                              child: IgnorePointer(
-                                ignoring: t < 0.5,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    GestureDetector(
-                                      onTap: _isLocationDetermined
-                                          ? _showLocationSelector
-                                          : null,
-                                      behavior: HitTestBehavior.opaque,
-                                      child: Text(
-                                        headerText,
-                                        style: TextStyle(
-                                          color: locationColour,
-                                          fontSize: kFontSizeLocation,
-                                          fontWeight: FontWeight.w600,
-                                          letterSpacing: 0.5,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                      ),
-                                    ),
-                                    GestureDetector(
-                                      onTap: _isSharing
-                                          ? null
-                                          : () => _shareCurrentPeriod(pageIndex),
-                                      behavior: HitTestBehavior.opaque,
-                                      child: Text(
-                                        _buildPeriodHeaderLabel(pageIndex),
-                                        style: const TextStyle(
-                                          color: kGreyLabelColour,
-                                          fontSize: kFontSizeBody - 2,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                            if (headerFlag != null)
+                              Text(
+                                headerFlag,
+                                style: const TextStyle(fontSize: kIconSize + 2),
+                              )
+                            else
+                              Icon(
+                                Icons.location_on_outlined,
+                                color: locationColour.withValues(alpha: 0.8),
+                                size: kIconSize + 2,
                               ),
-                            ),
-                            // Dots + coachmark — Positioned.fill so they don't
-                            // affect Stack height; centred to align with the
-                            // settings/share icons in the Row; fade out on scroll.
-                            Positioned.fill(
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Opacity(
-                                  opacity: (1.0 - t).clamp(0.0, 1.0),
-                                  child: IgnorePointer(
-                                    ignoring: t > 0.5,
-                                    child: _buildPeriodTabs(pageIndex),
-                                  ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                headerText,
+                                style: TextStyle(
+                                  color: locationColour,
+                                  fontSize: kFontSizeLocation,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
                                 ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      // Share icon — always visible
-                      GestureDetector(
-                        onTap: _isSharing ? null : () => _shareCurrentPeriod(pageIndex),
-                        behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          // No GlobalKey here — _buildPageHeader is called once
-                          // per page, so 4 Padding widgets would share one key.
-                          // iPad popover falls back to Rect.fromLTWH(0,0,1,1).
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          child: _isSharing
-                              ? SizedBox(
-                                  width: kIconSize + 6,
-                                  height: kIconSize + 6,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: kGreyLabelColour.withValues(alpha: 0.7),
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.ios_share,
-                                  color: kGreyLabelColour.withValues(alpha: 0.7),
-                                  size: kIconSize + 6,
-                                ),
-                        ),
-                      ),
-                      // Settings gear — always visible
-                      Semantics(
-                        label: 'Open settings',
-                        button: true,
-                        child: GestureDetector(
-                          onTap: _showSettings,
-                          behavior: HitTestBehavior.opaque,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            child: Icon(
-                              Icons.settings,
-                              color: kGreyLabelColour.withValues(alpha: 0.7),
-                              size: kIconSize + 8,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-                if (AppConfig.shouldShowDebugFeatures) ...[
-                  _buildDebugPadding(context, _buildDebugToggleSection()),
-                  _buildDebugPadding(context, _buildVersionSection()),
+                  const SizedBox(width: 8),
+                  // Share icon
+                  GestureDetector(
+                    onTap: _isSharing ? null : () => _shareCurrentPeriod(pageIndex),
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: _isSharing
+                          ? SizedBox(
+                              width: kIconSize + 6,
+                              height: kIconSize + 6,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: kGreyLabelColour.withValues(alpha: 0.7),
+                              ),
+                            )
+                          : Icon(
+                              Icons.ios_share,
+                              color: kGreyLabelColour.withValues(alpha: 0.7),
+                              size: kIconSize + 6,
+                            ),
+                    ),
+                  ),
+                  // Settings gear
+                  Semantics(
+                    label: 'Open settings',
+                    button: true,
+                    child: GestureDetector(
+                      onTap: _showSettings,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        child: Icon(
+                          Icons.settings,
+                          color: kGreyLabelColour.withValues(alpha: 0.7),
+                          size: kIconSize + 8,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
-              ],
-            );
-          },
+              ),
+            ),
+            if (AppConfig.shouldShowDebugFeatures) ...[
+              _buildDebugPadding(context, _buildDebugToggleSection()),
+              _buildDebugPadding(context, _buildVersionSection()),
+            ],
+          ],
         );
       },
     );
@@ -1670,64 +1636,18 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  /// Location row + period heading row shown at the top of each page's
-  /// scrollable content. This is inside the RepaintBoundary so both elements
-  /// appear in the share image.
+  /// Period heading shown at the top of the share-image RepaintBoundary,
+  /// e.g. "Week ending 1 May". Location is shown in the persistent header
+  /// above the scroll content, so it is not repeated here.
   Widget _buildLocationAndHeadingContent(int pageIndex) {
-    final locationColour = _locationColour;
-    final headerText = _displayLocation.isNotEmpty
-        ? _displayLocation
-        : (_determinedLocation.isNotEmpty
-            ? _determinedLocation
-            : 'Loading location...');
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Semantics(
-          label: _isLocationDetermined
-              ? 'Change location. Currently: $headerText'
-              : headerText,
-          button: _isLocationDetermined,
-          child: GestureDetector(
-            onTap: _isLocationDetermined ? _showLocationSelector : null,
-            behavior: HitTestBehavior.opaque,
-            child: Row(
-              children: [
-                Icon(
-                  Icons.location_on_outlined,
-                  color: locationColour.withValues(alpha: 0.8),
-                  size: kIconSize + 2,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    headerText,
-                    style: TextStyle(
-                      color: locationColour,
-                      fontSize: kFontSizeLocation,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          _buildPeriodHeaderLabel(pageIndex),
-          style: const TextStyle(
-            color: kTextPrimaryColour,
-            fontSize: kFontSizeBody,
-            fontWeight: FontWeight.w600,
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
+    return Text(
+      _buildPeriodHeaderLabel(pageIndex),
+      style: const TextStyle(
+        color: kTextPrimaryColour,
+        fontSize: kFontSizeBody,
+        fontWeight: FontWeight.w600,
+      ),
+      overflow: TextOverflow.ellipsis,
     );
   }
 
@@ -1805,6 +1725,15 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Period tabs — outside RepaintBoundary (navigation, not in share image)
+        Padding(
+          padding: EdgeInsets.only(
+            left: sidePad,
+            right: sidePad,
+            bottom: kTitleRowBottomPadding,
+          ),
+          child: _buildPeriodTabs(pageIndex),
+        ),
         RepaintBoundary(
           key: repaintKey,
           child: Column(
