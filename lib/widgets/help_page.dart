@@ -122,10 +122,12 @@ class _Body extends StatelessWidget {
         _Section(
           title: 'Reading the chart',
           body:
-              'Each bar represents the temperature recorded on the same date in a different year.',
+              'Each bar represents the temperature recorded on the same date in a different year. Bar colours show how warm or cool that year was compared with the average.',
           bullets: [
             _Bullet(color: kBarCurrentYearColour, label: 'Green bar — this year'),
-            _Bullet(color: kBarOtherYearColour, label: 'Red bars — previous years'),
+            _Bullet(color: kBarCoolColour, label: 'Blue bars — cooler than average years'),
+            _Bullet(color: kBarNeutralColour, label: 'Grey bars — years close to the average'),
+            _Bullet(color: kBarWarmColour, label: 'Red bars — warmer than average years'),
           ],
           footer: 'Tap any bar to see the exact temperature for that year.',
         ),

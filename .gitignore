@@ -11,6 +11,7 @@
 .svn/
 .swiftpm/
 .claude/
+.cursor/
 migrate_working_dir/
 .env
 docs/appstore-metadata-draft.md

@@ -16,6 +16,18 @@ const List<double> _barWidths = [
   0.88, 0.72, 0.61, 0.79, 0.53,
   0.68, 0.75, 0.48, 0.63, 0.57,
 ];
+const List<Color> _barColours = [
+  kBarWarmColour,
+  kBarNeutralColour,
+  kBarCoolColour,
+  kBarWarmColour,
+  kBarCoolColour,
+  kBarNeutralColour,
+  kBarWarmColour,
+  kBarCoolColour,
+  kBarNeutralColour,
+  kBarWarmColour,
+];
 
 /// Bar chart illustration for the "tap a bar" onboarding page.
 /// Shows ~10 bars with a floating tooltip overlaid on one of them,
@@ -72,22 +84,22 @@ class _BarsPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paintOther = Paint()
-      ..color = kBarOtherYearColour.withValues(alpha: 0.85)
-      ..style = PaintingStyle.fill;
-    final paintCurrent = Paint()
-      ..color = kBarCurrentYearColour.withValues(alpha: 0.9)
-      ..style = PaintingStyle.fill;
-    // Tapped bar at full opacity so it reads as "selected"
-    final paintTapped = Paint()
-      ..color = kBarOtherYearColour
-      ..style = PaintingStyle.fill;
-
     for (int i = 0; i < _barCount; i++) {
       final int year = _startYear - i;
       final double y = i * _rowHeight;
       final bool isCurrent = i == 0;
       final bool isTapped = i == _tappedIndex;
+      final fillColour =
+          (isCurrent ? kBarCurrentYearColour : _barColours[i]).withValues(
+            alpha: isCurrent || isTapped ? 0.95 : 0.85,
+          );
+      final fillPaint = Paint()
+        ..color = fillColour
+        ..style = PaintingStyle.fill;
+      final borderPaint = Paint()
+        ..color = fillColour
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5;
 
       // Year label — only for multiples of 5, matching the real app
       if (year % 5 == 0) {
@@ -98,18 +110,17 @@ class _BarsPainter extends CustomPainter {
         tp.paint(canvas, Offset(0, y + (_barHeight - tp.height) / 2));
       }
 
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            _yearLabelWidth + _labelBarGap,
-            y,
-            _barWidths[i] * maxBarWidth,
-            _barHeight,
-          ),
-          const Radius.circular(3),
+      final barRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          _yearLabelWidth + _labelBarGap,
+          y,
+          _barWidths[i] * maxBarWidth,
+          _barHeight,
         ),
-        isCurrent ? paintCurrent : (isTapped ? paintTapped : paintOther),
+        const Radius.circular(3),
       );
+      canvas.drawRRect(barRect, fillPaint);
+      canvas.drawRRect(barRect, borderPaint);
     }
   }
 

@@ -22,9 +22,18 @@ class DayChartIllustration extends StatelessWidget {
 }
 
 class _DayChartPainter extends CustomPainter {
-  // Most recent year at the top; 2026 shown in green
+  // Most recent year at the top; the current year stays solid green.
   static const List<String> _years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020'];
   static const List<double> _widths = [0.90, 0.75, 0.60, 0.80, 0.45, 0.70, 0.55];
+  static const List<Color> _barColours = [
+    kBarWarmColour,
+    kBarNeutralColour,
+    kBarCoolColour,
+    kBarWarmColour,
+    kBarCoolColour,
+    kBarNeutralColour,
+    kBarWarmColour,
+  ];
 
   static const _labelStyle = TextStyle(
     color: kGreyLabelColour,
@@ -39,17 +48,25 @@ class _DayChartPainter extends CustomPainter {
     final double barHeight = (size.height - barSpacing * (barCount - 1)) / barCount;
     final double chartWidth = size.width - yearLabelWidth - 8.0;
 
-    final paintOther = Paint()
-      ..color = kBarOtherYearColour.withValues(alpha: 0.85)
-      ..style = PaintingStyle.fill;
-    final paintCurrent = Paint()
-      ..color = kBarCurrentYearColour.withValues(alpha: 0.9)
-      ..style = PaintingStyle.fill;
-
     for (int i = 0; i < barCount; i++) {
       final double y = i * (barHeight + barSpacing);
       final double barW = _widths[i] * chartWidth;
       final bool isCurrent = i == 0;
+      final fillColour =
+          (isCurrent ? kBarCurrentYearColour : _barColours[i]).withValues(
+            alpha: isCurrent ? 0.9 : 0.85,
+          );
+      final fillPaint = Paint()
+        ..color = fillColour
+        ..style = PaintingStyle.fill;
+      final borderPaint = Paint()
+        ..color = fillColour
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5;
+      final barRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(yearLabelWidth + 8, y, barW, barHeight),
+        const Radius.circular(3),
+      );
 
       // Year label — consistent style for all years
       final yearTp = TextPainter(
@@ -59,13 +76,8 @@ class _DayChartPainter extends CustomPainter {
       yearTp.paint(canvas, Offset(0, y + (barHeight - yearTp.height) / 2));
 
       // Horizontal bar
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(yearLabelWidth + 8, y, barW, barHeight),
-          const Radius.circular(3),
-        ),
-        isCurrent ? paintCurrent : paintOther,
-      );
+      canvas.drawRRect(barRect, fillPaint);
+      canvas.drawRRect(barRect, borderPaint);
     }
   }
 

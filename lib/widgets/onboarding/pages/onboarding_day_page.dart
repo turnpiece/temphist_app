@@ -81,8 +81,16 @@ class OnboardingDayPage extends StatelessWidget {
         style: TextStyle(color: kBarCurrentYearColour, fontSize: bodySize),
       ),
       Text(
-        'Red bars = previous years.',
-        style: TextStyle(color: kBarOtherYearColour, fontSize: bodySize),
+        'Blue bars = cooler than average.',
+        style: TextStyle(color: kBarCoolColour, fontSize: bodySize),
+      ),
+      Text(
+        'Grey bars = about average.',
+        style: TextStyle(color: kBarNeutralColour, fontSize: bodySize),
+      ),
+      Text(
+        'Red bars = warmer than average.',
+        style: TextStyle(color: kBarWarmColour, fontSize: bodySize),
       ),
     ];
   }

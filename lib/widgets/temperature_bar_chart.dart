@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 
@@ -10,12 +12,16 @@ class TemperatureChartData {
   final double temperature;
   final bool isCurrentYear;
   final bool hasData;
+  final Color? barFillColor;
+  final Color? barBorderColor;
 
   TemperatureChartData({
     required this.year,
     required this.temperature,
     required this.isCurrentYear,
     this.hasData = true,
+    this.barFillColor,
+    this.barBorderColor,
   });
 }
 
@@ -60,7 +66,8 @@ class TemperatureBarChart extends StatelessWidget {
     double convLabel(double v) => shouldConvert ? celsiusToFahrenheit(v) : v;
     final unitLabel = temperatureUnitLabel(isFahrenheit: isFahrenheit);
 
-    final validData = chartData.where((d) => d.hasData).toList();
+    final styledChartData = _styleChartData(chartData, averageTemperature);
+    final validData = styledChartData.where((d) => d.hasData).toList();
     if (validData.isEmpty) {
       return SizedBox(
         height: height,
@@ -192,7 +199,7 @@ class TemperatureBarChart extends StatelessWidget {
                 );
               },
             ),
-            series: _buildSeries(yAxisMin, chartData, averageTemperature, trendSlope),
+            series: _buildSeries(yAxisMin, styledChartData, averageTemperature, trendSlope),
             primaryXAxis: NumericAxis(
               labelStyle: const TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
               majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
@@ -242,17 +249,22 @@ class TemperatureBarChart extends StatelessWidget {
   ) {
     return [
       RangeColumnSeries<TemperatureChartData, int>(
+        onCreateRenderer: (ChartSeries<TemperatureChartData, int> series) {
+          return _TemperatureBarSeriesRenderer();
+        },
         dataSource: data,
         xValueMapper: (TemperatureChartData data, _) => int.tryParse(data.year) ?? 0,
         lowValueMapper: (TemperatureChartData data, _) => baseline,
         highValueMapper: (TemperatureChartData data, _) => data.temperature,
         pointColorMapper: (TemperatureChartData data, _) =>
-            data.isCurrentYear ? kBarCurrentYearColour : kBarOtherYearColour,
+            data.barFillColor ?? kBarNeutralColour,
         width: 0.8,
         animationDuration: 0,
         name: 'Temperature',
         enableTooltip: true,
         spacing: 0.1,
+        borderColor: Colors.transparent,
+        borderWidth: 2,
         borderRadius: BorderRadius.circular(2),
       ),
       if (avg != null && !isLoading)
@@ -280,6 +292,121 @@ class TemperatureBarChart extends StatelessWidget {
           enableTooltip: false,
         ),
     ];
+  }
+
+  List<TemperatureChartData> _styleChartData(
+    List<TemperatureChartData> data,
+    double? averageTemperature,
+  ) {
+    if (data.isEmpty) {
+      return data;
+    }
+
+    final temperatures = data.where((d) => d.hasData).map((d) => d.temperature).toList();
+    if (temperatures.isEmpty) {
+      return data;
+    }
+
+    final baseline = averageTemperature;
+    if (baseline == null) {
+      return data
+          .map(
+            (d) => TemperatureChartData(
+              year: d.year,
+              temperature: d.temperature,
+              isCurrentYear: d.isCurrentYear,
+              hasData: d.hasData,
+              barFillColor:
+                  d.isCurrentYear ? kBarCurrentYearColour : kBarNeutralColour,
+              barBorderColor:
+                  d.isCurrentYear ? kBarCurrentYearColour : kBarNeutralColour,
+            ),
+          )
+          .toList();
+    }
+
+    final anomalies = temperatures.map((temp) => temp - baseline).toList();
+    final maxWarmAnomaly = anomalies.fold<double>(
+      0,
+      (currentMax, anomaly) => anomaly > currentMax ? anomaly : currentMax,
+    );
+    final maxCoolAnomaly = anomalies.fold<double>(
+      0,
+      (currentMax, anomaly) => anomaly < 0 ? math.max(currentMax, anomaly.abs()) : currentMax,
+    );
+
+    return data
+        .map((d) {
+          final fillColor =
+              d.isCurrentYear
+                  ? kBarCurrentYearColour
+                  : _barColorForTemperature(
+                    d.temperature,
+                    baseline,
+                    maxWarmAnomaly,
+                    maxCoolAnomaly,
+                  );
+          return TemperatureChartData(
+            year: d.year,
+            temperature: d.temperature,
+            isCurrentYear: d.isCurrentYear,
+            hasData: d.hasData,
+            barFillColor: fillColor,
+            barBorderColor: fillColor,
+          );
+        })
+        .toList();
+  }
+
+  Color _barColorForTemperature(
+    double temperature,
+    double averageTemperature,
+    double maxWarmAnomaly,
+    double maxCoolAnomaly,
+  ) {
+    const double neutralBand = 0.12;
+    final anomaly = temperature - averageTemperature;
+
+    double normalized;
+    if (anomaly > 0) {
+      normalized = maxWarmAnomaly == 0 ? 0 : anomaly / maxWarmAnomaly;
+    } else if (anomaly < 0) {
+      normalized = maxCoolAnomaly == 0 ? 0 : anomaly.abs() / maxCoolAnomaly;
+    } else {
+      normalized = 0;
+    }
+
+    if (normalized <= neutralBand) {
+      return kBarNeutralColour;
+    }
+
+    final blend = ((normalized - neutralBand) / (1 - neutralBand)).clamp(0.0, 1.0);
+    return Color.lerp(
+          kBarNeutralColour,
+          anomaly >= 0 ? kBarWarmColour : kBarCoolColour,
+          blend,
+        ) ??
+        kBarNeutralColour;
+  }
+}
+
+class _TemperatureBarSeriesRenderer
+    extends RangeColumnSeriesRenderer<TemperatureChartData, int> {
+  @override
+  RangeColumnSegment<TemperatureChartData, int> createSegment() {
+    return _TemperatureBarSegment();
+  }
+}
+
+class _TemperatureBarSegment extends RangeColumnSegment<TemperatureChartData, int> {
+  @override
+  Paint getStrokePaint() {
+    final data = series.dataSource![currentSegmentIndex];
+    return Paint()
+      ..color = data.barBorderColor ?? data.barFillColor ?? Colors.transparent
+      ..strokeWidth = series.borderWidth
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
   }
 }
 
