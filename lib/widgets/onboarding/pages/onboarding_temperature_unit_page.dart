@@ -107,7 +107,7 @@ class _OnboardingTemperatureUnitPageState
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
-        color: Colors.white.withValues(alpha: 0.08),
+        color: kSegmentedControlBackgroundColour,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -133,13 +133,15 @@ class _OnboardingTemperatureUnitPageState
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
           color: isActive
-              ? kBarCurrentYearColour.withValues(alpha: 0.25)
+              ? kSegmentedControlSelectedBackgroundColour
               : Colors.transparent,
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isActive ? kBarCurrentYearColour : kGreyLabelColour,
+            color: isActive
+                ? kSegmentedControlSelectedTextColour
+                : kSegmentedControlUnselectedTextColour,
             fontSize: 22,
             fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
           ),

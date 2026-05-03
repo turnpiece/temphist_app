@@ -210,7 +210,10 @@ class TemperatureBarChart extends StatelessWidget {
                 yAxisMin, styledChartData, averageTemperature, trendSlope),
             primaryXAxis: NumericAxis(
               labelStyle: const TextStyle(
-                  fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
+                fontSize: kFontSizeAxisLabel,
+                color: kGreyLabelColour,
+                fontFamilyFallback: kChartAxisFontFamilyFallback,
+              ),
               majorGridLines: MajorGridLines(
                   width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
               labelIntersectAction: AxisLabelIntersectAction.hide,
@@ -233,7 +236,10 @@ class TemperatureBarChart extends StatelessWidget {
               majorGridLines: MajorGridLines(
                   width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
               labelStyle: const TextStyle(
-                  fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
+                fontSize: kFontSizeAxisLabel,
+                color: kGreyLabelColour,
+                fontFamilyFallback: kChartAxisFontFamilyFallback,
+              ),
               plotOffset: 0,
               interval: yAxisInterval,
               labelPosition: ChartDataLabelPosition.outside,
@@ -279,7 +285,9 @@ class TemperatureBarChart extends StatelessWidget {
         spacing: 0.1,
         borderColor: Colors.transparent,
         borderWidth: 2,
-        borderRadius: BorderRadius.circular(2),
+        borderRadius: const BorderRadius.horizontal(
+          right: Radius.circular(4),
+        ),
       ),
       if (avg != null && !isLoading)
         LineSeries<TemperatureChartData, int>(

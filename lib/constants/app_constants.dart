@@ -23,6 +23,16 @@ const kLocationPopularColour = Color(0xFFD0D4DE);
 const kAxisLabelColour = Color(0xFFECECEC);
 const kAxisGridColour = kAxisLabelColour;
 const kGreyLabelColour = Color(0xFFB0B0B0);
+const kSegmentedControlBackgroundColour = Color(0x1FECECEC);
+const kSegmentedControlSelectedBackgroundColour = Color(0x2EECECEC);
+const kSegmentedControlSelectedTextColour = kTextPrimaryColour;
+const kSegmentedControlUnselectedTextColour = kHeadingColour;
+const kChartAxisFontFamilyFallback = [
+  'SF Mono',
+  'Menlo',
+  'Roboto Mono',
+  'monospace'
+];
 
 /// Layout constants for easy adjustment
 /// These constants control the spacing and padding throughout the app's UI
@@ -55,7 +65,7 @@ const double kFontSizeTitle = 26.0;
 const double kFontSizeLocation = 18.0; // Slightly larger for location
 const double kFontSizeBody =
     17.0; // Standard body text, summary, average, trend
-const double kFontSizeAxisLabel = 17.0; // Same as body for consistency
+const double kFontSizeAxisLabel = 16.0; // Slightly smaller for chart labels
 const double kIconSize = 17.0;
 const double kSummaryFontSize =
     kFontSizeBody; // Changed from -2 for consistency

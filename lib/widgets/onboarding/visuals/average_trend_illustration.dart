@@ -101,7 +101,11 @@ class _AverageTrendPainter extends CustomPainter {
         final tp = TextPainter(
           text: TextSpan(
             text: '${_years[i]}',
-            style: const TextStyle(color: kGreyLabelColour, fontSize: 10),
+            style: const TextStyle(
+              color: kGreyLabelColour,
+              fontSize: 10,
+              fontFamilyFallback: kChartAxisFontFamilyFallback,
+            ),
           ),
           textDirection: TextDirection.ltr,
         )..layout(maxWidth: yearLabelWidth);
@@ -109,9 +113,10 @@ class _AverageTrendPainter extends CustomPainter {
       }
 
       canvas.drawRRect(
-        RRect.fromRectAndRadius(
+        RRect.fromRectAndCorners(
           Rect.fromLTWH(chartStart, y, barW, barHeight),
-          const Radius.circular(2),
+          topRight: const Radius.circular(4),
+          bottomRight: const Radius.circular(4),
         ),
         barPaint,
       );

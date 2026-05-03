@@ -168,23 +168,10 @@ class _Body extends StatelessWidget {
           title: 'Location',
           body:
               'You can view the temperature history of wherever you are now, all the places you\'ve been, or any city in the world by searching for it.',
-          bullets: [
-            _Bullet(
-              color: kBarCurrentYearColour,
-              label: 'Current location',
-              description: 'Your actual location, detected automatically.',
-            ),
-            _Bullet(
-              color: kLocationRecentColour,
-              label: 'Recent locations',
-              description:
-                  'Places where you have opened the app. The list grows as you use it in new places.',
-            ),
-            _Bullet(
-              color: kLocationPopularColour,
-              label: 'Popular locations',
-              description: 'A list of cities you can browse and select.',
-            ),
+          items: [
+            'Current location — your actual location, detected automatically.',
+            'Recent locations — places where you have opened the app. The list grows as you use it in new places.',
+            'Other cities — use the search box to find any city by name.',
           ],
           footer:
               'Use the search box to find any city by name. The selected location is shown at the top of the screen. To change location: tap the location name or go to Settings → Location.',
@@ -304,10 +291,7 @@ class _Bullet {
   final Color color;
   final String label;
 
-  /// Optional description shown after the label in grey.
-  final String? description;
-
-  const _Bullet({required this.color, required this.label, this.description});
+  const _Bullet({required this.color, required this.label});
 }
 
 class _BulletRow extends StatelessWidget {
@@ -339,38 +323,14 @@ class _BulletRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: bullet.description != null
-                ? Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: bullet.label,
-                          style: TextStyle(
-                            color: bullet.color,
-                            fontSize: kFontSizeBody,
-                            fontWeight: FontWeight.w600,
-                            height: 1.45,
-                          ),
-                        ),
-                        TextSpan(
-                          text: ' — ${bullet.description}',
-                          style: const TextStyle(
-                            color: kGreyLabelColour,
-                            fontSize: kFontSizeBody,
-                            height: 1.45,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : Text(
-                    bullet.label,
-                    style: const TextStyle(
-                      color: kGreyLabelColour,
-                      fontSize: kFontSizeBody,
-                      height: 1.45,
-                    ),
-                  ),
+            child: Text(
+              bullet.label,
+              style: const TextStyle(
+                color: kGreyLabelColour,
+                fontSize: kFontSizeBody,
+                height: 1.45,
+              ),
+            ),
           ),
         ],
       ),

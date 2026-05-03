@@ -81,9 +81,8 @@ class _SettingsSheetState extends State<SettingsSheet> {
     // absorb taps in the empty space above the sheet.
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= kTabletBreakpointWidth;
-    final contentWidth = isTablet
-        ? kTabletMaxContentWidth.clamp(0.0, screenWidth)
-        : screenWidth;
+    final contentWidth =
+        isTablet ? kTabletMaxContentWidth.clamp(0.0, screenWidth) : screenWidth;
 
     return Align(
       alignment: Alignment.bottomCenter,
@@ -113,105 +112,105 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                // Header
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Settings',
-                        style: TextStyle(
-                          color: kTextPrimaryColour,
-                          fontSize: kFontSizeBody,
-                          fontWeight: FontWeight.w600,
+                      // Header
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+                        child: Row(
+                          children: [
+                            const Text(
+                              'Settings',
+                              style: TextStyle(
+                                color: kTextPrimaryColour,
+                                fontSize: kFontSizeBody,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              icon: Icon(
+                                Icons.close,
+                                color: kGreyLabelColour,
+                                size: kIconSize + 2,
+                              ),
+                              onPressed: () => Navigator.of(context).pop(),
+                            ),
+                          ],
                         ),
                       ),
-                      const Spacer(),
-                      IconButton(
-                        icon: Icon(
-                          Icons.close,
+                      Divider(
+                        color: kGreyLabelColour.withValues(alpha: 0.3),
+                        height: 1,
+                      ),
+
+                      // Temperature units row
+                      _SettingsRow(
+                        icon: Icons.thermostat_outlined,
+                        label: 'Temperature units',
+                        trailing: _UnitToggle(
+                          isFahrenheit: _isFahrenheit,
+                          onChanged: _toggleUnit,
+                        ),
+                      ),
+
+                      // Location row
+                      _SettingsRow(
+                        icon: Icons.location_on_outlined,
+                        label: 'Location',
+                        trailing: Icon(
+                          Icons.chevron_right,
+                          color: kGreyLabelColour,
+                          size: kIconSize + 4,
+                        ),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          widget.onOpenLocationSelector();
+                        },
+                      ),
+
+                      // Help row
+                      _SettingsRow(
+                        icon: Icons.help_outline,
+                        label: 'Help',
+                        trailing: Icon(
+                          Icons.chevron_right,
+                          color: kGreyLabelColour,
+                          size: kIconSize + 4,
+                        ),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          HelpPage.show(context);
+                        },
+                      ),
+
+                      // Privacy policy row
+                      _SettingsRow(
+                        icon: Icons.privacy_tip_outlined,
+                        label: 'Privacy policy',
+                        trailing: Icon(
+                          Icons.open_in_new,
                           color: kGreyLabelColour,
                           size: kIconSize + 2,
                         ),
-                        onPressed: () => Navigator.of(context).pop(),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          launchUrl(
+                            Uri.parse(kPrivacyPolicyUrl),
+                            mode: LaunchMode.externalApplication,
+                          );
+                        },
                       ),
+
+                      // Bottom spacing
+                      const SizedBox(height: 12),
                     ],
-                  ),
-                ),
-                Divider(
-                  color: kGreyLabelColour.withValues(alpha: 0.3),
-                  height: 1,
-                ),
-
-                // Temperature units row
-                _SettingsRow(
-                  icon: Icons.thermostat_outlined,
-                  label: 'Temperature units',
-                  trailing: _UnitToggle(
-                    isFahrenheit: _isFahrenheit,
-                    onChanged: _toggleUnit,
-                  ),
-                ),
-
-                // Location row
-                _SettingsRow(
-                  icon: Icons.location_on_outlined,
-                  label: 'Location',
-                  trailing: Icon(
-                    Icons.chevron_right,
-                    color: kGreyLabelColour,
-                    size: kIconSize + 4,
-                  ),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    widget.onOpenLocationSelector();
-                  },
-                ),
-
-                // Help row
-                _SettingsRow(
-                  icon: Icons.help_outline,
-                  label: 'Help',
-                  trailing: Icon(
-                    Icons.chevron_right,
-                    color: kGreyLabelColour,
-                    size: kIconSize + 4,
-                  ),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    HelpPage.show(context);
-                  },
-                ),
-
-                // Privacy policy row
-                _SettingsRow(
-                  icon: Icons.privacy_tip_outlined,
-                  label: 'Privacy policy',
-                  trailing: Icon(
-                    Icons.open_in_new,
-                    color: kGreyLabelColour,
-                    size: kIconSize + 2,
-                  ),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    launchUrl(
-                      Uri.parse(kPrivacyPolicyUrl),
-                      mode: LaunchMode.externalApplication,
-                    );
-                  },
-                ),
-
-                    // Bottom spacing
-                    const SizedBox(height: 12),
-                  ],
-                ),   // Column
-              ),     // SizedBox(contentWidth)
-            ),       // Align(heightFactor)
-          ),         // SafeArea
-        ),           // DecoratedBox
-      ),             // SizedBox(infinity)
-    ),               // Material
-  );                 // Align(bottomCenter)
+                  ), // Column
+                ), // SizedBox(contentWidth)
+              ), // Align(heightFactor)
+            ), // SafeArea
+          ), // DecoratedBox
+        ), // SizedBox(infinity)
+      ), // Material
+    ); // Align(bottomCenter)
   }
 }
 
@@ -275,35 +274,45 @@ class _UnitToggle extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        color: Colors.white.withValues(alpha: 0.08),
+        color: kSegmentedControlBackgroundColour,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _segment('°C', isActive: !isFahrenheit, onTap: () => onChanged(false)),
+          _segment('°C',
+              isActive: !isFahrenheit, onTap: () => onChanged(false)),
           _segment('°F', isActive: isFahrenheit, onTap: () => onChanged(true)),
         ],
       ),
     );
   }
 
-  Widget _segment(String label, {required bool isActive, required VoidCallback onTap}) {
+  Widget _segment(
+    String label, {
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
     return Semantics(
       label: label,
       button: true,
       selected: isActive,
       child: GestureDetector(
         onTap: onTap,
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            color: isActive ? kBarCurrentYearColour.withValues(alpha: 0.25) : Colors.transparent,
+            color: isActive
+                ? kSegmentedControlSelectedBackgroundColour
+                : Colors.transparent,
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: isActive ? kBarCurrentYearColour : kGreyLabelColour,
+              color: isActive
+                  ? kSegmentedControlSelectedTextColour
+                  : kSegmentedControlUnselectedTextColour,
               fontSize: kFontSizeBody,
               fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
             ),

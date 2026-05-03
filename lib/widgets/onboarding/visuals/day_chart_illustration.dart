@@ -45,6 +45,7 @@ class _DayChartPainter extends CustomPainter {
   static const _labelStyle = TextStyle(
     color: kGreyLabelColour,
     fontSize: 10,
+    fontFamilyFallback: kChartAxisFontFamilyFallback,
   );
 
   @override
@@ -81,9 +82,10 @@ class _DayChartPainter extends CustomPainter {
         ..color = fillColour
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5;
-      final barRect = RRect.fromRectAndRadius(
+      final barRect = RRect.fromRectAndCorners(
         Rect.fromLTWH(yearLabelWidth + 8, y, barW, barHeight),
-        const Radius.circular(3),
+        topRight: const Radius.circular(4),
+        bottomRight: const Radius.circular(4),
       );
 
       // Year label — consistent style for all years

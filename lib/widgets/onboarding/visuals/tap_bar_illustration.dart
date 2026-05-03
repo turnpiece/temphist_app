@@ -76,6 +76,7 @@ class _BarsPainter extends CustomPainter {
   static const _labelStyle = TextStyle(
     color: kGreyLabelColour,
     fontSize: 10,
+    fontFamilyFallback: kChartAxisFontFamilyFallback,
   );
 
   @override
@@ -117,14 +118,15 @@ class _BarsPainter extends CustomPainter {
         tp.paint(canvas, Offset(0, y + (_barHeight - tp.height) / 2));
       }
 
-      final barRect = RRect.fromRectAndRadius(
+      final barRect = RRect.fromRectAndCorners(
         Rect.fromLTWH(
           _yearLabelWidth + _labelBarGap,
           y,
           _barWidths[i] * maxBarWidth,
           _barHeight,
         ),
-        const Radius.circular(3),
+        topRight: const Radius.circular(4),
+        bottomRight: const Radius.circular(4),
       );
       canvas.drawRRect(barRect, fillPaint);
       canvas.drawRRect(barRect, borderPaint);
