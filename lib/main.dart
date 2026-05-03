@@ -1321,60 +1321,81 @@ class TemperatureScreenState extends State<TemperatureScreen>
         final horizontalMargin =
             isTablet ? (constraints.maxWidth - contentWidth) / 2 : 0.0;
 
+        final sidePad = _standardHorizontalPadding();
         return SizedBox(
           width: constraints.maxWidth,
           child: Center(
             child: Container(
               width: contentWidth,
               margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (index) {
-                  HapticFeedback.selectionClick();
-                  _pageIndexNotifier.value = index;
-                  _dismissCoachmark();
-                },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Page 0: Daily
-                  _buildPeriodPage(
-                    context,
-                    pageIndex: 0,
-                    pageKey: _dailyPageKey,
-                    repaintKey: _dailyRepaintKey,
-                    periodKey: 'daily',
-                    periodLabel: 'daily',
-                    scrollController: _dailyScrollController,
-                    onDataLoaded: _startCoachmarkIfPending,
+                  _buildPageHeader(context),
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: sidePad,
+                      right: sidePad,
+                      bottom: kTitleRowBottomPadding,
+                    ),
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: _pageIndexNotifier,
+                      builder: (_, pageIndex, __) =>
+                          _buildPeriodTabs(pageIndex),
+                    ),
                   ),
-                  // Page 1: Weekly
-                  _buildPeriodPage(
-                    context,
-                    pageIndex: 1,
-                    pageKey: _weekPageKey,
-                    repaintKey: _weekRepaintKey,
-                    periodKey: 'week',
-                    periodLabel: 'Past week',
-                    scrollController: _weekScrollController,
-                  ),
-                  // Page 2: Monthly
-                  _buildPeriodPage(
-                    context,
-                    pageIndex: 2,
-                    pageKey: _monthPageKey,
-                    repaintKey: _monthRepaintKey,
-                    periodKey: 'month',
-                    periodLabel: 'Past month',
-                    scrollController: _monthScrollController,
-                  ),
-                  // Page 3: Yearly
-                  _buildPeriodPage(
-                    context,
-                    pageIndex: 3,
-                    pageKey: _yearPageKey,
-                    repaintKey: _yearRepaintKey,
-                    periodKey: 'year',
-                    periodLabel: 'Past year',
-                    scrollController: _yearScrollController,
+                  Expanded(
+                    child: PageView(
+                      controller: _pageController,
+                      onPageChanged: (index) {
+                        HapticFeedback.selectionClick();
+                        _pageIndexNotifier.value = index;
+                        _dismissCoachmark();
+                      },
+                      children: [
+                        // Page 0: Daily
+                        _buildPeriodPage(
+                          context,
+                          pageIndex: 0,
+                          pageKey: _dailyPageKey,
+                          repaintKey: _dailyRepaintKey,
+                          periodKey: 'daily',
+                          periodLabel: 'daily',
+                          scrollController: _dailyScrollController,
+                          onDataLoaded: _startCoachmarkIfPending,
+                        ),
+                        // Page 1: Weekly
+                        _buildPeriodPage(
+                          context,
+                          pageIndex: 1,
+                          pageKey: _weekPageKey,
+                          repaintKey: _weekRepaintKey,
+                          periodKey: 'week',
+                          periodLabel: 'Past week',
+                          scrollController: _weekScrollController,
+                        ),
+                        // Page 2: Monthly
+                        _buildPeriodPage(
+                          context,
+                          pageIndex: 2,
+                          pageKey: _monthPageKey,
+                          repaintKey: _monthRepaintKey,
+                          periodKey: 'month',
+                          periodLabel: 'Past month',
+                          scrollController: _monthScrollController,
+                        ),
+                        // Page 3: Yearly
+                        _buildPeriodPage(
+                          context,
+                          pageIndex: 3,
+                          pageKey: _yearPageKey,
+                          repaintKey: _yearRepaintKey,
+                          periodKey: 'year',
+                          periodLabel: 'Past year',
+                          scrollController: _yearScrollController,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -1512,19 +1533,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
     );
   }
 
-  Widget _buildScrollablePageBody(
-    BuildContext context,
-    Widget content,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildPageHeader(context),
-        Expanded(child: content),
-      ],
-    );
-  }
-
   Future<void> _shareCurrentPeriod(int pageIndex) async {
     setState(() => _isSharing = true);
     try {
@@ -1582,60 +1590,59 @@ class TemperatureScreenState extends State<TemperatureScreen>
   static const List<String> _tabLabels = ['Today', 'Week', 'Month', 'Year'];
 
   Widget _buildPeriodTabs(int pageIndex) {
+    const innerPadding = 2.0;
+    const pillRadius = 20.0;
+
     return Semantics(
       label:
           '${_periodLabels[pageIndex]}. Period ${pageIndex + 1} of ${_periodKeys.length}. Tap or swipe to change.',
       child: ExcludeSemantics(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (int i = 0; i < _tabLabels.length; i++) ...[
-              if (i > 0) const SizedBox(width: 4),
-              GestureDetector(
-                onTap: () => _pageController.animateToPage(
-                  i,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                ),
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    left: i == 0 ? 0 : 6,
-                    right: 6,
-                    top: 4,
-                    bottom: 4,
-                  ),
-                  child: IntrinsicWidth(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          _tabLabels[i],
-                          style: TextStyle(
-                            color: i == pageIndex
-                                ? kBarCurrentYearColour
-                                : kHeadingColour,
-                            fontSize: kSummaryFontSize,
-                            fontWeight: i == pageIndex
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Container(
-                          height: 1.5,
+        child: Container(
+          decoration: BoxDecoration(
+            color: kSegmentedControlBackgroundColour,
+            borderRadius: BorderRadius.circular(pillRadius),
+          ),
+          padding: const EdgeInsets.all(innerPadding),
+          child: Row(
+            children: [
+              for (int i = 0; i < _tabLabels.length; i++)
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _pageController.animateToPage(
+                      i,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    ),
+                    behavior: HitTestBehavior.opaque,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      decoration: BoxDecoration(
+                        color: i == pageIndex
+                            ? kSegmentedControlSelectedBackgroundColour
+                            : Colors.transparent,
+                        borderRadius:
+                            BorderRadius.circular(pillRadius - innerPadding),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      alignment: Alignment.center,
+                      child: Text(
+                        _tabLabels[i],
+                        style: TextStyle(
                           color: i == pageIndex
-                              ? kBarCurrentYearColour
-                              : Colors.transparent,
+                              ? kSegmentedControlSelectedTextColour
+                              : kSegmentedControlUnselectedTextColour,
+                          fontSize: kSummaryFontSize,
+                          fontWeight: i == pageIndex
+                              ? FontWeight.w600
+                              : FontWeight.w400,
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -1709,45 +1716,28 @@ class TemperatureScreenState extends State<TemperatureScreen>
     final lon = isAtGps ? _lastPosition?.longitude : null;
 
     final sidePad = _standardHorizontalPadding();
-    return _buildScrollablePageBody(
-      context,
-      RepaintBoundary(
-        key: repaintKey,
-        child: PeriodPage(
-          key: pageKey,
-          periodKey: periodKey,
-          periodLabel: periodLabel,
-          location: _determinedLocation,
-          displayLocation:
-              _displayLocation.isNotEmpty ? _displayLocation : null,
-          latitude: lat,
-          longitude: lon,
-          useInternalScroll: true,
-          scrollController: scrollController,
-          topContent: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: EdgeInsets.only(
-                  left: sidePad,
-                  right: sidePad,
-                  bottom: kTitleRowBottomPadding,
-                ),
-                child: _buildPeriodTabs(pageIndex),
-              ),
-              Padding(
-                padding: EdgeInsets.only(
-                  left: sidePad,
-                  right: sidePad,
-                  bottom: kSectionBottomPadding,
-                ),
-                child: _buildLocationAndHeadingContent(pageIndex),
-              ),
-            ],
+    return RepaintBoundary(
+      key: repaintKey,
+      child: PeriodPage(
+        key: pageKey,
+        periodKey: periodKey,
+        periodLabel: periodLabel,
+        location: _determinedLocation,
+        displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
+        latitude: lat,
+        longitude: lon,
+        useInternalScroll: true,
+        scrollController: scrollController,
+        topContent: Padding(
+          padding: EdgeInsets.only(
+            left: sidePad,
+            right: sidePad,
+            bottom: kSectionBottomPadding,
           ),
-          isFahrenheit: _isFahrenheit,
-          onDataLoaded: onDataLoaded,
+          child: _buildLocationAndHeadingContent(pageIndex),
         ),
+        isFahrenheit: _isFahrenheit,
+        onDataLoaded: onDataLoaded,
       ),
     );
   }
