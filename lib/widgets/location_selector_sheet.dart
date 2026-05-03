@@ -75,7 +75,8 @@ class LocationSelectorSheet extends StatefulWidget {
         position: Tween<Offset>(
           begin: const Offset(0, 1),
           end: Offset.zero,
-        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+        ).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
         child: child,
       ),
     );
@@ -204,9 +205,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     try {
       final allPreapproved =
           await TemperatureService().fetchPreapprovedLocations();
-      popular = allPreapproved
-          .where((l) => !isExcludedFromPopular(l))
-          .toList()
+      popular = allPreapproved.where((l) => !isExcludedFromPopular(l)).toList()
         ..shuffle();
     } catch (_) {
       popular = [];
@@ -243,11 +242,14 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                   children: [
                     // Header row with title and optional close button
                     Padding(
-                      padding: EdgeInsets.fromLTRB(20, 16, widget.canDismiss ? 8 : 20, 12),
+                      padding: EdgeInsets.fromLTRB(
+                          20, 16, widget.canDismiss ? 8 : 20, 12),
                       child: Row(
                         children: [
                           Text(
-                            widget.canDismiss ? 'Choose location' : 'Choose your location',
+                            widget.canDismiss
+                                ? 'Choose location'
+                                : 'Choose your location',
                             style: TextStyle(
                               color: kTextPrimaryColour,
                               fontSize: kFontSizeBody,
@@ -288,9 +290,11 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                           : FutureBuilder<_SheetData>(
                               future: _dataFuture,
                               builder: (context, snapshot) {
-                                if (snapshot.connectionState != ConnectionState.done) {
+                                if (snapshot.connectionState !=
+                                    ConnectionState.done) {
                                   return const Center(
-                                    child: CircularProgressIndicator(color: kAccentColour),
+                                    child: CircularProgressIndicator(
+                                        color: kLocationPopularColour),
                                   );
                                 }
                                 if (snapshot.hasError || !snapshot.hasData) {
@@ -304,7 +308,8 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                                     ),
                                   );
                                 }
-                                return _buildContent(snapshot.data!, isTablet: isTablet);
+                                return _buildContent(snapshot.data!,
+                                    isTablet: isTablet);
                               },
                             ),
                     ),
@@ -321,7 +326,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
   Widget _buildSearchContent() {
     if (_searchLoading) {
       return const Center(
-        child: CircularProgressIndicator(color: kAccentColour),
+        child: CircularProgressIndicator(color: kLocationPopularColour),
       );
     }
 
@@ -378,28 +383,26 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
         // "Current location" shows the physical GPS location, if known.
         // Always a single full-width row.
         if (widget.gpsLocation.isNotEmpty) ...[
-          _SectionHeader('Current', color: kBarCurrentYearColour),
+          _SectionHeader('Current', color: kLocationRecentColour),
           _LocationRow(
             apiLocation: widget.gpsLocation,
             isSelected: widget.selectedLocation == widget.gpsLocation,
             selectedColor: kBarCurrentYearColour,
-            onTap: widget.selectedLocation == widget.gpsLocation && widget.canDismiss
-                ? null
-                : () => _select(widget.gpsLocation),
+            onTap: () => _select(widget.gpsLocation),
           ),
         ],
         // Recent — two-column grid on tablets, single column on phones.
         if (data.recentLocations.isNotEmpty) ...[
-          _SectionHeader('Recent', color: kAccentColour),
+          _SectionHeader('Recent', color: kLocationRecentColour),
           if (isTablet)
-            _buildTwoColumnGrid(visibleRecent, kAccentColour)
+            _buildTwoColumnGrid(visibleRecent, kBarCurrentYearColour)
           else ...[
             for (final loc in visibleRecent)
               _LocationRow(
                 apiLocation: loc,
                 isSelected: _isSelected(loc),
-                selectedColor: kAccentColour,
-                onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
+                selectedColor: kBarCurrentYearColour,
+                onTap: () => _select(loc),
               ),
             if (data.recentLocations.length > _initialCount && !_showAllRecent)
               _ShowMoreButton(
@@ -409,18 +412,19 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
         ],
         // Popular — two-column grid on tablets, single column on phones.
         if (data.popularLocations.isNotEmpty) ...[
-          _SectionHeader('Popular', color: kAverageColour),
+          _SectionHeader('Popular', color: kLocationRecentColour),
           if (isTablet)
-            _buildTwoColumnGrid(visiblePopular, kAverageColour)
+            _buildTwoColumnGrid(visiblePopular, kBarCurrentYearColour)
           else ...[
             for (final loc in visiblePopular)
               _LocationRow(
                 apiLocation: loc,
                 isSelected: _isSelected(loc),
-                selectedColor: kAverageColour,
-                onTap: _isSelected(loc) && widget.canDismiss ? null : () => _select(loc),
+                selectedColor: kBarCurrentYearColour,
+                onTap: () => _select(loc),
               ),
-            if (data.popularLocations.length > popularInitialCount && !showAllPopular)
+            if (data.popularLocations.length > popularInitialCount &&
+                !showAllPopular)
               _ShowMoreButton(
                 onTap: () => setState(() => _showAllPopular = true),
               ),
@@ -437,33 +441,35 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
       final left = locations[i];
       final right = i + 1 < locations.length ? locations[i + 1] : null;
       rows.add(
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: _LocationRow(
-                  apiLocation: left,
-                  isSelected: _isSelected(left),
-                  selectedColor: selectedColor,
-                  onTap: _isSelected(left) && widget.canDismiss ? null : () => _select(left),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _LocationRow(
+                    apiLocation: left,
+                    isSelected: _isSelected(left),
+                    selectedColor: selectedColor,
+                    onTap: () => _select(left),
+                    margin: EdgeInsets.zero,
+                  ),
                 ),
-              ),
-              VerticalDivider(
-                color: kGreyLabelColour.withValues(alpha: 0.15),
-                width: 1,
-              ),
-              Expanded(
-                child: right != null
-                    ? _LocationRow(
-                        apiLocation: right,
-                        isSelected: _isSelected(right),
-                        selectedColor: selectedColor,
-                        onTap: _isSelected(right) && widget.canDismiss ? null : () => _select(right),
-                      )
-                    : const SizedBox(),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Expanded(
+                  child: right != null
+                      ? _LocationRow(
+                          apiLocation: right,
+                          isSelected: _isSelected(right),
+                          selectedColor: selectedColor,
+                          onTap: () => _select(right),
+                          margin: EdgeInsets.zero,
+                        )
+                      : const SizedBox(),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -511,12 +517,15 @@ class _SectionHeader extends StatelessWidget {
 class _LocationRow extends StatelessWidget {
   final String apiLocation;
   final bool isSelected;
+
   /// The colour used when this row is selected (matches the section colour).
   final Color selectedColor;
   final VoidCallback? onTap;
+
   /// When true, show state/country as a secondary line below the city name.
   /// Used in search results to disambiguate same-named cities.
   final bool showDetails;
+  final EdgeInsetsGeometry margin;
 
   const _LocationRow({
     required this.apiLocation,
@@ -524,6 +533,7 @@ class _LocationRow extends StatelessWidget {
     required this.selectedColor,
     required this.onTap,
     this.showDetails = false,
+    this.margin = const EdgeInsets.fromLTRB(12, 0, 12, 8),
   });
 
   String get _displayName => apiLocation.split(',').first.trim();
@@ -550,53 +560,61 @@ class _LocationRow extends StatelessWidget {
     return Semantics(
       label: isSelected ? '$label, selected' : label,
       button: true,
-      child: InkWell(
-        onTap: onTap,
-        splashColor: kAccentColour.withValues(alpha: 0.1),
-        highlightColor: kAccentColour.withValues(alpha: 0.05),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Flag emoji when a country code is known; pin icon otherwise.
-              if (flag != null)
-                SizedBox(
-                  width: kIconSize + 3,
-                  child: Text(
-                    flag,
-                    style: const TextStyle(fontSize: 20),
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              else
-                Icon(
-                  Icons.location_on_outlined,
-                  size: kIconSize + 3,
-                  color: color,
-                ),
-              const SizedBox(width: 14),
-              Flexible(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+      child: Container(
+        margin: margin,
+        decoration: BoxDecoration(
+          color: kTextPrimaryColour.withValues(alpha: isSelected ? 0.16 : 0.1),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          splashColor: kAccentColour.withValues(alpha: 0.1),
+          highlightColor: kAccentColour.withValues(alpha: 0.05),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Flag emoji when a country code is known; pin icon otherwise.
+                if (flag != null)
+                  SizedBox(
+                    width: kIconSize + 3,
+                    child: Text(
+                      flag,
+                      style: const TextStyle(fontSize: 20),
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.location_on_outlined,
+                    size: kIconSize + 3,
                     color: color,
-                    fontSize: kFontSizeBody,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                const SizedBox(width: 14),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: kFontSizeBody,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
+                    ),
                   ),
                 ),
-              ),
-              if (isSelected) ...[
-                const SizedBox(width: 6),
-                Icon(
-                  Icons.check,
-                  size: kIconSize + 3,
-                  color: kBarCurrentYearColour,
-                ),
+                if (isSelected) ...[
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.check,
+                    size: kIconSize + 3,
+                    color: color,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -611,7 +629,7 @@ class _ShowMoreButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(left: 20),
+      padding: const EdgeInsets.only(left: 20, bottom: 8),
       child: TextButton(
         onPressed: onTap,
         style: TextButton.styleFrom(
@@ -631,7 +649,7 @@ class _ShowMoreButton extends StatelessWidget {
   }
 }
 
-class _SearchField extends StatelessWidget {
+class _SearchField extends StatefulWidget {
   final TextEditingController controller;
   final void Function(String) onChanged;
   final void Function(String) onSubmitted;
@@ -645,17 +663,46 @@ class _SearchField extends StatelessWidget {
   });
 
   @override
+  State<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends State<_SearchField> {
+  late final FocusNode _focusNode;
+  bool _hasFocus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode();
+    _focusNode.addListener(_handleFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_handleFocusChange);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChange() {
+    if (mounted && _hasFocus != _focusNode.hasFocus) {
+      setState(() => _hasFocus = _focusNode.hasFocus);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return TextField(
-      controller: controller,
-      onChanged: onChanged,
-      onSubmitted: onSubmitted,
+      focusNode: _focusNode,
+      controller: widget.controller,
+      onChanged: widget.onChanged,
+      onSubmitted: widget.onSubmitted,
       textInputAction: TextInputAction.go,
       autofocus: false,
       autocorrect: false,
       enableSuggestions: false,
-      style: const TextStyle(
-        color: kTextPrimaryColour,
+      style: TextStyle(
+        color: _hasFocus ? kTextPrimaryColour : kLocationPopularColour,
         fontSize: kFontSizeBody,
       ),
       decoration: InputDecoration(
@@ -664,27 +711,33 @@ class _SearchField extends StatelessWidget {
           color: kGreyLabelColour.withValues(alpha: 0.7),
           fontSize: kFontSizeBody,
         ),
-        prefixIcon: const Icon(Icons.search, color: kGreyLabelColour, size: kIconSize + 3),
-        suffixIcon: controller.text.isNotEmpty
+        prefixIcon: const Icon(Icons.search,
+            color: kGreyLabelColour, size: kIconSize + 3),
+        suffixIcon: widget.controller.text.isNotEmpty
             ? IconButton(
-                icon: const Icon(Icons.close, color: kGreyLabelColour, size: kIconSize + 1),
-                onPressed: onClear,
+                icon: const Icon(Icons.close,
+                    color: kGreyLabelColour, size: kIconSize + 1),
+                onPressed: widget.onClear,
               )
             : null,
         filled: true,
         fillColor: kBackgroundColour.withValues(alpha: 0.6),
-        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: kGreyLabelColour.withValues(alpha: 0.3)),
+          borderSide:
+              BorderSide(color: kGreyLabelColour.withValues(alpha: 0.3)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: kGreyLabelColour.withValues(alpha: 0.3)),
+          borderSide:
+              BorderSide(color: kGreyLabelColour.withValues(alpha: 0.3)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: kAccentColour.withValues(alpha: 0.6)),
+          borderSide:
+              BorderSide(color: kLocationPopularColour.withValues(alpha: 0.45)),
         ),
       ),
     );

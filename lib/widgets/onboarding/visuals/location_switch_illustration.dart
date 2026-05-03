@@ -14,83 +14,83 @@ class LocationSwitchIllustration extends StatelessWidget {
     return FittedBox(
       fit: BoxFit.scaleDown,
       child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        // Mock app header strip
-        Container(
-          decoration: BoxDecoration(
-            color: kBackgroundColourDark.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: kAccentColour.withValues(alpha: 0.25),
-              width: 1,
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.location_on_outlined,
-                color: kAccentColour,
-                size: 16,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Mock app header strip
+          Container(
+            decoration: BoxDecoration(
+              color: kBackgroundColourDark.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: kLocationRecentColour.withValues(alpha: 0.25),
+                width: 1,
               ),
-              const SizedBox(width: 6),
-              Text(
-                'London',
-                style: TextStyle(
-                  color: kAccentColour,
-                  fontSize: kFontSizeBody,
-                  fontWeight: FontWeight.w600,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  color: kBarCurrentYearColour,
+                  size: 16,
                 ),
-              ),
-              const SizedBox(width: 2),
-              Icon(
-                Icons.keyboard_arrow_down,
-                color: kAccentColour.withValues(alpha: 0.7),
-                size: 20,
-              ),
-            ],
-          ),
-        ),
-        // Tap indicator
-        const SizedBox(height: 10),
-        Icon(
-          Icons.touch_app_outlined,
-          color: kGreyLabelColour.withValues(alpha: 0.55),
-          size: 32,
-        ),
-        // Mini bottom-sheet mockup
-        const SizedBox(height: 10),
-        Container(
-          width: 220,
-          decoration: BoxDecoration(
-            color: kBackgroundColourDark,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: kGreyLabelColour.withValues(alpha: 0.15),
-              width: 1,
+                const SizedBox(width: 6),
+                Text(
+                  'London',
+                  style: TextStyle(
+                    color: kBarCurrentYearColour,
+                    fontSize: kFontSizeBody,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.keyboard_arrow_down,
+                  color: kBarCurrentYearColour.withValues(alpha: 0.7),
+                  size: 20,
+                ),
+              ],
             ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionLabel('CURRENT'),
-              _locationRow('London', isSelected: true),
-              _divider(),
-              _sectionLabel('RECENT'),
-              _locationRow('Paris'),
-              _locationRow('New York'),
-              _divider(),
-              _sectionLabel('POPULAR'),
-              _locationRow('Tokyo'),
-              _locationRow('Sydney'),
-            ],
+          // Tap indicator
+          const SizedBox(height: 10),
+          Icon(
+            Icons.touch_app_outlined,
+            color: kGreyLabelColour.withValues(alpha: 0.55),
+            size: 32,
           ),
-        ),
-      ],
+          // Mini bottom-sheet mockup
+          const SizedBox(height: 10),
+          Container(
+            width: 220,
+            decoration: BoxDecoration(
+              color: kTextPrimaryColour.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: kGreyLabelColour.withValues(alpha: 0.15),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionLabel('CURRENT'),
+                _locationRow('London', isSelected: true),
+                _divider(),
+                _sectionLabel('RECENT'),
+                _locationRow('Paris'),
+                _locationRow('New York'),
+                _divider(),
+                _sectionLabel('POPULAR'),
+                _locationRow('Tokyo'),
+                _locationRow('Sydney'),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -100,7 +100,7 @@ class LocationSwitchIllustration extends StatelessWidget {
         child: Text(
           text,
           style: TextStyle(
-            color: kGreyLabelColour.withValues(alpha: 0.6),
+            color: kLocationRecentColour,
             fontSize: 9,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.6,
@@ -109,25 +109,25 @@ class LocationSwitchIllustration extends StatelessWidget {
       );
 
   Widget _locationRow(String city, {bool isSelected = false}) {
-    final color = isSelected ? kBarCurrentYearColour : kAccentColour;
+    final effectiveColor =
+        isSelected ? kBarCurrentYearColour : kTextPrimaryColour;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       child: Row(
         children: [
-          Icon(Icons.location_on_outlined, size: 13, color: color),
+          Icon(Icons.location_on_outlined, size: 13, color: effectiveColor),
           const SizedBox(width: 6),
           Text(
             city,
             style: TextStyle(
-              color: color,
+              color: effectiveColor,
               fontSize: 12,
-              fontWeight:
-                  isSelected ? FontWeight.w600 : FontWeight.normal,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             ),
           ),
           if (isSelected) ...[
             const Spacer(),
-            Icon(Icons.check, size: 13, color: kBarCurrentYearColour),
+            Icon(Icons.check, size: 13, color: effectiveColor),
           ],
         ],
       ),

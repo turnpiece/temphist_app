@@ -1673,14 +1673,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         // Green — your actual GPS location, matches the current-year bar.
         return kBarCurrentYearColour;
       case LocationSource.recentlyVisited:
-        // Red — a city you've physically been to (in GPS history).
-        // Red has more visual weight than blue, reflecting that personal history
-        // is more relevant than an arbitrary popular-city selection.
-        return kAccentColour;
+        // Secondary green for places the user has already been.
+        return kLocationRecentColour;
       case LocationSource.manual:
-        // Blue — a city chosen from the popular list with no GPS history.
-        // Neutral, matches the average reference line in the chart.
-        return kAverageColour;
+        // Neutral silver for searched or popular locations.
+        return kLocationPopularColour;
     }
   }
 
