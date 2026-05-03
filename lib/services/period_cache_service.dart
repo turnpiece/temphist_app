@@ -170,9 +170,12 @@ class PeriodCacheService {
                   'date': v.date,
                   'year': v.year,
                   'temperature': v.temperature,
+                  if (v.anomaly != null) 'anomaly': v.anomaly,
                 })
             .toList(),
         'average': {'mean': d.average.mean},
+        if (d.standardDeviation != null)
+          'standard_deviation': d.standardDeviation,
         'trend': {'slope': d.trend.slope, 'unit': d.trend.unit},
         'summary': d.summary,
         if (d.metadata != null)

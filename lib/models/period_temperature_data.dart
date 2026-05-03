@@ -16,6 +16,11 @@ class PeriodTemperatureData {
   final String summary;
   final PeriodMetadata? metadata;
 
+  /// Population standard deviation of all temperatures in the series, in the
+  /// same unit as [values]. Used to compute per-year Z-scores for chart
+  /// coloring. May be null for very short series or when the API omits it.
+  final double? standardDeviation;
+
   PeriodTemperatureData({
     required this.period,
     required this.location,
@@ -27,12 +32,14 @@ class PeriodTemperatureData {
     required this.trend,
     required this.summary,
     this.metadata,
+    this.standardDeviation,
   });
 
   /// Whether the API returned data already converted to Fahrenheit.
   bool get isFahrenheit => unitGroup == 'fahrenheit';
 
   factory PeriodTemperatureData.fromJson(Map<String, dynamic> json) {
+    final stdDev = json['standard_deviation'];
     return PeriodTemperatureData(
       period: json['period'] ?? '',
       location: json['location'] ?? '',
@@ -48,6 +55,7 @@ class PeriodTemperatureData {
       metadata: json['metadata'] != null
           ? PeriodMetadata.fromJson(json['metadata'])
           : null,
+      standardDeviation: stdDev is num ? stdDev.toDouble() : null,
     );
   }
 }
@@ -77,18 +85,25 @@ class PeriodDataPoint {
   final int year;
   final double temperature;
 
+  /// Deviation from the series mean (`temperature - mean`), in the same unit
+  /// as [temperature]. May be null when the API omits it.
+  final double? anomaly;
+
   PeriodDataPoint({
     required this.date,
     required this.year,
     required this.temperature,
+    this.anomaly,
   });
 
   factory PeriodDataPoint.fromJson(Map<String, dynamic> json) {
     final temp = json['temperature'];
+    final anom = json['anomaly'];
     return PeriodDataPoint(
       date: json['date'] ?? '',
       year: json['year'] ?? 0,
       temperature: temp != null ? (temp as num).toDouble() : 0.0,
+      anomaly: anom is num ? anom.toDouble() : null,
     );
   }
 }

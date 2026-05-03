@@ -12,6 +12,12 @@ class TemperatureChartData {
   final double temperature;
   final bool isCurrentYear;
   final bool hasData;
+
+  /// API-supplied anomaly (`temperature - series mean`) for this year.
+  /// When provided alongside a series-level standard deviation, the chart
+  /// colors bars by Z-score instead of normalizing to the largest anomaly.
+  final double? anomaly;
+
   final Color? barFillColor;
   final Color? barBorderColor;
 
@@ -20,6 +26,7 @@ class TemperatureChartData {
     required this.temperature,
     required this.isCurrentYear,
     this.hasData = true,
+    this.anomaly,
     this.barFillColor,
     this.barBorderColor,
   });
@@ -76,11 +83,15 @@ TemperatureChartPresentation? buildTemperatureChartPresentation({
   required double? averageTemperature,
   required bool isFahrenheit,
   required bool needsConversion,
+  double? standardDeviation,
 }) {
   final shouldConvert = isFahrenheit && needsConversion;
   final unitLabel = temperatureUnitLabel(isFahrenheit: isFahrenheit);
-  final styledChartData =
-      _styleChartDataForPresentation(chartData, averageTemperature);
+  final styledChartData = _styleChartDataForPresentation(
+    chartData,
+    averageTemperature,
+    standardDeviation,
+  );
   final validData = styledChartData.where((d) => d.hasData).toList();
 
   if (validData.isEmpty) {
@@ -225,17 +236,27 @@ class TemperatureChartTopAxis extends StatelessWidget {
   }
 }
 
+/// |Z| at which a bar is fully saturated red (warm) or blue (cool).
+/// Roughly the 95th percentile of a normal distribution (|Z| >= 2 covers ~5%
+/// of years), so most years sit somewhere in the diverging gradient.
+const double _kColorSaturationZ = 2.0;
+
+/// |Z| at which a bar still reads as neutral grey. Anything closer to the
+/// mean than this gets no warm/cool tint, so "about average" years don't
+/// look faintly red or blue.
+const double _kNeutralZBand = 0.25;
+
 List<TemperatureChartData> _styleChartDataForPresentation(
   List<TemperatureChartData> data,
   double? averageTemperature,
+  double? standardDeviation,
 ) {
   if (data.isEmpty) {
     return data;
   }
 
-  final temperatures =
-      data.where((d) => d.hasData).map((d) => d.temperature).toList();
-  if (temperatures.isEmpty) {
+  final validValues = data.where((d) => d.hasData).toList();
+  if (validValues.isEmpty) {
     return data;
   }
 
@@ -248,6 +269,7 @@ List<TemperatureChartData> _styleChartDataForPresentation(
             temperature: d.temperature,
             isCurrentYear: d.isCurrentYear,
             hasData: d.hasData,
+            anomaly: d.anomaly,
             barFillColor:
                 d.isCurrentYear ? kBarCurrentYearColour : kBarNeutralColour,
             barBorderColor:
@@ -257,46 +279,67 @@ List<TemperatureChartData> _styleChartDataForPresentation(
         .toList();
   }
 
-  final anomalies = temperatures.map((temp) => temp - baseline).toList();
-  final maxWarmAnomaly = anomalies.fold<double>(
-    0,
-    (currentMax, anomaly) => anomaly > currentMax ? anomaly : currentMax,
-  );
-  final maxCoolAnomaly = anomalies.fold<double>(
-    0,
-    (currentMax, anomaly) =>
-        anomaly < 0 ? math.max(currentMax, anomaly.abs()) : currentMax,
-  );
+  // Prefer the API's series-level standard deviation. When it's missing or
+  // zero we fall back to normalizing each bar's anomaly against the largest
+  // observed anomaly so the chart still has meaningful contrast.
+  final useZScore =
+      standardDeviation != null && standardDeviation > 0;
+
+  double maxWarmAnomaly = 0;
+  double maxCoolAnomaly = 0;
+  if (!useZScore) {
+    for (final d in validValues) {
+      final a = d.anomaly ?? (d.temperature - baseline);
+      if (a > maxWarmAnomaly) maxWarmAnomaly = a;
+      if (a < 0 && a.abs() > maxCoolAnomaly) maxCoolAnomaly = a.abs();
+    }
+  }
 
   return data.map((d) {
+    final anomaly = d.anomaly ?? (d.temperature - baseline);
     final fillColor = d.isCurrentYear
         ? kBarCurrentYearColour
-        : _barColorForTemperature(
-            d.temperature,
-            baseline,
-            maxWarmAnomaly,
-            maxCoolAnomaly,
-          );
+        : useZScore
+            ? _barColorForZScore(anomaly / standardDeviation)
+            : _barColorForAnomaly(anomaly, maxWarmAnomaly, maxCoolAnomaly);
     return TemperatureChartData(
       year: d.year,
       temperature: d.temperature,
       isCurrentYear: d.isCurrentYear,
       hasData: d.hasData,
+      anomaly: anomaly,
       barFillColor: fillColor,
       barBorderColor: fillColor,
     );
   }).toList();
 }
 
-Color _barColorForTemperature(
-  double temperature,
-  double averageTemperature,
+/// Map a Z-score to a diverging blue → grey → red color.
+Color _barColorForZScore(double z) {
+  final magnitude = z.abs();
+  if (magnitude <= _kNeutralZBand) {
+    return kBarNeutralColour;
+  }
+  final blend = ((magnitude - _kNeutralZBand) /
+          (_kColorSaturationZ - _kNeutralZBand))
+      .clamp(0.0, 1.0);
+  return Color.lerp(
+        kBarNeutralColour,
+        z >= 0 ? kBarWarmColour : kBarCoolColour,
+        blend,
+      ) ??
+      kBarNeutralColour;
+}
+
+/// Fallback coloring used when the series has no standard deviation (e.g.
+/// a single-year cache from before the API exposed it). Normalizes each
+/// anomaly against the largest observed warm/cool anomaly in the series.
+Color _barColorForAnomaly(
+  double anomaly,
   double maxWarmAnomaly,
   double maxCoolAnomaly,
 ) {
   const double neutralBand = 0.12;
-  final anomaly = temperature - averageTemperature;
-
   double normalized;
   if (anomaly > 0) {
     normalized = maxWarmAnomaly == 0 ? 0 : anomaly / maxWarmAnomaly;
@@ -340,6 +383,11 @@ class TemperatureBarChart extends StatelessWidget {
   final bool needsConversion;
   final bool showTemperatureAxis;
 
+  /// Series-level standard deviation (matches [chartData] units). When
+  /// provided, bars are colored by Z-score (`anomaly / standardDeviation`)
+  /// so coloring is statistically meaningful and consistent across periods.
+  final double? standardDeviation;
+
   const TemperatureBarChart({
     super.key,
     required this.chartData,
@@ -350,6 +398,7 @@ class TemperatureBarChart extends StatelessWidget {
     this.isFahrenheit = false,
     this.needsConversion = true,
     this.showTemperatureAxis = true,
+    this.standardDeviation,
   });
 
   @override
@@ -360,6 +409,7 @@ class TemperatureBarChart extends StatelessWidget {
       averageTemperature: averageTemperature,
       isFahrenheit: isFahrenheit,
       needsConversion: needsConversion,
+      standardDeviation: standardDeviation,
     );
 
     if (presentation == null) {

@@ -112,6 +112,7 @@ class PeriodPageState extends State<PeriodPage>
             temperature: v.temperature,
             isCurrentYear: v.year == currentYear,
             hasData: true,
+            anomaly: v.anomaly,
           ),
         )
         .toList();
@@ -123,6 +124,7 @@ class PeriodPageState extends State<PeriodPage>
       averageTemperature: data.average.mean,
       isFahrenheit: widget.isFahrenheit,
       needsConversion: needsConversion,
+      standardDeviation: data.standardDeviation,
     );
   }
 
@@ -555,6 +557,7 @@ class PeriodPageState extends State<PeriodPage>
             temperature: v.temperature,
             isCurrentYear: v.year == DateTime.now().year,
             hasData: true,
+            anomaly: v.anomaly,
           ),
         )
         .toList();
@@ -623,6 +626,7 @@ class PeriodPageState extends State<PeriodPage>
           isFahrenheit: widget.isFahrenheit,
           needsConversion: needsConversion,
           showTemperatureAxis: false,
+          standardDeviation: data.standardDeviation,
         ),
       ),
     );
@@ -813,6 +817,7 @@ class PeriodPageState extends State<PeriodPage>
         temperature: v.temperature,
         isCurrentYear: v.year == currentYear,
         hasData: true,
+        anomaly: v.anomaly,
       );
     }).toList();
 
@@ -862,6 +867,7 @@ class PeriodPageState extends State<PeriodPage>
               isFahrenheit: widget.isFahrenheit,
               needsConversion: needsConversion,
               showTemperatureAxis: true,
+              standardDeviation: data.standardDeviation,
             ),
             const SizedBox(height: kSectionBottomPadding),
             // Average text
