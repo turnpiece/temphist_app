@@ -13,20 +13,16 @@ const int _barCount = 10; // 2026 → 2017
 const int _tappedIndex = 7; // 2019 — near the bottom, not a multiple of 5
 
 const List<double> _barWidths = [
-  0.88, 0.72, 0.61, 0.79, 0.53,
-  0.68, 0.75, 0.48, 0.63, 0.57,
-];
-const List<Color> _barColours = [
-  kBarWarmColour,
-  kBarNeutralColour,
-  kBarCoolColour,
-  kBarWarmColour,
-  kBarCoolColour,
-  kBarNeutralColour,
-  kBarWarmColour,
-  kBarCoolColour,
-  kBarNeutralColour,
-  kBarWarmColour,
+  0.88,
+  0.72,
+  0.61,
+  0.79,
+  0.53,
+  0.68,
+  0.75,
+  0.48,
+  0.63,
+  0.57,
 ];
 
 /// Bar chart illustration for the "tap a bar" onboarding page.
@@ -84,15 +80,26 @@ class _BarsPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final averageWidth = _barWidths.reduce((a, b) => a + b) / _barWidths.length;
+    final maxWarmDelta = _barWidths
+        .map((width) => width - averageWidth)
+        .where((delta) => delta > 0)
+        .fold<double>(0, (max, delta) => delta > max ? delta : max);
+    final maxCoolDelta = _barWidths
+        .map((width) => averageWidth - width)
+        .where((delta) => delta > 0)
+        .fold<double>(0, (max, delta) => delta > max ? delta : max);
+
     for (int i = 0; i < _barCount; i++) {
       final int year = _startYear - i;
       final double y = i * _rowHeight;
-      final bool isCurrent = i == 0;
       final bool isTapped = i == _tappedIndex;
-      final fillColour =
-          (isCurrent ? kBarCurrentYearColour : _barColours[i]).withValues(
-            alpha: isCurrent || isTapped ? 0.95 : 0.85,
-          );
+      final fillColour = _barColourForWidth(
+        _barWidths[i],
+        averageWidth,
+        maxWarmDelta,
+        maxCoolDelta,
+      ).withValues(alpha: isTapped ? 0.95 : 0.85);
       final fillPaint = Paint()
         ..color = fillColour
         ..style = PaintingStyle.fill;
@@ -127,6 +134,38 @@ class _BarsPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _BarsPainter oldDelegate) =>
       oldDelegate.maxBarWidth != maxBarWidth;
+}
+
+Color _barColourForWidth(
+  double width,
+  double averageWidth,
+  double maxWarmDelta,
+  double maxCoolDelta,
+) {
+  const double neutralBand = 0.12;
+  final delta = width - averageWidth;
+
+  double normalized;
+  if (delta > 0) {
+    normalized = maxWarmDelta == 0 ? 0 : delta / maxWarmDelta;
+  } else if (delta < 0) {
+    normalized = maxCoolDelta == 0 ? 0 : delta.abs() / maxCoolDelta;
+  } else {
+    normalized = 0;
+  }
+
+  if (normalized <= neutralBand) {
+    return kBarNeutralColour;
+  }
+
+  final blend =
+      ((normalized - neutralBand) / (1 - neutralBand)).clamp(0.0, 1.0);
+  return Color.lerp(
+        kBarNeutralColour,
+        delta >= 0 ? kBarWarmColour : kBarCoolColour,
+        blend,
+      ) ??
+      kBarNeutralColour;
 }
 
 class _TooltipMockup extends StatelessWidget {

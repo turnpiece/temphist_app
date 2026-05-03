@@ -383,7 +383,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
         // "Current location" shows the physical GPS location, if known.
         // Always a single full-width row.
         if (widget.gpsLocation.isNotEmpty) ...[
-          _SectionHeader('Current', color: kLocationRecentColour),
+          _SectionHeader('Current', color: kHeadingColour),
           _LocationRow(
             apiLocation: widget.gpsLocation,
             isSelected: widget.selectedLocation == widget.gpsLocation,
@@ -393,7 +393,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
         ],
         // Recent — two-column grid on tablets, single column on phones.
         if (data.recentLocations.isNotEmpty) ...[
-          _SectionHeader('Recent', color: kLocationRecentColour),
+          _SectionHeader('Recent', color: kHeadingColour),
           if (isTablet)
             _buildTwoColumnGrid(visibleRecent, kBarCurrentYearColour)
           else ...[
@@ -412,7 +412,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
         ],
         // Popular — two-column grid on tablets, single column on phones.
         if (data.popularLocations.isNotEmpty) ...[
-          _SectionHeader('Popular', color: kLocationRecentColour),
+          _SectionHeader('Popular', color: kHeadingColour),
           if (isTablet)
             _buildTwoColumnGrid(visiblePopular, kBarCurrentYearColour)
           else ...[
@@ -551,7 +551,7 @@ class _LocationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? selectedColor : kTextPrimaryColour;
+    final color = isSelected ? kTextPrimaryColour : kTextPrimaryColour;
     final cc = TemperatureService.countryCodeFor(apiLocation);
     final flag = cc != null ? TemperatureService.flagEmoji(cc) : null;
 
@@ -569,8 +569,8 @@ class _LocationRow extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),
-          splashColor: kAccentColour.withValues(alpha: 0.1),
-          highlightColor: kAccentColour.withValues(alpha: 0.05),
+          splashColor: kButtonColour.withValues(alpha: 0.1),
+          highlightColor: kButtonColour.withValues(alpha: 0.05),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Row(
@@ -640,7 +640,7 @@ class _ShowMoreButton extends StatelessWidget {
         child: Text(
           'Show more...',
           style: TextStyle(
-            color: kGreyLabelColour,
+            color: kButtonColour,
             fontSize: kFontSizeBody - 2,
           ),
         ),
@@ -736,8 +736,7 @@ class _SearchFieldState extends State<_SearchField> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide:
-              BorderSide(color: kLocationPopularColour.withValues(alpha: 0.45)),
+          borderSide: BorderSide(color: kButtonColour.withValues(alpha: 0.45)),
         ),
       ),
     );

@@ -38,7 +38,7 @@ class SplashScreen extends StatelessWidget {
                 Text(
                   kAppTitle,
                   style: TextStyle(
-                    color: kAccentColour,
+                    color: kHeadingColour,
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.2,
@@ -47,7 +47,7 @@ class SplashScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 // Loading indicator
                 const CircularProgressIndicator(
-                  color: kAccentColour,
+                  color: kButtonColour,
                   strokeWidth: 3,
                 ),
                 const SizedBox(height: 16),

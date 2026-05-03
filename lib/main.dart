@@ -33,7 +33,6 @@ import 'utils/date_utils.dart' as date_utils;
 Map<String, String> _getCurrentDateAndLocation(String determinedLocation) =>
     date_utils.getCurrentDateAndLocation(determinedLocation);
 
-
 /// Check available storage space and return true if sufficient space is available
 Future<bool> _checkStorageSpace() async {
   try {
@@ -42,7 +41,7 @@ Future<bool> _checkStorageSpace() async {
       // but we can try to write a small test file to see if storage is available
       final tempDir = io.Directory.systemTemp;
       final testFile = io.File('${tempDir.path}/temp_storage_test.tmp');
-      
+
       try {
         await testFile.writeAsString('test');
         // Write succeeded — storage is available.
@@ -59,7 +58,8 @@ Future<bool> _checkStorageSpace() async {
     } else {
       // For desktop platforms, check available disk space
       final tempDir = io.Directory.systemTemp;
-      await tempDir.stat(); // Basic check - if we can access temp dir, assume space is available
+      await tempDir
+          .stat(); // Basic check - if we can access temp dir, assume space is available
       return true;
     }
   } catch (e) {
@@ -77,21 +77,23 @@ Future<T?> _safeSharedPreferencesOperation<T>(
     // Check storage space before attempting operation
     final hasSpace = await _checkStorageSpace();
     if (!hasSpace) {
-      DebugUtils.logLazy(() => '⚠️ Insufficient storage space for $operationName');
+      DebugUtils.logLazy(
+          () => '⚠️ Insufficient storage space for $operationName');
       return null;
     }
-    
+
     return await operation();
   } catch (e) {
     DebugUtils.logLazy(() => '❌ SharedPreferences $operationName failed: $e');
-    
+
     // If it's a storage-related error, try to clear some cache
-    if (e.toString().contains('No space left') || 
+    if (e.toString().contains('No space left') ||
         e.toString().contains('ENOSPC') ||
         e.toString().contains('storage')) {
-      DebugUtils.logLazy(() => '🧹 Storage error detected, attempting cache cleanup');
+      DebugUtils.logLazy(
+          () => '🧹 Storage error detected, attempting cache cleanup');
       await _emergencyCacheCleanup();
-      
+
       // Try the operation once more after cleanup
       try {
         return await operation();
@@ -100,7 +102,7 @@ Future<T?> _safeSharedPreferencesOperation<T>(
         return null;
       }
     }
-    
+
     return null;
   }
 }
@@ -111,12 +113,14 @@ Future<void> _emergencyCacheCleanup() async {
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs.getKeys();
     int cleanedCount = 0;
-    
+
     // Remove oldest cache entries first (those with oldest timestamps)
     final cacheEntries = <String, int>{};
-    
+
     for (final key in keys) {
-      if (key.startsWith('tempData_') || key.startsWith('api_') || key.startsWith('cachedLocation')) {
+      if (key.startsWith('tempData_') ||
+          key.startsWith('api_') ||
+          key.startsWith('cachedLocation')) {
         try {
           final data = prefs.getString(key);
           if (data != null) {
@@ -133,24 +137,23 @@ Future<void> _emergencyCacheCleanup() async {
         }
       }
     }
-    
+
     // Sort by timestamp (oldest first) and remove oldest 50% of entries
     final sortedEntries = cacheEntries.entries.toList()
       ..sort((a, b) => a.value.compareTo(b.value));
-    
+
     final entriesToRemove = (sortedEntries.length * 0.5).ceil();
     for (int i = 0; i < entriesToRemove && i < sortedEntries.length; i++) {
       await prefs.remove(sortedEntries[i].key);
       cleanedCount++;
     }
-    
-    DebugUtils.logLazy(() => '🧹 Emergency cleanup removed $cleanedCount cache entries');
+
+    DebugUtils.logLazy(
+        () => '🧹 Emergency cleanup removed $cleanedCount cache entries');
   } catch (e) {
     DebugUtils.logLazy(() => '❌ Emergency cache cleanup failed: $e');
   }
 }
-
-
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -158,9 +161,9 @@ void main() async {
   // Lock phones to portrait; tablets use system default (all orientations).
   // On iOS the Info.plist ~ipad key already declares landscape for iPads.
   final isTablet = WidgetsBinding.instance.platformDispatcher.views.first
-          .physicalSize
-          .shortestSide /
-      WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio >=
+              .physicalSize.shortestSide /
+          WidgetsBinding
+              .instance.platformDispatcher.views.first.devicePixelRatio >=
       600;
   await SystemChrome.setPreferredOrientations(
     isTablet
@@ -170,7 +173,7 @@ void main() async {
 
   // Configure system UI overlay to extend app background over status bar and navigation bar
   _setSystemUIOverlayStyle();
-  
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -225,7 +228,7 @@ class TempHist extends StatelessWidget {
   Widget build(BuildContext context) {
     // Ensure system UI overlay is set correctly
     _setSystemUIOverlayStyle();
-    
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: kAppTitle,
@@ -261,7 +264,8 @@ class TemperatureScreen extends StatefulWidget {
   TemperatureScreenState createState() => TemperatureScreenState();
 }
 
-class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindingObserver {
+class TemperatureScreenState extends State<TemperatureScreen>
+    with WidgetsBindingObserver {
   // Temperature unit preference (°C / °F).
   final TemperatureUnitService _unitService = TemperatureUnitService();
   bool get _isFahrenheit => _unitService.isFahrenheit.value;
@@ -326,7 +330,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   final _yearPageKey = GlobalKey<PeriodPageState>();
 
   // Onboarding
-  bool _hasSeenOnboarding = true; // default true to avoid flash during async check
+  bool _hasSeenOnboarding =
+      true; // default true to avoid flash during async check
 
   // Swipe coachmark
   bool _coachmarkPending = false;
@@ -381,10 +386,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // Debug mode detection logging
     DebugUtils.logLazy(() => '🔧 Debug mode detection:');
     DebugUtils.logLazy(() => '  - kDebugMode: $kDebugMode');
-    DebugUtils.logLazy(() => '  - AppConfig.isDebugMode: ${AppConfig.isDebugMode}');
-    DebugUtils.logLazy(() => '  - AppConfig.enableDebugUI: ${AppConfig.enableDebugUI}');
-    DebugUtils.logLazy(() => '  - AppConfig.shouldShowDebugFeatures: ${AppConfig.shouldShowDebugFeatures}');
-    
+    DebugUtils.logLazy(
+        () => '  - AppConfig.isDebugMode: ${AppConfig.isDebugMode}');
+    DebugUtils.logLazy(
+        () => '  - AppConfig.enableDebugUI: ${AppConfig.enableDebugUI}');
+    DebugUtils.logLazy(() =>
+        '  - AppConfig.shouldShowDebugFeatures: ${AppConfig.shouldShowDebugFeatures}');
+
     // Load temperature unit preference (°C / °F) and rebuild on change.
     _unitService.load();
     _unitService.isFahrenheit.addListener(_onUnitChanged);
@@ -398,7 +406,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
     // Start minimum splash screen timer
     _startSplashScreenTimer();
-    
+
     // If we have a test future, skip async initialization — PeriodPage
     // handles its own data loading when a location is set.
     if (widget.testFuture != null) {
@@ -441,7 +449,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     super.didChangeAppLifecycleState(state);
 
     if (state == AppLifecycleState.resumed) {
-      DebugUtils.logLazy(() => 'App resumed - checking if location or date needs refresh');
+      DebugUtils.logLazy(
+          () => 'App resumed - checking if location or date needs refresh');
       _checkAndRefreshLocationIfNeeded();
       _checkAndRefreshDataIfDateChanged();
       // Cleanup expired cache on resume
@@ -482,7 +491,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
     _startListeningToLocationChanges();
 
-    DebugUtils.verboseLazy(() => 'App initialization completed - location: $_determinedLocation');
+    DebugUtils.verboseLazy(
+        () => 'App initialization completed - location: $_determinedLocation');
   }
 
   Future<void> _checkAndRefreshLocationIfNeeded() async {
@@ -497,11 +507,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     if (_lastDateIdentifier.isEmpty) return;
     final current = _currentDateIdentifier();
     if (current != _lastDateIdentifier) {
-      DebugUtils.logLazy(() => 'Date changed ($_lastDateIdentifier → $current), reloading all periods');
+      DebugUtils.logLazy(() =>
+          'Date changed ($_lastDateIdentifier → $current), reloading all periods');
       _lastDateIdentifier = current;
       _reloadAllPeriodPages();
     } else {
-      DebugUtils.logLazy(() => 'Date unchanged ($current), keeping current data');
+      DebugUtils.logLazy(
+          () => 'Date unchanged ($current), keeping current data');
     }
   }
 
@@ -510,13 +522,19 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   String _currentDateIdentifier() {
     final now = DateTime.now();
     final useYesterday = now.hour < kUseYesterdayHourThreshold;
-    final dateToUse = useYesterday ? now.subtract(const Duration(days: 1)) : now;
+    final dateToUse =
+        useYesterday ? now.subtract(const Duration(days: 1)) : now;
     return dateIdentifier(dateToUse);
   }
 
   /// Force-reload every PeriodPage via its GlobalKey.
   void _reloadAllPeriodPages() {
-    for (final key in [_dailyPageKey, _weekPageKey, _monthPageKey, _yearPageKey]) {
+    for (final key in [
+      _dailyPageKey,
+      _weekPageKey,
+      _monthPageKey,
+      _yearPageKey
+    ]) {
       key.currentState?.reload();
     }
   }
@@ -533,7 +551,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     // didUpdateWidget when the location prop changes.
     await _determineLocation();
 
-    DebugUtils.logLazy(() => 'Location refresh: $previousLocation → $_determinedLocation');
+    DebugUtils.logLazy(
+        () => 'Location refresh: $previousLocation → $_determinedLocation');
     _prefetchPeriodData();
   }
 
@@ -546,31 +565,32 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Future<void> _clearCache() async {
     await _safeSharedPreferencesOperation(() async {
       final prefs = await SharedPreferences.getInstance();
-      
+
       // Get all keys to find cache entries
       final keys = prefs.getKeys();
-      
+
       // Clear chart data cache
       await prefs.remove('cachedChartData');
-      
+
       // Clear API response caches (average, trend, summary)
       for (final key in keys) {
         if (key.startsWith('api_')) {
           await prefs.remove(key);
         }
       }
-      
+
       // Clear temperature data caches
       for (final key in keys) {
         if (key.startsWith('tempData_')) {
           await prefs.remove(key);
         }
       }
-      
+
       // Clear location cache
       await prefs.remove('cachedLocation');
-      
-      DebugUtils.logLazy(() => 'All cache cleared: chart data, API responses, temperature data, and location');
+
+      DebugUtils.logLazy(() =>
+          'All cache cleared: chart data, API responses, temperature data, and location');
     }, 'clear cache');
   }
 
@@ -588,15 +608,18 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
             final cachedData = prefs.getString(key);
             if (cachedData != null) {
               final data = jsonDecode(cachedData) as Map<String, dynamic>;
-              final timestamp = DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int);
+              final timestamp =
+                  DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int);
               final age = now.difference(timestamp);
-              
+
               Duration expiration;
               if (key.startsWith('tempData_')) {
                 // Temperature data cache
                 final year = data['year'] as int;
                 final isCurrentYear = year == now.year;
-                expiration = isCurrentYear ? _currentDateCacheExpiration : _historicalDataCacheExpiration;
+                expiration = isCurrentYear
+                    ? _currentDateCacheExpiration
+                    : _historicalDataCacheExpiration;
               } else if (key.startsWith('api_')) {
                 // API response cache
                 final endpoint = data['endpoint'] as String;
@@ -629,7 +652,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       }
 
       if (cleanedCount > 0) {
-        DebugUtils.logLazy(() => '🧹 Cleaned up $cleanedCount expired cache entries');
+        DebugUtils.logLazy(
+            () => '🧹 Cleaned up $cleanedCount expired cache entries');
       }
     }, 'cleanup expired cache');
   }
@@ -735,7 +759,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }, 'save swipe coachmark shown');
   }
 
-
   Future<void> _determineLocation() async {
     await _locationService.determineLocation();
   }
@@ -759,7 +782,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     final lat = isAtGps ? _lastPosition?.latitude : null;
     final lon = isAtGps ? _lastPosition?.longitude : null;
 
-    DebugUtils.logLazy(() => 'Prefetching period data in parallel for $location ($identifier)');
+    DebugUtils.logLazy(() =>
+        'Prefetching period data in parallel for $location ($identifier)');
 
     await Future.wait(
       periods.map((period) async {
@@ -849,13 +873,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     });
   }
 
-
-
-
-
-
-
-
   Future<void> _handleRefresh() async {
     DebugUtils.logLazy(() => 'Full refresh triggered');
 
@@ -885,7 +902,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   /// Clear only location cache (for testing different locations in Simulator)
   Future<void> _handleLocationRefresh() async {
-    DebugUtils.logLazy(() => 'Location refresh triggered - clearing location cache only');
+    DebugUtils.logLazy(
+        () => 'Location refresh triggered - clearing location cache only');
 
     await _locationService.clearCache();
 
@@ -932,9 +950,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
     final currentPage = _pageIndexNotifier.value;
     final currentPeriod = _periodKeys[currentPage];
-    DebugUtils.logLazy(() =>
-        '📍 Location switch: $_determinedLocation → $apiLocation '
-        '(on $currentPeriod page, gps: ${_locationService.gpsLocation})');
+    DebugUtils.logLazy(
+        () => '📍 Location switch: $_determinedLocation → $apiLocation '
+            '(on $currentPeriod page, gps: ${_locationService.gpsLocation})');
 
     // Purge the in-memory service cache so stale data for the old location
     // is never served to the new fetch.
@@ -951,7 +969,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   /// Test date change detection (for debugging)
   void _handleTestDateChange() {
-    DebugUtils.logLazy(() => 'Test date change triggered - simulating date change detection');
+    DebugUtils.logLazy(
+        () => 'Test date change triggered - simulating date change detection');
     // Pretend the last load was for a different date, then run the check.
     _lastDateIdentifier = '00-00';
     _checkAndRefreshDataIfDateChanged();
@@ -959,11 +978,12 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   /// Clear all cache (for debugging)
   Future<void> _handleClearCache() async {
-    DebugUtils.logLazy(() => 'Clear cache triggered - clearing all cached data');
-    
+    DebugUtils.logLazy(
+        () => 'Clear cache triggered - clearing all cached data');
+
     // Clear all cache
     await _clearCache();
-    
+
     // Show feedback only if widget is still mounted
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -994,83 +1014,83 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
 
   Widget _buildVersionSection() {
     return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Debug Info:',
-              style: TextStyle(
-                color: kGreyLabelColour,
-                fontSize: kFontSizeBody - 2,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Version: ${AppConfig.fullVersion}',
-              style: TextStyle(
-                color: kGreyLabelColour,
-                fontSize: kFontSizeBody - 3,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-            Text(
-              'Release: ${AppConfig.releaseDate}',
-              style: TextStyle(
-                color: kGreyLabelColour,
-                fontSize: kFontSizeBody - 3,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-          ],
-        );
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Debug Info:',
+          style: TextStyle(
+            color: kGreyLabelColour,
+            fontSize: kFontSizeBody - 2,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Version: ${AppConfig.fullVersion}',
+          style: TextStyle(
+            color: kGreyLabelColour,
+            fontSize: kFontSizeBody - 3,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        Text(
+          'Release: ${AppConfig.releaseDate}',
+          style: TextStyle(
+            color: kGreyLabelColour,
+            fontSize: kFontSizeBody - 3,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildDebugToggleSection() {
     return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Debug Mode - Simulate Endpoint Failures:',
+          style: TextStyle(
+            color: kGreyLabelColour,
+            fontSize: kFontSizeBody - 1,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Use Wrap for responsive button layout
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            Text(
-              'Debug Mode - Simulate Endpoint Failures:',
-              style: TextStyle(
-                color: kGreyLabelColour,
-                fontSize: kFontSizeBody - 1,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 8),
-            // Use Wrap for responsive button layout
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildDebugToggleButton('Average', 'average'),
-                _buildDebugToggleButton('Trend', 'trend'),
-                _buildDebugToggleButton('Summary', 'summary'),
-                _buildResetAllButton(),
-                _buildForceRefreshButton(),
-                _buildLocationRefreshButton(),
-                _buildTestDateChangeButton(),
-                _buildClearCacheButton(),
-              ],
-            ),
-            if (AppConfig.enableEndpointFailureSimulation) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Simulation Active: ${_simulateAverageFailure ? "Average" : ""}${_simulateTrendFailure ? "${_simulateAverageFailure ? ", " : ""}Trend" : ""}${_simulateSummaryFailure ? "${(_simulateAverageFailure || _simulateTrendFailure) ? ", " : ""}Summary" : ""}',
-                style: TextStyle(
-                  color: kAccentColour,
-                  fontSize: kFontSizeBody - 2,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
+            _buildDebugToggleButton('Average', 'average'),
+            _buildDebugToggleButton('Trend', 'trend'),
+            _buildDebugToggleButton('Summary', 'summary'),
+            _buildResetAllButton(),
+            _buildForceRefreshButton(),
+            _buildLocationRefreshButton(),
+            _buildTestDateChangeButton(),
+            _buildClearCacheButton(),
           ],
-        );
+        ),
+        if (AppConfig.enableEndpointFailureSimulation) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Simulation Active: ${_simulateAverageFailure ? "Average" : ""}${_simulateTrendFailure ? "${_simulateAverageFailure ? ", " : ""}Trend" : ""}${_simulateSummaryFailure ? "${(_simulateAverageFailure || _simulateTrendFailure) ? ", " : ""}Summary" : ""}',
+            style: TextStyle(
+              color: kHeadingColour,
+              fontSize: kFontSizeBody - 2,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   Widget _buildDebugToggleButton(String label, String endpoint) {
     bool isSimulating = false;
-    
+
     switch (endpoint) {
       case 'average':
         isSimulating = _simulateAverageFailure;
@@ -1082,7 +1102,7 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         isSimulating = _simulateSummaryFailure;
         break;
     }
-    
+
     return GestureDetector(
       onTap: () async {
         setState(() {
@@ -1098,30 +1118,33 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
               break;
           }
         });
-        
+
         // Show feedback
         if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${isSimulating ? 'Disabled' : 'Enabled'} $label failure simulation'),
-            duration: const Duration(seconds: 1),
-          ),
-        );
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  '${isSimulating ? 'Disabled' : 'Enabled'} $label failure simulation'),
+              duration: const Duration(seconds: 1),
+            ),
+          );
         }
-        
+
         // If we're enabling a simulation, trigger a refresh to see the failure
         if (!isSimulating) {
           // Clear cache when enabling simulation to ensure fresh data loading
           await _clearCache();
           if (mounted) {
-          _handleRefresh();
+            _handleRefresh();
           }
         }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isSimulating ? kAccentColour : kGreyLabelColour.withValues(alpha: 0.3),
+          color: isSimulating
+              ? kAccentColour
+              : kGreyLabelColour.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
@@ -1236,7 +1259,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       onTap: () {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Simulating date change - clearing data and reloading...'),
+            content:
+                Text('Simulating date change - clearing data and reloading...'),
             duration: Duration(seconds: 2),
           ),
         );
@@ -1274,13 +1298,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: Colors.red.withValues(alpha: 0.2),
+          color: kButtonColour.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           'Clear Cache',
           style: TextStyle(
-            color: Colors.red,
+            color: kButtonColour,
             fontSize: kFontSizeBody - 2,
             fontWeight: FontWeight.w500,
           ),
@@ -1296,8 +1320,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         final screenWidth = MediaQuery.of(context).size.width;
         final isTablet = screenWidth >= 768;
         final maxContentWidth = isTablet ? 650.0 : constraints.maxWidth;
-        final contentWidth = constraints.maxWidth > maxContentWidth ? maxContentWidth : constraints.maxWidth;
-        final horizontalMargin = isTablet ? (constraints.maxWidth - contentWidth) / 2 : 0.0;
+        final contentWidth = constraints.maxWidth > maxContentWidth
+            ? maxContentWidth
+            : constraints.maxWidth;
+        final horizontalMargin =
+            isTablet ? (constraints.maxWidth - contentWidth) / 2 : 0.0;
 
         return SizedBox(
           width: constraints.maxWidth,
@@ -1381,7 +1408,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                 ? _determinedLocation
                 : 'Loading location...');
         final headerCc = TemperatureService.countryCodeFor(_determinedLocation);
-        final headerFlag = headerCc != null ? TemperatureService.flagEmoji(headerCc) : null;
+        final headerFlag =
+            headerCc != null ? TemperatureService.flagEmoji(headerCc) : null;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1403,7 +1431,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                           : headerText,
                       button: _isLocationDetermined,
                       child: GestureDetector(
-                        onTap: _isLocationDetermined ? _showLocationSelector : null,
+                        onTap: _isLocationDetermined
+                            ? _showLocationSelector
+                            : null,
                         behavior: HitTestBehavior.opaque,
                         child: Row(
                           children: [
@@ -1440,10 +1470,13 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                   const SizedBox(width: 8),
                   // Share icon
                   GestureDetector(
-                    onTap: _isSharing ? null : () => _shareCurrentPeriod(pageIndex),
+                    onTap: _isSharing
+                        ? null
+                        : () => _shareCurrentPeriod(pageIndex),
                     behavior: HitTestBehavior.opaque,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
                       child: _isSharing
                           ? SizedBox(
                               width: kIconSize + 6,
@@ -1468,7 +1501,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                       onTap: _showSettings,
                       behavior: HitTestBehavior.opaque,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
                         child: Icon(
                           Icons.settings,
                           color: kGreyLabelColour.withValues(alpha: 0.7),
@@ -1576,12 +1610,18 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     }
   }
 
-  static const List<String> _periodLabels = ['Daily', 'Past week', 'Past month', 'Past year'];
+  static const List<String> _periodLabels = [
+    'Daily',
+    'Past week',
+    'Past month',
+    'Past year'
+  ];
   static const List<String> _tabLabels = ['Today', 'Week', 'Month', 'Year'];
 
   Widget _buildPeriodTabs(int pageIndex) {
     return Semantics(
-      label: '${_periodLabels[pageIndex]}. Period ${pageIndex + 1} of ${_periodKeys.length}. Tap or swipe to change.',
+      label:
+          '${_periodLabels[pageIndex]}. Period ${pageIndex + 1} of ${_periodKeys.length}. Tap or swipe to change.',
       child: ExcludeSemantics(
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1612,9 +1652,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
                           style: TextStyle(
                             color: i == pageIndex
                                 ? kBarCurrentYearColour
-                                : kAccentColour,
+                                : kHeadingColour,
                             fontSize: kSummaryFontSize,
-                            fontWeight: i == pageIndex ? FontWeight.w600 : FontWeight.w400,
+                            fontWeight: i == pageIndex
+                                ? FontWeight.w600
+                                : FontWeight.w400,
                           ),
                         ),
                         const SizedBox(height: 3),
@@ -1775,9 +1817,9 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-
   Widget _buildDebugPadding(BuildContext context, Widget child) {
-    final leftPadding = _standardHorizontalPadding().clamp(0.0, double.infinity);
+    final leftPadding =
+        _standardHorizontalPadding().clamp(0.0, double.infinity);
     final rightPadding = leftPadding;
 
     return Padding(
@@ -1790,7 +1832,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
     );
   }
 
-  double _standardHorizontalPadding() => kScreenPadding + kContentHorizontalMargin;
+  double _standardHorizontalPadding() =>
+      kScreenPadding + kContentHorizontalMargin;
 
   /// Start monitoring network connectivity
   void _startConnectivityMonitoring() {
@@ -1800,11 +1843,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
         final initialResults = await Connectivity().checkConnectivity();
         if (mounted) {
           _isOnline = initialResults.any((result) =>
-            result == ConnectivityResult.mobile ||
-            result == ConnectivityResult.wifi ||
-            result == ConnectivityResult.ethernet
-          );
-          DebugUtils.logLazy(() => '🌐 Initial connectivity status: ${_isOnline ? "online" : "offline"}');
+              result == ConnectivityResult.mobile ||
+              result == ConnectivityResult.wifi ||
+              result == ConnectivityResult.ethernet);
+          DebugUtils.logLazy(() =>
+              '🌐 Initial connectivity status: ${_isOnline ? "online" : "offline"}');
         }
       } catch (e) {
         DebugUtils.logLazy(() => '⚠️ Failed to check initial connectivity: $e');
@@ -1817,22 +1860,24 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       (List<ConnectivityResult> results) {
         final wasOnline = _isOnline;
         _isOnline = results.any((result) =>
-          result == ConnectivityResult.mobile ||
-          result == ConnectivityResult.wifi ||
-          result == ConnectivityResult.ethernet
-        );
+            result == ConnectivityResult.mobile ||
+            result == ConnectivityResult.wifi ||
+            result == ConnectivityResult.ethernet);
 
-        DebugUtils.logLazy(() => '🌐 Network connectivity changed: ${_isOnline ? "online" : "offline"}');
+        DebugUtils.logLazy(() =>
+            '🌐 Network connectivity changed: ${_isOnline ? "online" : "offline"}');
 
         // If we just came back online and were offline, try to refresh data
         if (!wasOnline && _isOnline) {
-          DebugUtils.logLazy(() => '🔄 Network restored, attempting to refresh data');
+          DebugUtils.logLazy(
+              () => '🔄 Network restored, attempting to refresh data');
           _handleNetworkRestored();
         }
 
         // Update UI to reflect connectivity state (_isOnline was updated above)
         if (mounted) {
-          DebugUtils.logLazy(() => '🌐 Updating UI for connectivity state: ${_isOnline ? "online" : "offline"}');
+          DebugUtils.logLazy(() =>
+              '🌐 Updating UI for connectivity state: ${_isOnline ? "online" : "offline"}');
           setState(() {
             // _isOnline was already updated above — this triggers a rebuild.
           });
@@ -1851,7 +1896,8 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   /// Called on app lifecycle events (resume/pause/detach) instead of periodic timer
   void _performMemoryCleanup() {
     _memoryCleanupCount++;
-    DebugUtils.logLazy(() => '🧹 Performing memory cleanup #$_memoryCleanupCount');
+    DebugUtils.logLazy(
+        () => '🧹 Performing memory cleanup #$_memoryCleanupCount');
 
     try {
       _cleanupExpiredCache();
@@ -1883,10 +1929,11 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
   Widget build(BuildContext context) {
     // Ensure system UI overlay is set correctly
     _setSystemUIOverlayStyle();
-    
+
     // Show splash screen while app is initializing OR minimum time hasn't elapsed
     // Skip splash screen in test mode
-    if (widget.testFuture == null && (!_isAppInitialized || !_splashScreenMinTimeElapsed)) {
+    if (widget.testFuture == null &&
+        (!_isAppInitialized || !_splashScreenMinTimeElapsed)) {
       return const SplashScreen();
     }
 
@@ -1926,7 +1973,6 @@ class TemperatureScreenState extends State<TemperatureScreen> with WidgetsBindin
       child: appContent,
     );
   }
-
 }
 
 String _formatDayMonth(DateTime date) => date_utils.formatDateWithOrdinal(date);
@@ -1977,8 +2023,8 @@ class _DotsSwipeHintState extends State<_DotsSwipeHint>
         weight: 15,
       ),
       TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween:
+            Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.easeIn)),
         weight: 10,
       ),
       TweenSequenceItem(tween: ConstantTween(1.0), weight: 35),

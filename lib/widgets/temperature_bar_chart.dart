@@ -25,7 +25,6 @@ class TemperatureChartData {
   });
 }
 
-
 /// A reusable horizontal bar chart showing temperature data across years.
 ///
 /// Used by both the daily view (progressive loading) and period views
@@ -85,7 +84,8 @@ class TemperatureBarChart extends StatelessWidget {
             SizedBox(height: 16),
             Text(
               'Loading temperature data...',
-              style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
+              style:
+                  TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
             ),
           ],
         ),
@@ -93,8 +93,10 @@ class TemperatureBarChart extends StatelessWidget {
     }
 
     // Calculate Y-axis range
-    final minTemp = validData.map((d) => d.temperature).reduce((a, b) => a < b ? a : b);
-    final maxTemp = validData.map((d) => d.temperature).reduce((a, b) => a > b ? a : b);
+    final minTemp =
+        validData.map((d) => d.temperature).reduce((a, b) => a < b ? a : b);
+    final maxTemp =
+        validData.map((d) => d.temperature).reduce((a, b) => a > b ? a : b);
 
     double yAxisMin = (minTemp - 2).floorToDouble();
     double yAxisMax = (maxTemp + 2).ceilToDouble();
@@ -115,7 +117,8 @@ class TemperatureBarChart extends StatelessWidget {
 
           // On portrait phones, cap at 5 labels to avoid crowding.
           // Tablets and landscape views allow up to 7.
-          final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
+          final isPortrait =
+              MediaQuery.of(context).orientation == Orientation.portrait;
           final maxLabels = (!isTablet && isPortrait) ? 5 : 7;
           final maxIntervals = maxLabels - 1;
 
@@ -148,8 +151,10 @@ class TemperatureBarChart extends StatelessWidget {
           // 1/3 of the way into that interval step. Otherwise, stop at the last tick
           // and add just enough visual padding so the bar isn't flush with the axis end.
           const double kUpperTickThreshold = 1.0 / 3.0;
-          final lastTickBeforeMax = (maxTemp / yAxisInterval).floor() * yAxisInterval;
-          final fractionIntoNextStep = (maxTemp - lastTickBeforeMax) / yAxisInterval;
+          final lastTickBeforeMax =
+              (maxTemp / yAxisInterval).floor() * yAxisInterval;
+          final fractionIntoNextStep =
+              (maxTemp - lastTickBeforeMax) / yAxisInterval;
           if (fractionIntoNextStep > kUpperTickThreshold) {
             yAxisMax = lastTickBeforeMax + yAxisInterval;
           } else {
@@ -164,9 +169,11 @@ class TemperatureBarChart extends StatelessWidget {
             yAxisMin -= yAxisInterval;
           }
 
-          final availableWidth = isTablet ? kTabletMaxContentWidth : screenWidth;
+          final availableWidth =
+              isTablet ? kTabletMaxContentWidth : screenWidth;
           final contentPadding = kScreenPadding + kContentHorizontalMargin;
-          final chartWidth = availableWidth - kChartRightMargin - (contentPadding * 2);
+          final chartWidth =
+              availableWidth - kChartRightMargin - (contentPadding * 2);
 
           final chart = SfCartesianChart(
             key: ValueKey(isFahrenheit),
@@ -199,10 +206,13 @@ class TemperatureBarChart extends StatelessWidget {
                 );
               },
             ),
-            series: _buildSeries(yAxisMin, styledChartData, averageTemperature, trendSlope),
+            series: _buildSeries(
+                yAxisMin, styledChartData, averageTemperature, trendSlope),
             primaryXAxis: NumericAxis(
-              labelStyle: const TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
-              majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
+              labelStyle: const TextStyle(
+                  fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
+              majorGridLines: MajorGridLines(
+                  width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
               labelIntersectAction: AxisLabelIntersectAction.hide,
               minimum: kChartStartYear.toDouble(),
               maximum: DateTime.now().year.toDouble(),
@@ -220,8 +230,10 @@ class TemperatureBarChart extends StatelessWidget {
               },
               minimum: yAxisMin,
               maximum: yAxisMax,
-              majorGridLines: MajorGridLines(width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
-              labelStyle: const TextStyle(fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
+              majorGridLines: MajorGridLines(
+                  width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
+              labelStyle: const TextStyle(
+                  fontSize: kFontSizeAxisLabel, color: kGreyLabelColour),
               plotOffset: 0,
               interval: yAxisInterval,
               labelPosition: ChartDataLabelPosition.outside,
@@ -234,7 +246,8 @@ class TemperatureBarChart extends StatelessWidget {
           return isTablet
               ? SizedBox(height: height, width: chartWidth, child: chart)
               : Center(
-                  child: SizedBox(height: height, width: chartWidth, child: chart),
+                  child:
+                      SizedBox(height: height, width: chartWidth, child: chart),
                 );
         },
       ),
@@ -253,7 +266,8 @@ class TemperatureBarChart extends StatelessWidget {
           return _TemperatureBarSeriesRenderer();
         },
         dataSource: data,
-        xValueMapper: (TemperatureChartData data, _) => int.tryParse(data.year) ?? 0,
+        xValueMapper: (TemperatureChartData data, _) =>
+            int.tryParse(data.year) ?? 0,
         lowValueMapper: (TemperatureChartData data, _) => baseline,
         highValueMapper: (TemperatureChartData data, _) => data.temperature,
         pointColorMapper: (TemperatureChartData data, _) =>
@@ -270,10 +284,12 @@ class TemperatureBarChart extends StatelessWidget {
       if (avg != null && !isLoading)
         LineSeries<TemperatureChartData, int>(
           dataSource: generateAverageData(data, avg),
-          xValueMapper: (TemperatureChartData data, _) => int.tryParse(data.year) ?? 0,
+          xValueMapper: (TemperatureChartData data, _) =>
+              int.tryParse(data.year) ?? 0,
           yValueMapper: (TemperatureChartData data, _) => data.temperature,
           color: kAverageColour,
           width: 2,
+          dashArray: const <double>[4, 4],
           animationDuration: 0,
           name: 'Average Temperature',
           markerSettings: const MarkerSettings(isVisible: false),
@@ -282,7 +298,8 @@ class TemperatureBarChart extends StatelessWidget {
       if (slope != null && !isLoading)
         LineSeries<TemperatureChartData, int>(
           dataSource: generateTrendData(data, slope),
-          xValueMapper: (TemperatureChartData data, _) => int.tryParse(data.year) ?? 0,
+          xValueMapper: (TemperatureChartData data, _) =>
+              int.tryParse(data.year) ?? 0,
           yValueMapper: (TemperatureChartData data, _) => data.temperature,
           color: kTrendColour,
           width: 2,
@@ -302,7 +319,8 @@ class TemperatureBarChart extends StatelessWidget {
       return data;
     }
 
-    final temperatures = data.where((d) => d.hasData).map((d) => d.temperature).toList();
+    final temperatures =
+        data.where((d) => d.hasData).map((d) => d.temperature).toList();
     if (temperatures.isEmpty) {
       return data;
     }
@@ -332,30 +350,28 @@ class TemperatureBarChart extends StatelessWidget {
     );
     final maxCoolAnomaly = anomalies.fold<double>(
       0,
-      (currentMax, anomaly) => anomaly < 0 ? math.max(currentMax, anomaly.abs()) : currentMax,
+      (currentMax, anomaly) =>
+          anomaly < 0 ? math.max(currentMax, anomaly.abs()) : currentMax,
     );
 
-    return data
-        .map((d) {
-          final fillColor =
-              d.isCurrentYear
-                  ? kBarCurrentYearColour
-                  : _barColorForTemperature(
-                    d.temperature,
-                    baseline,
-                    maxWarmAnomaly,
-                    maxCoolAnomaly,
-                  );
-          return TemperatureChartData(
-            year: d.year,
-            temperature: d.temperature,
-            isCurrentYear: d.isCurrentYear,
-            hasData: d.hasData,
-            barFillColor: fillColor,
-            barBorderColor: fillColor,
-          );
-        })
-        .toList();
+    return data.map((d) {
+      final fillColor = d.isCurrentYear
+          ? kBarCurrentYearColour
+          : _barColorForTemperature(
+              d.temperature,
+              baseline,
+              maxWarmAnomaly,
+              maxCoolAnomaly,
+            );
+      return TemperatureChartData(
+        year: d.year,
+        temperature: d.temperature,
+        isCurrentYear: d.isCurrentYear,
+        hasData: d.hasData,
+        barFillColor: fillColor,
+        barBorderColor: fillColor,
+      );
+    }).toList();
   }
 
   Color _barColorForTemperature(
@@ -380,7 +396,8 @@ class TemperatureBarChart extends StatelessWidget {
       return kBarNeutralColour;
     }
 
-    final blend = ((normalized - neutralBand) / (1 - neutralBand)).clamp(0.0, 1.0);
+    final blend =
+        ((normalized - neutralBand) / (1 - neutralBand)).clamp(0.0, 1.0);
     return Color.lerp(
           kBarNeutralColour,
           anomaly >= 0 ? kBarWarmColour : kBarCoolColour,
@@ -398,7 +415,8 @@ class _TemperatureBarSeriesRenderer
   }
 }
 
-class _TemperatureBarSegment extends RangeColumnSegment<TemperatureChartData, int> {
+class _TemperatureBarSegment
+    extends RangeColumnSegment<TemperatureChartData, int> {
   @override
   Paint getStrokePaint() {
     final data = series.dataSource![currentSegmentIndex];
@@ -430,7 +448,8 @@ List<TemperatureChartData> generateTrendData(
   final middleYear = yearsWithData[yearsWithData.length ~/ 2];
 
   final tempsWithData = dataWithValues.map((d) => d.temperature).toList();
-  final middleTemp = tempsWithData.reduce((a, b) => a + b) / tempsWithData.length;
+  final middleTemp =
+      tempsWithData.reduce((a, b) => a + b) / tempsWithData.length;
 
   final minYear = yearsWithData.first;
   final maxYear = yearsWithData.last;

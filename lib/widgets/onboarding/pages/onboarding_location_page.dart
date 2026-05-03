@@ -20,7 +20,7 @@ class OnboardingLocationPage extends StatelessWidget {
               'switch location.',
           visual: Icon(
             Icons.location_on_outlined,
-            color: kAccentColour,
+            color: kHeadingColour,
             size: iconSize,
           ),
         );

@@ -58,7 +58,7 @@ class OnboardingDayPage extends StatelessWidget {
       Text(
         'Today in history',
         style: TextStyle(
-          color: kAccentColour,
+          color: kHeadingColour,
           fontSize: titleSize,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.3,
@@ -77,20 +77,16 @@ class OnboardingDayPage extends StatelessWidget {
       ),
       SizedBox(height: gap),
       Text(
-        'Green bar = this year.',
-        style: TextStyle(color: kBarCurrentYearColour, fontSize: bodySize),
+        'Longer bars represent warmer years and are redder.',
+        style: TextStyle(color: kBarWarmColour, fontSize: bodySize),
       ),
       Text(
-        'Blue bars = cooler than average.',
-        style: TextStyle(color: kBarCoolColour, fontSize: bodySize),
-      ),
-      Text(
-        'Grey bars = about average.',
+        'Mid-length bars are around average and grey.',
         style: TextStyle(color: kBarNeutralColour, fontSize: bodySize),
       ),
       Text(
-        'Red bars = warmer than average.',
-        style: TextStyle(color: kBarWarmColour, fontSize: bodySize),
+        'Shorter bars represent cooler years and are bluer.',
+        style: TextStyle(color: kBarCoolColour, fontSize: bodySize),
       ),
     ];
   }

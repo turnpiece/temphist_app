@@ -55,7 +55,7 @@ class OnboardingSwipePage extends StatelessWidget {
   Widget _titleWidget({double fontSize = 24.0}) => Text(
         'Swipe to see more',
         style: TextStyle(
-          color: kAccentColour,
+          color: kHeadingColour,
           fontSize: fontSize,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.3,
@@ -63,13 +63,21 @@ class OnboardingSwipePage extends StatelessWidget {
       );
 
   List<Widget> _rowWidgets(String date, {required bool isSmall}) => [
-        _buildRow(Icons.today_outlined, 'Day', '$date in each year', isSmall: isSmall),
-        _buildRow(Icons.date_range_outlined, 'Week', 'The week ending $date in each year', isSmall: isSmall),
-        _buildRow(Icons.calendar_month_outlined, 'Month', 'The month ending $date in each year', isSmall: isSmall),
-        _buildRow(Icons.calendar_today_outlined, 'Year', 'The year ending $date in each year', isSmall: isSmall),
+        _buildRow(Icons.today_outlined, 'Day', '$date in each year',
+            isSmall: isSmall),
+        _buildRow(Icons.date_range_outlined, 'Week',
+            'The week ending $date in each year',
+            isSmall: isSmall),
+        _buildRow(Icons.calendar_month_outlined, 'Month',
+            'The month ending $date in each year',
+            isSmall: isSmall),
+        _buildRow(Icons.calendar_today_outlined, 'Year',
+            'The year ending $date in each year',
+            isSmall: isSmall),
       ];
 
-  Widget _buildRow(IconData icon, String label, String description, {required bool isSmall}) {
+  Widget _buildRow(IconData icon, String label, String description,
+      {required bool isSmall}) {
     final rowPadding = isSmall ? 6.0 : 10.0;
     return Padding(
       padding: EdgeInsets.symmetric(vertical: rowPadding),
@@ -78,7 +86,7 @@ class OnboardingSwipePage extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 8.0),
-            child: Icon(icon, color: kAccentColour, size: kIconSize + 2),
+            child: Icon(icon, color: kHeadingColour, size: kIconSize + 2),
           ),
           const SizedBox(width: 14),
           Expanded(

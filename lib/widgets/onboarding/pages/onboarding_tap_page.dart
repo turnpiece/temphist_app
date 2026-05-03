@@ -41,7 +41,7 @@ class OnboardingTapPage extends StatelessWidget {
         const Text(
           'Tap for details',
           style: TextStyle(
-            color: kAccentColour,
+            color: kHeadingColour,
             fontSize: 24,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.3,

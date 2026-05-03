@@ -45,7 +45,7 @@ class OnboardingAverageTrendPage extends StatelessWidget {
   Widget _titleWidget({double fontSize = 24.0}) => Text(
         'Average and trend',
         style: TextStyle(
-          color: kAccentColour,
+          color: kHeadingColour,
           fontSize: fontSize,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.3,

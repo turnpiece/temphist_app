@@ -34,10 +34,13 @@ class _OnboardingTemperatureUnitPageState
   }
 
   void _onUnitChanged() {
-    if (mounted) setState(() => _isFahrenheit = widget.unitService.isFahrenheit.value);
+    if (mounted) {
+      setState(() => _isFahrenheit = widget.unitService.isFahrenheit.value);
+    }
   }
 
-  void _setUnit(bool fahrenheit) => widget.unitService.setFahrenheit(fahrenheit);
+  void _setUnit(bool fahrenheit) =>
+      widget.unitService.setFahrenheit(fahrenheit);
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +86,7 @@ class _OnboardingTemperatureUnitPageState
   Widget _titleWidget({double fontSize = 24.0}) => Text(
         'Units',
         style: TextStyle(
-          color: kAccentColour,
+          color: kHeadingColour,
           fontSize: fontSize,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.3,
@@ -109,7 +112,8 @@ class _OnboardingTemperatureUnitPageState
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _segment('°C', isActive: !_isFahrenheit, onTap: () => _setUnit(false)),
+          _segment('°C',
+              isActive: !_isFahrenheit, onTap: () => _setUnit(false)),
           _segment('°F', isActive: _isFahrenheit, onTap: () => _setUnit(true)),
         ],
       ),

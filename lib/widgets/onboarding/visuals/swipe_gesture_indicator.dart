@@ -47,8 +47,8 @@ class _SwipeGestureIndicatorState extends State<SwipeGestureIndicator>
       ),
       // Fade back in at origin
       TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween:
+            Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.easeIn)),
         weight: 10,
       ),
       // Hold visible before next cycle
@@ -79,7 +79,8 @@ class _SwipeGestureIndicatorState extends State<SwipeGestureIndicator>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.swipe_right_outlined, color: kAccentColour, size: 28),
+                    Icon(Icons.swipe_right_outlined,
+                        color: kHeadingColour, size: 28),
                     const SizedBox(width: 10),
                     const Text(
                       'swipe right to explore',

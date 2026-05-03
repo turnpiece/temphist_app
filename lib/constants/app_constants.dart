@@ -4,13 +4,15 @@ import 'package:flutter/material.dart';
 /// These colors define the visual theme of the TempHist application
 const kBackgroundColour = Color(0xFF242456);
 const kBackgroundColourDark = Color(0xFF343499);
-const kAccentColour = Color(0xFFFF6B6B);
 const kTextPrimaryColour = Color(0xFFECECEC);
 const kSummaryColour = Color(0xFF51CF66);
-const kAverageColour = Color(0xFF4DABF7);
+const kButtonColour = kSummaryColour;
+const kAccentColour = kButtonColour;
+const kHeadingColour = Color(0xFFD0D4DE);
+const kAverageColour = kHeadingColour;
 const kTrendColour = Color(0xFFAAAA00);
 const kTrendLineColour = kTrendColour;
-const kBarOtherYearColour = kAccentColour;
+const kBarOtherYearColour = Color(0xFFFF6B6B);
 const kBarCurrentYearColour = kSummaryColour;
 const kBarWarmColour = Color(0xFFFF3B30);
 const kBarCoolColour = Color(0xFF3B82F6);
@@ -51,17 +53,20 @@ const String kAppTitle = 'TempHist';
 /// Font size constants - control text sizing throughout the app
 const double kFontSizeTitle = 26.0;
 const double kFontSizeLocation = 18.0; // Slightly larger for location
-const double kFontSizeBody = 17.0; // Standard body text, summary, average, trend
+const double kFontSizeBody =
+    17.0; // Standard body text, summary, average, trend
 const double kFontSizeAxisLabel = 17.0; // Same as body for consistency
 const double kIconSize = 17.0;
-const double kSummaryFontSize = kFontSizeBody; // Changed from -2 for consistency
+const double kSummaryFontSize =
+    kFontSizeBody; // Changed from -2 for consistency
 const double kSummaryLineHeight = 1.2;
 const double kSummaryMinLines = 4;
 const double kSummaryMinLinesTablet = 2;
 
 /// Enable verbose logging in production builds via dart-define.
 /// Usage: flutter build ios --dart-define=VERBOSE_LOGS=true
-const bool verboseLogs = bool.fromEnvironment('VERBOSE_LOGS', defaultValue: false);
+const bool verboseLogs =
+    bool.fromEnvironment('VERBOSE_LOGS', defaultValue: false);
 
 /// Time constants
 const int kUseYesterdayHourThreshold = 3;

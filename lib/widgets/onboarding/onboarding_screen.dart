@@ -81,8 +81,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             final contentWidth = isTablet
                 ? kTabletMaxContentWidth.clamp(0.0, constraints.maxWidth)
                 : constraints.maxWidth;
-            final isLandscape = MediaQuery.of(context).orientation ==
-                Orientation.landscape;
+            final isLandscape =
+                MediaQuery.of(context).orientation == Orientation.landscape;
 
             // On tablets the PageView is given a fixed height that fills most
             // of the screen.  Content starts just below the skip button; the
@@ -107,7 +107,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: const Text(
                     'Skip',
                     style: TextStyle(
-                      color: Colors.red,
+                      color: kButtonColour,
                       fontSize: kFontSizeBody,
                     ),
                   ),
@@ -149,8 +149,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                         ),
                       ),
-                    ]
-                    else ...[
+                    ] else ...[
                       // Phone: PageView fills remaining space; dots and button
                       // sit at the bottom.
                       // On small screens (iPhone SE: ~647px available) the
@@ -158,11 +157,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       // more room and content is less likely to be clipped.
                       if (isLandscape) const SizedBox(height: 4),
                       Expanded(child: pageView),
-                      SizedBox(height: isLandscape ? 16 : (constraints.maxHeight < 700 ? 12 : 48)),
+                      SizedBox(
+                          height: isLandscape
+                              ? 16
+                              : (constraints.maxHeight < 700 ? 12 : 48)),
                       _buildDots(),
-                      SizedBox(height: isLandscape ? 12 : (constraints.maxHeight < 700 ? 10 : 28)),
+                      SizedBox(
+                          height: isLandscape
+                              ? 12
+                              : (constraints.maxHeight < 700 ? 10 : 28)),
                       _buildNextButton(),
-                      SizedBox(height: isLandscape ? 6 : (constraints.maxHeight < 700 ? 10 : 20)),
+                      SizedBox(
+                          height: isLandscape
+                              ? 6
+                              : (constraints.maxHeight < 700 ? 10 : 20)),
                     ],
                   ],
                 ),
@@ -182,7 +190,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         child: ElevatedButton(
           onPressed: _next,
           style: ElevatedButton.styleFrom(
-            backgroundColor: kAccentColour,
+            backgroundColor: kButtonColour,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(

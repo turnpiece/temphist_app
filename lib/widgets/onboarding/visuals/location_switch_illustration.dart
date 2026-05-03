@@ -40,7 +40,7 @@ class LocationSwitchIllustration extends StatelessWidget {
                 Text(
                   'London',
                   style: TextStyle(
-                    color: kBarCurrentYearColour,
+                    color: kHeadingColour,
                     fontSize: kFontSizeBody,
                     fontWeight: FontWeight.w600,
                   ),
@@ -48,7 +48,7 @@ class LocationSwitchIllustration extends StatelessWidget {
                 const SizedBox(width: 2),
                 Icon(
                   Icons.keyboard_arrow_down,
-                  color: kBarCurrentYearColour.withValues(alpha: 0.7),
+                  color: kHeadingColour.withValues(alpha: 0.7),
                   size: 20,
                 ),
               ],
@@ -100,7 +100,7 @@ class LocationSwitchIllustration extends StatelessWidget {
         child: Text(
           text,
           style: TextStyle(
-            color: kLocationRecentColour,
+            color: kHeadingColour,
             fontSize: 9,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.6,
@@ -109,8 +109,7 @@ class LocationSwitchIllustration extends StatelessWidget {
       );
 
   Widget _locationRow(String city, {bool isSelected = false}) {
-    final effectiveColor =
-        isSelected ? kBarCurrentYearColour : kTextPrimaryColour;
+    final effectiveColor = kTextPrimaryColour;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       child: Row(

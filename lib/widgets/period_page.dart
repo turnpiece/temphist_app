@@ -130,7 +130,8 @@ class PeriodPageState extends State<PeriodPage>
   String get _identifier {
     final now = DateTime.now();
     final useYesterday = now.hour < kUseYesterdayHourThreshold;
-    final dateToUse = useYesterday ? now.subtract(const Duration(days: 1)) : now;
+    final dateToUse =
+        useYesterday ? now.subtract(const Duration(days: 1)) : now;
     return dateIdentifier(dateToUse);
   }
 
@@ -181,7 +182,10 @@ class PeriodPageState extends State<PeriodPage>
       PeriodTemperatureData? data;
       if (!bypassCache && lat != null && lon != null) {
         data = await PeriodCacheService.get(
-          widget.periodKey, lat, lon, _identifier,
+          widget.periodKey,
+          lat,
+          lon,
+          _identifier,
           unitGroup: unitGroup,
         );
         if (data != null) {
@@ -201,7 +205,9 @@ class PeriodPageState extends State<PeriodPage>
           _identifier,
           unitGroup: unitGroup,
           onFallbackToSync: () {
-            if (!mounted || _fetchGeneration != generation || !_isLoading) return;
+            if (!mounted || _fetchGeneration != generation || !_isLoading) {
+              return;
+            }
             _fallbackMessageShownAt = DateTime.now();
             _isShowingFallbackMessage = true;
             setState(() {
@@ -228,7 +234,11 @@ class PeriodPageState extends State<PeriodPage>
 
         if (lat != null && lon != null) {
           await PeriodCacheService.put(
-            widget.periodKey, lat, lon, _identifier, data,
+            widget.periodKey,
+            lat,
+            lon,
+            _identifier,
+            data,
             unitGroup: unitGroup,
           );
         }
@@ -504,7 +514,8 @@ class PeriodPageState extends State<PeriodPage>
           if (_data != null && _data!.values.isEmpty) _buildEmptyState(),
 
           // Data loaded
-          if (_data != null && _data!.values.isNotEmpty) ..._buildDataContent(isTablet: isTablet),
+          if (_data != null && _data!.values.isNotEmpty)
+            ..._buildDataContent(isTablet: isTablet),
         ],
       ),
     );
@@ -529,7 +540,8 @@ class PeriodPageState extends State<PeriodPage>
             _loadingMessage.isNotEmpty
                 ? _loadingMessage
                 : 'Loading ${widget.periodLabel.toLowerCase()} temperature data...',
-            style: const TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
+            style: const TextStyle(
+                color: kGreyLabelColour, fontSize: kFontSizeBody),
           ),
         ],
       ),
@@ -541,12 +553,14 @@ class PeriodPageState extends State<PeriodPage>
       padding: const EdgeInsets.only(top: 40),
       child: Row(
         children: [
-          const Icon(Icons.thermostat_outlined, color: kGreyLabelColour, size: 17),
+          const Icon(Icons.thermostat_outlined,
+              color: kGreyLabelColour, size: 17),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               'No temperature data found for this location. The area may not have coverage — try a more specific name, e.g. "London, United Kingdom".',
-              style: const TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
+              style: const TextStyle(
+                  color: kGreyLabelColour, fontSize: kFontSizeBody),
             ),
           ),
         ],
@@ -562,12 +576,13 @@ class PeriodPageState extends State<PeriodPage>
         children: [
           Row(
             children: [
-              const Icon(Icons.error_outline, color: kAccentColour, size: 17),
+              const Icon(Icons.error_outline, color: kButtonColour, size: 17),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   _error!,
-                  style: const TextStyle(color: kAccentColour, fontSize: kFontSizeBody),
+                  style: const TextStyle(
+                      color: kButtonColour, fontSize: kFontSizeBody),
                 ),
               ),
             ],
@@ -579,14 +594,18 @@ class PeriodPageState extends State<PeriodPage>
             child: GestureDetector(
               onTap: _fetchData,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: kAccentColour.withValues(alpha: 0.2),
+                  color: kButtonColour.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Text(
                   'Retry',
-                  style: TextStyle(color: kAccentColour, fontSize: kFontSizeBody, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                      color: kButtonColour,
+                      fontSize: kFontSizeBody,
+                      fontWeight: FontWeight.w500),
                 ),
               ),
             ),
@@ -617,8 +636,10 @@ class PeriodPageState extends State<PeriodPage>
           padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              minHeight: kSummaryFontSize * kSummaryLineHeight *
-                  (isTablet ? kSummaryMinLinesTablet : kSummaryMinLines) + 8,
+              minHeight: kSummaryFontSize *
+                      kSummaryLineHeight *
+                      (isTablet ? kSummaryMinLinesTablet : kSummaryMinLines) +
+                  8,
             ),
             child: Text(
               data.summary,
@@ -660,15 +681,19 @@ class PeriodPageState extends State<PeriodPage>
               padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
               child: Text(
                 'Average: ${formatTemperature(data.average.mean, isFahrenheit: widget.isFahrenheit, convert: needsConversion)}',
-                style: const TextStyle(color: kAverageColour, fontSize: kFontSizeBody),
+                style: const TextStyle(
+                    color: kAverageColour, fontSize: kFontSizeBody),
               ),
             ),
             // Trend text
             Padding(
               padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
               child: Text(
-                formatTrendSlope(data.trend.slope, isFahrenheit: widget.isFahrenheit, convert: needsConversion),
-                style: const TextStyle(color: kTrendColour, fontSize: kFontSizeBody),
+                formatTrendSlope(data.trend.slope,
+                    isFahrenheit: widget.isFahrenheit,
+                    convert: needsConversion),
+                style: const TextStyle(
+                    color: kTrendColour, fontSize: kFontSizeBody),
               ),
             ),
           ],
@@ -678,11 +703,14 @@ class PeriodPageState extends State<PeriodPage>
       Builder(builder: (context) {
         final currentYear = DateTime.now().year;
         final loadedYears = data.values.map((v) => v.year).toSet();
-        final metaMissing = (data.metadata?.missingYears ?? []).map((m) => m.year).toList();
+        final metaMissing =
+            (data.metadata?.missingYears ?? []).map((m) => m.year).toList();
         final absent = detectAbsentYears(loadedYears, metaMissing);
         final allMissing = [...metaMissing, ...absent]..sort();
         // Exclude the current year: API may return it but it has no full-year data yet.
-        final effectiveLoaded = loadedYears.where((y) => y < currentYear && !metaMissing.contains(y)).length;
+        final effectiveLoaded = loadedYears
+            .where((y) => y < currentYear && !metaMissing.contains(y))
+            .length;
         const totalExpected = kHistoricalDataWindowYears;
         final completeness = effectiveLoaded / totalExpected * 100;
 
@@ -706,5 +734,4 @@ class PeriodPageState extends State<PeriodPage>
       }),
     ];
   }
-
 }

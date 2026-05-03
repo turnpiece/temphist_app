@@ -22,17 +22,24 @@ class DayChartIllustration extends StatelessWidget {
 }
 
 class _DayChartPainter extends CustomPainter {
-  // Most recent year at the top; the current year stays solid green.
-  static const List<String> _years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020'];
-  static const List<double> _widths = [0.90, 0.75, 0.60, 0.80, 0.45, 0.70, 0.55];
-  static const List<Color> _barColours = [
-    kBarWarmColour,
-    kBarNeutralColour,
-    kBarCoolColour,
-    kBarWarmColour,
-    kBarCoolColour,
-    kBarNeutralColour,
-    kBarWarmColour,
+  // Most recent year at the top.
+  static const List<String> _years = [
+    '2026',
+    '2025',
+    '2024',
+    '2023',
+    '2022',
+    '2021',
+    '2020'
+  ];
+  static const List<double> _widths = [
+    0.90,
+    0.75,
+    0.60,
+    0.80,
+    0.45,
+    0.70,
+    0.55
   ];
 
   static const _labelStyle = TextStyle(
@@ -45,17 +52,28 @@ class _DayChartPainter extends CustomPainter {
     final int barCount = _years.length;
     const double yearLabelWidth = 36.0;
     const double barSpacing = 3.0;
-    final double barHeight = (size.height - barSpacing * (barCount - 1)) / barCount;
+    final double barHeight =
+        (size.height - barSpacing * (barCount - 1)) / barCount;
     final double chartWidth = size.width - yearLabelWidth - 8.0;
+    final averageWidth = _widths.reduce((a, b) => a + b) / _widths.length;
+    final maxWarmDelta = _widths
+        .map((width) => width - averageWidth)
+        .where((delta) => delta > 0)
+        .fold<double>(0, (max, delta) => delta > max ? delta : max);
+    final maxCoolDelta = _widths
+        .map((width) => averageWidth - width)
+        .where((delta) => delta > 0)
+        .fold<double>(0, (max, delta) => delta > max ? delta : max);
 
     for (int i = 0; i < barCount; i++) {
       final double y = i * (barHeight + barSpacing);
       final double barW = _widths[i] * chartWidth;
-      final bool isCurrent = i == 0;
-      final fillColour =
-          (isCurrent ? kBarCurrentYearColour : _barColours[i]).withValues(
-            alpha: isCurrent ? 0.9 : 0.85,
-          );
+      final fillColour = _barColourForWidth(
+        _widths[i],
+        averageWidth,
+        maxWarmDelta,
+        maxCoolDelta,
+      ).withValues(alpha: 0.9);
       final fillPaint = Paint()
         ..color = fillColour
         ..style = PaintingStyle.fill;
@@ -83,4 +101,36 @@ class _DayChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+Color _barColourForWidth(
+  double width,
+  double averageWidth,
+  double maxWarmDelta,
+  double maxCoolDelta,
+) {
+  const double neutralBand = 0.12;
+  final delta = width - averageWidth;
+
+  double normalized;
+  if (delta > 0) {
+    normalized = maxWarmDelta == 0 ? 0 : delta / maxWarmDelta;
+  } else if (delta < 0) {
+    normalized = maxCoolDelta == 0 ? 0 : delta.abs() / maxCoolDelta;
+  } else {
+    normalized = 0;
+  }
+
+  if (normalized <= neutralBand) {
+    return kBarNeutralColour;
+  }
+
+  final blend =
+      ((normalized - neutralBand) / (1 - neutralBand)).clamp(0.0, 1.0);
+  return Color.lerp(
+        kBarNeutralColour,
+        delta >= 0 ? kBarWarmColour : kBarCoolColour,
+        blend,
+      ) ??
+      kBarNeutralColour;
 }

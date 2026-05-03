@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../constants/app_constants.dart';
 
-/// Illustrative chart showing faded bars with the average (blue) and
+/// Illustrative chart showing faded bars with the average (grey) and
 /// trend (yellow) lines emphasised, matching what users see in the app.
 /// Year labels shown every 5 years only, like the actual chart.
 class AverageTrendIllustration extends StatelessWidget {
@@ -24,18 +24,50 @@ class AverageTrendIllustration extends StatelessWidget {
 class _AverageTrendPainter extends CustomPainter {
   // 20 years, most recent at top — matches actual app layout
   static const List<int> _years = [
-    2025, 2024, 2023, 2022, 2021,
-    2020, 2019, 2018, 2017, 2016,
-    2015, 2014, 2013, 2012, 2011,
-    2010, 2009, 2008, 2007, 2006,
+    2025,
+    2024,
+    2023,
+    2022,
+    2021,
+    2020,
+    2019,
+    2018,
+    2017,
+    2016,
+    2015,
+    2014,
+    2013,
+    2012,
+    2011,
+    2010,
+    2009,
+    2008,
+    2007,
+    2006,
   ];
 
   // Bar widths as fraction of chart area — general warming trend with variation
   static const List<double> _widths = [
-    0.74, 0.65, 0.70, 0.56, 0.68,
-    0.61, 0.64, 0.59, 0.72, 0.58,
-    0.63, 0.55, 0.60, 0.53, 0.52,
-    0.65, 0.50, 0.54, 0.48, 0.46,
+    0.74,
+    0.65,
+    0.70,
+    0.56,
+    0.68,
+    0.61,
+    0.64,
+    0.59,
+    0.72,
+    0.58,
+    0.63,
+    0.55,
+    0.60,
+    0.53,
+    0.52,
+    0.65,
+    0.50,
+    0.54,
+    0.48,
+    0.46,
   ];
 
   // Average vertical line at ~61% of chart width
@@ -89,12 +121,17 @@ class _AverageTrendPainter extends CustomPainter {
     final double trendTopX = chartStart + _trendTopFraction * chartWidth;
     final double trendBottomX = chartStart + _trendBottomFraction * chartWidth;
 
-    // --- Average line (blue, vertical) ---
+    // --- Average line (grey, vertical dotted) ---
     final avgPaint = Paint()
       ..color = kAverageColour
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(avgX, 0), Offset(avgX, size.height), avgPaint);
+    _drawDashedLine(
+      canvas,
+      Offset(avgX, 0),
+      Offset(avgX, size.height),
+      avgPaint,
+    );
 
     // "average" label near the top, to the LEFT of the average line
     final avgLabel = TextPainter(
@@ -135,10 +172,27 @@ class _AverageTrendPainter extends CustomPainter {
     )..layout();
     trendLabel.paint(
       canvas,
-      Offset(trendBottomX - trendLabel.width - 4, size.height - trendLabel.height - 2),
+      Offset(trendBottomX - trendLabel.width - 4,
+          size.height - trendLabel.height - 2),
     );
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+void _drawDashedLine(Canvas canvas, Offset start, Offset end, Paint paint) {
+  const dashLength = 6.0;
+  const gapLength = 4.0;
+  final totalLength = (end - start).distance;
+  final direction = (end - start) / totalLength;
+  double distance = 0;
+
+  while (distance < totalLength) {
+    final dashStart = start + direction * distance;
+    final dashEnd =
+        start + direction * (distance + dashLength).clamp(0.0, totalLength);
+    canvas.drawLine(dashStart, dashEnd, paint);
+    distance += dashLength + gapLength;
+  }
 }

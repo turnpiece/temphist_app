@@ -124,10 +124,17 @@ class _Body extends StatelessWidget {
           body:
               'Each bar represents the temperature recorded on the same date in a different year. Bar colours show how warm or cool that year was compared with the average.',
           bullets: [
-            _Bullet(color: kBarCurrentYearColour, label: 'Green bar — this year'),
-            _Bullet(color: kBarCoolColour, label: 'Blue bars — cooler than average years'),
-            _Bullet(color: kBarNeutralColour, label: 'Grey bars — years close to the average'),
-            _Bullet(color: kBarWarmColour, label: 'Red bars — warmer than average years'),
+            _Bullet(
+                color: kBarCurrentYearColour, label: 'Green bar — this year'),
+            _Bullet(
+                color: kBarCoolColour,
+                label: 'Blue bars — cooler than average years'),
+            _Bullet(
+                color: kBarNeutralColour,
+                label: 'Grey bars — years close to the average'),
+            _Bullet(
+                color: kBarWarmColour,
+                label: 'Red bars — warmer than average years'),
           ],
           footer: 'Tap any bar to see the exact temperature for that year.',
         ),
@@ -135,10 +142,17 @@ class _Body extends StatelessWidget {
           title: 'Average and trend',
           body: 'The chart also shows two reference lines:',
           bullets: [
-            _Bullet(color: kAverageColour, label: 'Average (blue line) — the historical mean temperature for this date.'),
-            _Bullet(color: kTrendColour, label: 'Trend (yellow line) — shows whether temperatures are rising or falling over the decades.'),
+            _Bullet(
+                color: kAverageColour,
+                label:
+                    'Average (grey dotted line) — the historical mean temperature for this date.'),
+            _Bullet(
+                color: kTrendColour,
+                label:
+                    'Trend (yellow line) — shows whether temperatures are rising or falling over the decades.'),
           ],
-          footer: 'Trend accuracy increases with longer time periods. The trend is most reliable on the Year view, where each data point averages a full year of readings. On the Day view it reflects a single date each year, so day-to-day weather variation can make it less meaningful.',
+          footer:
+              'Trend accuracy increases with longer time periods. The trend is most reliable on the Year view, where each data point averages a full year of readings. On the Day view it reflects a single date each year, so day-to-day weather variation can make it less meaningful.',
         ),
         _Section(
           title: 'Time periods',
@@ -161,16 +175,15 @@ class _Body extends StatelessWidget {
               description: 'Your actual location, detected automatically.',
             ),
             _Bullet(
-              color: kAccentColour,
+              color: kLocationRecentColour,
               label: 'Recent locations',
               description:
                   'Places where you have opened the app. The list grows as you use it in new places.',
             ),
             _Bullet(
-              color: kAverageColour,
+              color: kLocationPopularColour,
               label: 'Popular locations',
-              description:
-                  'A list of cities you can browse and select.',
+              description: 'A list of cities you can browse and select.',
             ),
           ],
           footer:
@@ -290,6 +303,7 @@ class _Section extends StatelessWidget {
 class _Bullet {
   final Color color;
   final String label;
+
   /// Optional description shown after the label in grey.
   final String? description;
 
