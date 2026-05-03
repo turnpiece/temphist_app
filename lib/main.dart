@@ -322,8 +322,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
   late final ScrollController _weekScrollController;
   late final ScrollController _monthScrollController;
   late final ScrollController _yearScrollController;
-  final ValueNotifier<double> _scrollOffsetNotifier = ValueNotifier(0.0);
-  ScrollController? _activeScrollController;
   final _dailyPageKey = GlobalKey<PeriodPageState>();
   final _weekPageKey = GlobalKey<PeriodPageState>();
   final _monthPageKey = GlobalKey<PeriodPageState>();
@@ -341,7 +339,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
   /// Resets scroll positions on all period pages to the top and clears the
   /// collapsed-header state. Call whenever the content is about to reload.
   void _resetScrollPositions() {
-    _scrollOffsetNotifier.value = 0.0;
     for (final c in [
       _dailyScrollController,
       _weekScrollController,
@@ -381,7 +378,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
     _weekScrollController = ScrollController();
     _monthScrollController = ScrollController();
     _yearScrollController = ScrollController();
-    _attachScrollController(_dailyScrollController);
 
     // Debug mode detection logging
     DebugUtils.logLazy(() => '🔧 Debug mode detection:');
@@ -440,7 +436,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
     _weekScrollController.dispose();
     _monthScrollController.dispose();
     _yearScrollController.dispose();
-    _scrollOffsetNotifier.dispose();
     super.dispose();
   }
 
@@ -1338,13 +1333,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
                   HapticFeedback.selectionClick();
                   _pageIndexNotifier.value = index;
                   _dismissCoachmark();
-                  final controllers = [
-                    _dailyScrollController,
-                    _weekScrollController,
-                    _monthScrollController,
-                    _yearScrollController,
-                  ];
-                  _attachScrollController(controllers[index]);
                 },
                 children: [
                   // Page 0: Daily
@@ -1526,39 +1514,14 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
   Widget _buildScrollablePageBody(
     BuildContext context,
-    Widget content, {
-    Widget Function(Widget child)? wrapWithRefresh,
-    ScrollController? scrollController,
-  }) {
-    final scrollView = SingleChildScrollView(
-      controller: scrollController,
-      physics: const AlwaysScrollableScrollPhysics(),
-      child: content,
-    );
-    final scrollable =
-        wrapWithRefresh != null ? wrapWithRefresh(scrollView) : scrollView;
+    Widget content,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildPageHeader(context),
-        Expanded(child: scrollable),
+        Expanded(child: content),
       ],
-    );
-  }
-
-  Widget _buildExternalRefreshIndicator({
-    required Widget child,
-    required Future<void> Function() onRefresh,
-  }) {
-    if (widget.testFuture != null) {
-      return child;
-    }
-
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      color: kAccentColour,
-      backgroundColor: kBackgroundColour,
-      child: child,
     );
   }
 
@@ -1693,21 +1656,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
     );
   }
 
-  void _attachScrollController(ScrollController controller) {
-    _activeScrollController?.removeListener(_onActiveScrollChanged);
-    _activeScrollController = controller;
-    controller.addListener(_onActiveScrollChanged);
-    _scrollOffsetNotifier.value =
-        controller.hasClients ? controller.offset : 0.0;
-  }
-
-  void _onActiveScrollChanged() {
-    if (_activeScrollController?.hasClients == true) {
-      _scrollOffsetNotifier.value =
-          _activeScrollController!.offset.clamp(0.0, double.infinity);
-    }
-  }
-
   Color get _locationColour {
     if (!_isLocationDetermined) return kGreyLabelColour.withValues(alpha: 0.4);
     switch (_locationService.locationSource) {
@@ -1761,23 +1709,32 @@ class TemperatureScreenState extends State<TemperatureScreen>
     final lon = isAtGps ? _lastPosition?.longitude : null;
 
     final sidePad = _standardHorizontalPadding();
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Period tabs — outside RepaintBoundary (navigation, not in share image)
-        Padding(
-          padding: EdgeInsets.only(
-            left: sidePad,
-            right: sidePad,
-            bottom: kTitleRowBottomPadding,
-          ),
-          child: _buildPeriodTabs(pageIndex),
-        ),
-        RepaintBoundary(
-          key: repaintKey,
-          child: Column(
+    return _buildScrollablePageBody(
+      context,
+      RepaintBoundary(
+        key: repaintKey,
+        child: PeriodPage(
+          key: pageKey,
+          periodKey: periodKey,
+          periodLabel: periodLabel,
+          location: _determinedLocation,
+          displayLocation:
+              _displayLocation.isNotEmpty ? _displayLocation : null,
+          latitude: lat,
+          longitude: lon,
+          useInternalScroll: true,
+          scrollController: scrollController,
+          topContent: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Padding(
+                padding: EdgeInsets.only(
+                  left: sidePad,
+                  right: sidePad,
+                  bottom: kTitleRowBottomPadding,
+                ),
+                child: _buildPeriodTabs(pageIndex),
+              ),
               Padding(
                 padding: EdgeInsets.only(
                   left: sidePad,
@@ -1786,33 +1743,11 @@ class TemperatureScreenState extends State<TemperatureScreen>
                 ),
                 child: _buildLocationAndHeadingContent(pageIndex),
               ),
-              PeriodPage(
-                key: pageKey,
-                periodKey: periodKey,
-                periodLabel: periodLabel,
-                location: _determinedLocation,
-                displayLocation:
-                    _displayLocation.isNotEmpty ? _displayLocation : null,
-                latitude: lat,
-                longitude: lon,
-                useInternalScroll: false,
-                isFahrenheit: _isFahrenheit,
-                onDataLoaded: onDataLoaded,
-              ),
             ],
           ),
+          isFahrenheit: _isFahrenheit,
+          onDataLoaded: onDataLoaded,
         ),
-      ],
-    );
-    return _buildScrollablePageBody(
-      context,
-      content,
-      scrollController: scrollController,
-      wrapWithRefresh: (child) => _buildExternalRefreshIndicator(
-        child: child,
-        onRefresh: () async {
-          await pageKey.currentState?.refresh();
-        },
       ),
     );
   }

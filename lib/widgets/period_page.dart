@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -40,6 +41,12 @@ class PeriodPage extends StatefulWidget {
   /// Whether to display temperatures in Fahrenheit.
   final bool isFahrenheit;
 
+  /// Optional scroll controller for the page's internal scroll view.
+  final ScrollController? scrollController;
+
+  /// Optional widget inserted above the chart content inside the scroll view.
+  final Widget? topContent;
+
   /// Called once after the page successfully loads (or reloads) data.
   /// Useful for triggering downstream actions like showing a coachmark.
   final VoidCallback? onDataLoaded;
@@ -55,6 +62,8 @@ class PeriodPage extends StatefulWidget {
     this.onRefresh,
     this.useInternalScroll = true,
     this.isFahrenheit = false,
+    this.scrollController,
+    this.topContent,
     this.onDataLoaded,
   });
 
@@ -88,6 +97,34 @@ class PeriodPageState extends State<PeriodPage>
   // Generation counter — incremented whenever location/unit changes so that
   // any in-flight fetch from the previous configuration is discarded.
   int _fetchGeneration = 0;
+
+  TemperatureChartPresentation? get chartPresentation {
+    final data = _data;
+    if (data == null || data.values.isEmpty) {
+      return null;
+    }
+
+    final currentYear = DateTime.now().year;
+    final chartData = data.values
+        .map(
+          (v) => TemperatureChartData(
+            year: v.year.toString(),
+            temperature: v.temperature,
+            isCurrentYear: v.year == currentYear,
+            hasData: true,
+          ),
+        )
+        .toList();
+
+    final needsConversion = widget.isFahrenheit && !data.isFahrenheit;
+    return buildTemperatureChartPresentation(
+      context: context,
+      chartData: chartData,
+      averageTemperature: data.average.mean,
+      isFahrenheit: widget.isFahrenheit,
+      needsConversion: needsConversion,
+    );
+  }
 
   @override
   bool get wantKeepAlive => true;
@@ -479,11 +516,162 @@ class PeriodPageState extends State<PeriodPage>
       },
       color: kAccentColour,
       backgroundColor: kBackgroundColour,
-      child: SingleChildScrollView(
+      child: CustomScrollView(
+        controller: widget.scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        child: _buildContent(context),
+        slivers: _buildSlivers(context),
       ),
     );
+  }
+
+  List<Widget> _buildSlivers(BuildContext context) {
+    final slivers = <Widget>[];
+
+    if (widget.topContent != null) {
+      slivers.add(SliverToBoxAdapter(child: widget.topContent!));
+    }
+
+    if (_data == null && _error == null) {
+      slivers.add(SliverToBoxAdapter(child: _buildLoadingState()));
+      return slivers;
+    }
+
+    if (_error != null) {
+      slivers.add(SliverToBoxAdapter(child: _buildErrorState()));
+      return slivers;
+    }
+
+    if (_data != null && _data!.values.isEmpty) {
+      slivers.add(SliverToBoxAdapter(child: _buildEmptyState()));
+      return slivers;
+    }
+
+    final data = _data!;
+    final needsConversion = widget.isFahrenheit && !data.isFahrenheit;
+    final chartData = data.values
+        .map(
+          (v) => TemperatureChartData(
+            year: v.year.toString(),
+            temperature: v.temperature,
+            isCurrentYear: v.year == DateTime.now().year,
+            hasData: true,
+          ),
+        )
+        .toList();
+    final presentation = chartPresentation;
+
+    if (data.summary.isNotEmpty) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: kScreenPadding + kContentHorizontalMargin,
+              right: kScreenPadding + kContentHorizontalMargin,
+              bottom: kSectionBottomPadding,
+            ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: kSummaryFontSize *
+                        kSummaryLineHeight *
+                        (MediaQuery.of(context).size.width >=
+                                kTabletBreakpointWidth
+                            ? kSummaryMinLinesTablet
+                            : kSummaryMinLines) +
+                    8,
+              ),
+              child: Text(
+                data.summary,
+                style: const TextStyle(
+                  color: kSummaryColour,
+                  fontSize: kSummaryFontSize,
+                  fontWeight: FontWeight.w400,
+                  height: kSummaryLineHeight,
+                ),
+                strutStyle: const StrutStyle(
+                  fontSize: kSummaryFontSize,
+                  height: kSummaryLineHeight,
+                  forceStrutHeight: true,
+                ),
+                softWrap: true,
+                maxLines: null,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (presentation != null) {
+      slivers.add(
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _PinnedChartAxisHeaderDelegate(
+            child: TemperatureChartTopAxis(presentation: presentation),
+          ),
+        ),
+      );
+    }
+
+    slivers.add(
+      SliverToBoxAdapter(
+        child: TemperatureBarChart(
+          chartData: chartData,
+          averageTemperature: data.average.mean,
+          trendSlope: data.trend.slope,
+          isLoading: false,
+          height: 800,
+          isFahrenheit: widget.isFahrenheit,
+          needsConversion: needsConversion,
+          showTemperatureAxis: false,
+        ),
+      ),
+    );
+
+    slivers.add(
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: kScreenPadding + kContentHorizontalMargin,
+            right: kScreenPadding + kContentHorizontalMargin,
+            bottom:
+                MediaQuery.of(context).padding.bottom + kContentVerticalPadding,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: kSectionBottomPadding),
+              Padding(
+                padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                child: Text(
+                  'Average: ${formatTemperature(data.average.mean, isFahrenheit: widget.isFahrenheit, convert: needsConversion)}',
+                  style: const TextStyle(
+                    color: kAverageColour,
+                    fontSize: kFontSizeBody,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+                child: Text(
+                  formatTrendSlope(
+                    data.trend.slope,
+                    isFahrenheit: widget.isFahrenheit,
+                    convert: needsConversion,
+                  ),
+                  style: const TextStyle(
+                    color: kTrendColour,
+                    fontSize: kFontSizeBody,
+                  ),
+                ),
+              ),
+              _buildCompletenessSection(data),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return slivers;
   }
 
   Widget _buildContent(BuildContext context) {
@@ -618,7 +806,6 @@ class PeriodPageState extends State<PeriodPage>
   List<Widget> _buildDataContent({bool isTablet = false}) {
     final data = _data!;
     final currentYear = DateTime.now().year;
-
     // Convert API values to chart data
     final chartData = data.values.map((v) {
       return TemperatureChartData(
@@ -674,6 +861,7 @@ class PeriodPageState extends State<PeriodPage>
               height: 800,
               isFahrenheit: widget.isFahrenheit,
               needsConversion: needsConversion,
+              showTemperatureAxis: true,
             ),
             const SizedBox(height: kSectionBottomPadding),
             // Average text
@@ -700,38 +888,70 @@ class PeriodPageState extends State<PeriodPage>
         );
       }),
       // Completeness notice
-      Builder(builder: (context) {
-        final currentYear = DateTime.now().year;
-        final loadedYears = data.values.map((v) => v.year).toSet();
-        final metaMissing =
-            (data.metadata?.missingYears ?? []).map((m) => m.year).toList();
-        final absent = detectAbsentYears(loadedYears, metaMissing);
-        final allMissing = [...metaMissing, ...absent]..sort();
-        // Exclude the current year: API may return it but it has no full-year data yet.
-        final effectiveLoaded = loadedYears
-            .where((y) => y < currentYear && !metaMissing.contains(y))
-            .length;
-        const totalExpected = kHistoricalDataWindowYears;
-        final completeness = effectiveLoaded / totalExpected * 100;
-
-        DebugUtils.logLazy(() =>
-            'PeriodPage(${widget.periodKey}): metaMissing=$metaMissing, absent=$absent, effectiveLoaded=$effectiveLoaded, completeness=${completeness.toStringAsFixed(0)}%');
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-          child: CompletenessSection(
-            allMissing: allMissing,
-            completeness: completeness,
-            isRetrying: _isLoading,
-            onRetry: _isLoading
-                ? null
-                : () {
-                    _lastFetchKey = '';
-                    _fetchData(bypassCache: true);
-                  },
-          ),
-        );
-      }),
+      _buildCompletenessSection(data),
     ];
+  }
+
+  Widget _buildCompletenessSection(PeriodTemperatureData data) {
+    final currentYear = DateTime.now().year;
+    final loadedYears = data.values.map((v) => v.year).toSet();
+    final metaMissing =
+        (data.metadata?.missingYears ?? []).map((m) => m.year).toList();
+    final absent = detectAbsentYears(loadedYears, metaMissing);
+    final allMissing = [...metaMissing, ...absent]..sort();
+    final effectiveLoaded = loadedYears
+        .where((y) => y < currentYear && !metaMissing.contains(y))
+        .length;
+    const totalExpected = kHistoricalDataWindowYears;
+    final completeness = effectiveLoaded / totalExpected * 100;
+
+    DebugUtils.logLazy(() =>
+        'PeriodPage(${widget.periodKey}): metaMissing=$metaMissing, absent=$absent, effectiveLoaded=$effectiveLoaded, completeness=${completeness.toStringAsFixed(0)}%');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
+      child: CompletenessSection(
+        allMissing: allMissing,
+        completeness: completeness,
+        isRetrying: _isLoading,
+        onRetry: _isLoading
+            ? null
+            : () {
+                _lastFetchKey = '';
+                _fetchData(bypassCache: true);
+              },
+      ),
+    );
+  }
+}
+
+class _PinnedChartAxisHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+
+  const _PinnedChartAxisHeaderDelegate({required this.child});
+
+  @override
+  double get minExtent => kTemperatureChartTopAxisHeight;
+
+  @override
+  double get maxExtent => kTemperatureChartTopAxisHeight;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: child,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _PinnedChartAxisHeaderDelegate oldDelegate) {
+    return child != oldDelegate.child;
   }
 }

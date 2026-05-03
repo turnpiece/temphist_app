@@ -25,6 +25,301 @@ class TemperatureChartData {
   });
 }
 
+class TemperatureChartPresentation {
+  final List<TemperatureChartData> styledChartData;
+  final List<TemperatureChartData> validData;
+  final double yAxisMin;
+  final double yAxisMax;
+  final double yAxisInterval;
+  final String unitLabel;
+  final bool shouldConvert;
+
+  const TemperatureChartPresentation({
+    required this.styledChartData,
+    required this.validData,
+    required this.yAxisMin,
+    required this.yAxisMax,
+    required this.yAxisInterval,
+    required this.unitLabel,
+    required this.shouldConvert,
+  });
+
+  List<double> get axisTicks {
+    final ticks = <double>[];
+    var value = yAxisMin;
+    while (value <= yAxisMax + 0.0001) {
+      ticks.add(value);
+      value += yAxisInterval;
+    }
+    return ticks;
+  }
+
+  String formatAxisLabel(double rawValue) {
+    final display = shouldConvert ? celsiusToFahrenheit(rawValue) : rawValue;
+    return '${display.toStringAsFixed(0)}$unitLabel';
+  }
+}
+
+const double kTemperatureChartTopAxisHeight = 22.0;
+
+double computeTemperatureChartWidth(BuildContext context) {
+  final screenWidth = MediaQuery.of(context).size.width;
+  final isTablet = screenWidth >= kTabletBreakpointWidth;
+  final availableWidth = isTablet ? kTabletMaxContentWidth : screenWidth;
+  final contentPadding = kScreenPadding + kContentHorizontalMargin;
+  return availableWidth - kChartRightMargin - (contentPadding * 2);
+}
+
+TemperatureChartPresentation? buildTemperatureChartPresentation({
+  required BuildContext context,
+  required List<TemperatureChartData> chartData,
+  required double? averageTemperature,
+  required bool isFahrenheit,
+  required bool needsConversion,
+}) {
+  final shouldConvert = isFahrenheit && needsConversion;
+  final unitLabel = temperatureUnitLabel(isFahrenheit: isFahrenheit);
+  final styledChartData =
+      _styleChartDataForPresentation(chartData, averageTemperature);
+  final validData = styledChartData.where((d) => d.hasData).toList();
+
+  if (validData.isEmpty) {
+    return null;
+  }
+
+  final minTemp = validData.map((d) => d.temperature).reduce(math.min);
+  final maxTemp = validData.map((d) => d.temperature).reduce(math.max);
+
+  double yAxisMin = (minTemp - 2).floorToDouble();
+  double yAxisMax = (maxTemp + 2).ceilToDouble();
+
+  final range = maxTemp - minTemp;
+  if (range < 5) {
+    final midPoint = (maxTemp + minTemp) / 2;
+    yAxisMin = (midPoint - 2.5).floorToDouble();
+    yAxisMax = (midPoint + 2.5).ceilToDouble();
+  }
+
+  final screenWidth = MediaQuery.of(context).size.width;
+  final isTablet = screenWidth >= kTabletBreakpointWidth;
+  final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
+  final maxLabels = (!isTablet && isPortrait) ? 5 : 7;
+  final maxIntervals = maxLabels - 1;
+  final yRange = yAxisMax - yAxisMin;
+
+  final double yAxisInterval;
+  if (yRange / 1 <= maxIntervals) {
+    yAxisInterval = 1;
+  } else if (yRange / 2 <= maxIntervals) {
+    yAxisInterval = 2;
+  } else if (yRange / 3 <= maxIntervals) {
+    yAxisInterval = 3;
+  } else if (yRange / 5 <= maxIntervals) {
+    yAxisInterval = 5;
+  } else if (yRange / 10 <= maxIntervals) {
+    yAxisInterval = 10;
+  } else {
+    yAxisInterval = 20;
+  }
+
+  yAxisMin = (minTemp / yAxisInterval).floor() * yAxisInterval;
+  if (yAxisMin >= minTemp) {
+    yAxisMin -= yAxisInterval;
+  }
+
+  const double kUpperTickThreshold = 1.0 / 3.0;
+  final lastTickBeforeMax = (maxTemp / yAxisInterval).floor() * yAxisInterval;
+  final fractionIntoNextStep = (maxTemp - lastTickBeforeMax) / yAxisInterval;
+  if (fractionIntoNextStep > kUpperTickThreshold) {
+    yAxisMax = lastTickBeforeMax + yAxisInterval;
+  } else {
+    yAxisMax = maxTemp + yAxisInterval * 0.2;
+  }
+
+  const double kMinBarFraction = 0.05;
+  if ((minTemp - yAxisMin) / (yAxisMax - yAxisMin) < kMinBarFraction) {
+    yAxisMin -= yAxisInterval;
+  }
+
+  return TemperatureChartPresentation(
+    styledChartData: styledChartData,
+    validData: validData,
+    yAxisMin: yAxisMin,
+    yAxisMax: yAxisMax,
+    yAxisInterval: yAxisInterval,
+    unitLabel: unitLabel,
+    shouldConvert: shouldConvert,
+  );
+}
+
+class TemperatureChartTopAxis extends StatelessWidget {
+  final TemperatureChartPresentation presentation;
+
+  const TemperatureChartTopAxis({
+    super.key,
+    required this.presentation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final chartWidth = computeTemperatureChartWidth(context);
+
+    return Center(
+      child: SizedBox(
+        width: chartWidth,
+        height: kTemperatureChartTopAxisHeight,
+        child: SfCartesianChart(
+          isTransposed: true,
+          margin: const EdgeInsets.only(
+            left: kChartHorizontalMargin,
+            right: kChartRightMargin,
+          ),
+          primaryXAxis: NumericAxis(
+            labelStyle: const TextStyle(
+              fontSize: kFontSizeAxisLabel,
+              color: Colors.transparent,
+              fontFamilyFallback: kChartAxisFontFamilyFallback,
+            ),
+            majorGridLines: const MajorGridLines(width: 0),
+            majorTickLines: const MajorTickLines(width: 0, size: 0),
+            labelIntersectAction: AxisLabelIntersectAction.hide,
+            minimum: kChartStartYear.toDouble(),
+            maximum: DateTime.now().year.toDouble(),
+            interval: 5,
+            labelFormat: '{value}',
+            plotOffset: 20,
+            axisLine: const AxisLine(width: 0),
+          ),
+          primaryYAxis: NumericAxis(
+            opposedPosition: true,
+            axisLabelFormatter: (AxisLabelRenderDetails details) {
+              return ChartAxisLabel(
+                presentation.formatAxisLabel(details.value.toDouble()),
+                details.textStyle,
+              );
+            },
+            minimum: presentation.yAxisMin,
+            maximum: presentation.yAxisMax,
+            majorGridLines: const MajorGridLines(width: 0),
+            labelStyle: const TextStyle(
+              fontSize: kFontSizeAxisLabel,
+              color: kGreyLabelColour,
+              fontFamilyFallback: kChartAxisFontFamilyFallback,
+            ),
+            plotOffset: 0,
+            interval: presentation.yAxisInterval,
+            labelPosition: ChartDataLabelPosition.outside,
+            majorTickLines: const MajorTickLines(
+              size: 4,
+              width: 1,
+              color: kAxisLabelColour,
+            ),
+            axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
+          ),
+          plotAreaBorderWidth: 0,
+          enableAxisAnimation: false,
+          series: const <CartesianSeries<dynamic, dynamic>>[],
+        ),
+      ),
+    );
+  }
+}
+
+List<TemperatureChartData> _styleChartDataForPresentation(
+  List<TemperatureChartData> data,
+  double? averageTemperature,
+) {
+  if (data.isEmpty) {
+    return data;
+  }
+
+  final temperatures =
+      data.where((d) => d.hasData).map((d) => d.temperature).toList();
+  if (temperatures.isEmpty) {
+    return data;
+  }
+
+  final baseline = averageTemperature;
+  if (baseline == null) {
+    return data
+        .map(
+          (d) => TemperatureChartData(
+            year: d.year,
+            temperature: d.temperature,
+            isCurrentYear: d.isCurrentYear,
+            hasData: d.hasData,
+            barFillColor:
+                d.isCurrentYear ? kBarCurrentYearColour : kBarNeutralColour,
+            barBorderColor:
+                d.isCurrentYear ? kBarCurrentYearColour : kBarNeutralColour,
+          ),
+        )
+        .toList();
+  }
+
+  final anomalies = temperatures.map((temp) => temp - baseline).toList();
+  final maxWarmAnomaly = anomalies.fold<double>(
+    0,
+    (currentMax, anomaly) => anomaly > currentMax ? anomaly : currentMax,
+  );
+  final maxCoolAnomaly = anomalies.fold<double>(
+    0,
+    (currentMax, anomaly) =>
+        anomaly < 0 ? math.max(currentMax, anomaly.abs()) : currentMax,
+  );
+
+  return data.map((d) {
+    final fillColor = d.isCurrentYear
+        ? kBarCurrentYearColour
+        : _barColorForTemperature(
+            d.temperature,
+            baseline,
+            maxWarmAnomaly,
+            maxCoolAnomaly,
+          );
+    return TemperatureChartData(
+      year: d.year,
+      temperature: d.temperature,
+      isCurrentYear: d.isCurrentYear,
+      hasData: d.hasData,
+      barFillColor: fillColor,
+      barBorderColor: fillColor,
+    );
+  }).toList();
+}
+
+Color _barColorForTemperature(
+  double temperature,
+  double averageTemperature,
+  double maxWarmAnomaly,
+  double maxCoolAnomaly,
+) {
+  const double neutralBand = 0.12;
+  final anomaly = temperature - averageTemperature;
+
+  double normalized;
+  if (anomaly > 0) {
+    normalized = maxWarmAnomaly == 0 ? 0 : anomaly / maxWarmAnomaly;
+  } else if (anomaly < 0) {
+    normalized = maxCoolAnomaly == 0 ? 0 : anomaly.abs() / maxCoolAnomaly;
+  } else {
+    normalized = 0;
+  }
+
+  if (normalized <= neutralBand) {
+    return kBarNeutralColour;
+  }
+
+  final blend =
+      ((normalized - neutralBand) / (1 - neutralBand)).clamp(0.0, 1.0);
+  return Color.lerp(
+        kBarNeutralColour,
+        anomaly >= 0 ? kBarWarmColour : kBarCoolColour,
+        blend,
+      ) ??
+      kBarNeutralColour;
+}
+
 /// A reusable horizontal bar chart showing temperature data across years.
 ///
 /// Used by both the daily view (progressive loading) and period views
@@ -43,6 +338,7 @@ class TemperatureBarChart extends StatelessWidget {
   /// (data is pre-converted).  Defaults to `true` to preserve the existing
   /// behaviour where the app always converts from Celsius.
   final bool needsConversion;
+  final bool showTemperatureAxis;
 
   const TemperatureBarChart({
     super.key,
@@ -53,21 +349,20 @@ class TemperatureBarChart extends StatelessWidget {
     this.height = 600,
     this.isFahrenheit = false,
     this.needsConversion = true,
+    this.showTemperatureAxis = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    // The chart always plots raw values (Celsius or pre-converted Fahrenheit
-    // from the API) so that bar proportions stay visually identical regardless
-    // of the selected unit.  Only axis labels and tooltips are converted for
-    // display when the user selects a different unit.
-    final shouldConvert = isFahrenheit && needsConversion;
-    double convLabel(double v) => shouldConvert ? celsiusToFahrenheit(v) : v;
-    final unitLabel = temperatureUnitLabel(isFahrenheit: isFahrenheit);
+    final presentation = buildTemperatureChartPresentation(
+      context: context,
+      chartData: chartData,
+      averageTemperature: averageTemperature,
+      isFahrenheit: isFahrenheit,
+      needsConversion: needsConversion,
+    );
 
-    final styledChartData = _styleChartData(chartData, averageTemperature);
-    final validData = styledChartData.where((d) => d.hasData).toList();
-    if (validData.isEmpty) {
+    if (presentation == null) {
       return SizedBox(
         height: height,
         child: const Column(
@@ -92,91 +387,16 @@ class TemperatureBarChart extends StatelessWidget {
       );
     }
 
-    // Calculate Y-axis range
-    final minTemp =
-        validData.map((d) => d.temperature).reduce((a, b) => a < b ? a : b);
-    final maxTemp =
-        validData.map((d) => d.temperature).reduce((a, b) => a > b ? a : b);
-
-    double yAxisMin = (minTemp - 2).floorToDouble();
-    double yAxisMax = (maxTemp + 2).ceilToDouble();
-
-    final range = maxTemp - minTemp;
-    if (range < 5) {
-      final midPoint = (maxTemp + minTemp) / 2;
-      yAxisMin = (midPoint - 2.5).floorToDouble();
-      yAxisMax = (midPoint + 2.5).ceilToDouble();
-    }
-
     return Padding(
       padding: EdgeInsets.zero,
       child: Builder(
         builder: (context) {
           final screenWidth = MediaQuery.of(context).size.width;
           final isTablet = screenWidth >= kTabletBreakpointWidth;
-
-          // On portrait phones, cap at 5 labels to avoid crowding.
-          // Tablets and landscape views allow up to 7.
-          final isPortrait =
-              MediaQuery.of(context).orientation == Orientation.portrait;
-          final maxLabels = (!isTablet && isPortrait) ? 5 : 7;
-          final maxIntervals = maxLabels - 1;
-
-          // Choose a whole-number interval that stays within maxLabels.
-          // The axis always uses raw (Celsius) values — labels are converted
-          // for display — so these thresholds only need to work for Celsius ranges.
-          final yRange = yAxisMax - yAxisMin;
-          final double yAxisInterval;
-          if (yRange / 1 <= maxIntervals) {
-            yAxisInterval = 1;
-          } else if (yRange / 2 <= maxIntervals) {
-            yAxisInterval = 2;
-          } else if (yRange / 3 <= maxIntervals) {
-            yAxisInterval = 3;
-          } else if (yRange / 5 <= maxIntervals) {
-            yAxisInterval = 5;
-          } else if (yRange / 10 <= maxIntervals) {
-            yAxisInterval = 10;
-          } else {
-            yAxisInterval = 20;
-          }
-
-          // Snap lower bound to the interval and guarantee one step of headroom below.
-          // Snap from minTemp directly (not the pre-buffered yAxisMin) so the ±2 buffer
-          // used for interval selection above doesn't cause a double-step of waste.
-          yAxisMin = (minTemp / yAxisInterval).floor() * yAxisInterval;
-          if (yAxisMin >= minTemp) yAxisMin -= yAxisInterval;
-
-          // Upper bound: only include the tick above maxTemp if the data is more than
-          // 1/3 of the way into that interval step. Otherwise, stop at the last tick
-          // and add just enough visual padding so the bar isn't flush with the axis end.
-          const double kUpperTickThreshold = 1.0 / 3.0;
-          final lastTickBeforeMax =
-              (maxTemp / yAxisInterval).floor() * yAxisInterval;
-          final fractionIntoNextStep =
-              (maxTemp - lastTickBeforeMax) / yAxisInterval;
-          if (fractionIntoNextStep > kUpperTickThreshold) {
-            yAxisMax = lastTickBeforeMax + yAxisInterval;
-          } else {
-            // No upper tick — axis extends past the bar with a small visual gap.
-            yAxisMax = maxTemp + yAxisInterval * 0.2;
-          }
-
-          // Minimum bar: if the shortest bar would be less than 5% of the visible
-          // axis range, drop yAxisMin by one more step so it stays tappable.
-          const double kMinBarFraction = 0.05;
-          if ((minTemp - yAxisMin) / (yAxisMax - yAxisMin) < kMinBarFraction) {
-            yAxisMin -= yAxisInterval;
-          }
-
-          final availableWidth =
-              isTablet ? kTabletMaxContentWidth : screenWidth;
-          final contentPadding = kScreenPadding + kContentHorizontalMargin;
-          final chartWidth =
-              availableWidth - kChartRightMargin - (contentPadding * 2);
+          final chartWidth = computeTemperatureChartWidth(context);
 
           final chart = SfCartesianChart(
-            key: ValueKey(isFahrenheit),
+            key: ValueKey('${isFahrenheit}_$showTemperatureAxis'),
             isTransposed: true,
             margin: const EdgeInsets.only(
               left: kChartHorizontalMargin,
@@ -185,13 +405,15 @@ class TemperatureBarChart extends StatelessWidget {
             tooltipBehavior: TooltipBehavior(
               enable: true,
               color: Colors.black87,
-              format: 'point.x: point.y$unitLabel',
+              format: 'point.x: point.y${presentation.unitLabel}',
               canShowMarker: false,
               header: '',
               textStyle: const TextStyle(fontSize: kFontSizeBody),
               builder: (data, point, series, pointIndex, seriesIndex) {
                 final d = data as TemperatureChartData;
-                final displayTemp = convLabel(d.temperature);
+                final displayTemp = presentation.shouldConvert
+                    ? celsiusToFahrenheit(d.temperature)
+                    : d.temperature;
                 return Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -199,7 +421,7 @@ class TemperatureBarChart extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    '${d.year}: ${displayTemp.toStringAsFixed(1)}$unitLabel',
+                    '${d.year}: ${displayTemp.toStringAsFixed(1)}${presentation.unitLabel}',
                     style: const TextStyle(
                         color: Colors.white, fontSize: kFontSizeBody - 4),
                   ),
@@ -207,7 +429,11 @@ class TemperatureBarChart extends StatelessWidget {
               },
             ),
             series: _buildSeries(
-                yAxisMin, styledChartData, averageTemperature, trendSlope),
+              presentation.yAxisMin,
+              presentation.styledChartData,
+              averageTemperature,
+              trendSlope,
+            ),
             primaryXAxis: NumericAxis(
               labelStyle: const TextStyle(
                 fontSize: kFontSizeAxisLabel,
@@ -225,25 +451,35 @@ class TemperatureBarChart extends StatelessWidget {
               axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
             ),
             primaryYAxis: NumericAxis(
+              opposedPosition: true,
               axisLabelFormatter: (AxisLabelRenderDetails details) {
-                final raw = details.value.toDouble();
-                final display = convLabel(raw);
-                final text = '${display.toStringAsFixed(0)}$unitLabel';
-                return ChartAxisLabel(text, details.textStyle);
+                return ChartAxisLabel(
+                  presentation.formatAxisLabel(details.value.toDouble()),
+                  details.textStyle,
+                );
               },
-              minimum: yAxisMin,
-              maximum: yAxisMax,
+              minimum: presentation.yAxisMin,
+              maximum: presentation.yAxisMax,
               majorGridLines: MajorGridLines(
                   width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
-              labelStyle: const TextStyle(
-                fontSize: kFontSizeAxisLabel,
-                color: kGreyLabelColour,
+              labelStyle: TextStyle(
+                fontSize: showTemperatureAxis ? kFontSizeAxisLabel : 1,
+                color:
+                    showTemperatureAxis ? kGreyLabelColour : Colors.transparent,
                 fontFamilyFallback: kChartAxisFontFamilyFallback,
               ),
               plotOffset: 0,
-              interval: yAxisInterval,
+              interval: presentation.yAxisInterval,
               labelPosition: ChartDataLabelPosition.outside,
-              axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
+              majorTickLines: MajorTickLines(
+                size: showTemperatureAxis ? 4 : 0,
+                width: showTemperatureAxis ? 1 : 0,
+                color: kAxisLabelColour,
+              ),
+              axisLine: AxisLine(
+                width: showTemperatureAxis ? 1 : 0,
+                color: kAxisLabelColour,
+              ),
             ),
             plotAreaBorderWidth: 0,
             enableAxisAnimation: false,
@@ -317,101 +553,6 @@ class TemperatureBarChart extends StatelessWidget {
           enableTooltip: false,
         ),
     ];
-  }
-
-  List<TemperatureChartData> _styleChartData(
-    List<TemperatureChartData> data,
-    double? averageTemperature,
-  ) {
-    if (data.isEmpty) {
-      return data;
-    }
-
-    final temperatures =
-        data.where((d) => d.hasData).map((d) => d.temperature).toList();
-    if (temperatures.isEmpty) {
-      return data;
-    }
-
-    final baseline = averageTemperature;
-    if (baseline == null) {
-      return data
-          .map(
-            (d) => TemperatureChartData(
-              year: d.year,
-              temperature: d.temperature,
-              isCurrentYear: d.isCurrentYear,
-              hasData: d.hasData,
-              barFillColor:
-                  d.isCurrentYear ? kBarCurrentYearColour : kBarNeutralColour,
-              barBorderColor:
-                  d.isCurrentYear ? kBarCurrentYearColour : kBarNeutralColour,
-            ),
-          )
-          .toList();
-    }
-
-    final anomalies = temperatures.map((temp) => temp - baseline).toList();
-    final maxWarmAnomaly = anomalies.fold<double>(
-      0,
-      (currentMax, anomaly) => anomaly > currentMax ? anomaly : currentMax,
-    );
-    final maxCoolAnomaly = anomalies.fold<double>(
-      0,
-      (currentMax, anomaly) =>
-          anomaly < 0 ? math.max(currentMax, anomaly.abs()) : currentMax,
-    );
-
-    return data.map((d) {
-      final fillColor = d.isCurrentYear
-          ? kBarCurrentYearColour
-          : _barColorForTemperature(
-              d.temperature,
-              baseline,
-              maxWarmAnomaly,
-              maxCoolAnomaly,
-            );
-      return TemperatureChartData(
-        year: d.year,
-        temperature: d.temperature,
-        isCurrentYear: d.isCurrentYear,
-        hasData: d.hasData,
-        barFillColor: fillColor,
-        barBorderColor: fillColor,
-      );
-    }).toList();
-  }
-
-  Color _barColorForTemperature(
-    double temperature,
-    double averageTemperature,
-    double maxWarmAnomaly,
-    double maxCoolAnomaly,
-  ) {
-    const double neutralBand = 0.12;
-    final anomaly = temperature - averageTemperature;
-
-    double normalized;
-    if (anomaly > 0) {
-      normalized = maxWarmAnomaly == 0 ? 0 : anomaly / maxWarmAnomaly;
-    } else if (anomaly < 0) {
-      normalized = maxCoolAnomaly == 0 ? 0 : anomaly.abs() / maxCoolAnomaly;
-    } else {
-      normalized = 0;
-    }
-
-    if (normalized <= neutralBand) {
-      return kBarNeutralColour;
-    }
-
-    final blend =
-        ((normalized - neutralBand) / (1 - neutralBand)).clamp(0.0, 1.0);
-    return Color.lerp(
-          kBarNeutralColour,
-          anomaly >= 0 ? kBarWarmColour : kBarCoolColour,
-          blend,
-        ) ??
-        kBarNeutralColour;
   }
 }
 
