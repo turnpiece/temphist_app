@@ -312,6 +312,16 @@ class TemperatureScreenState extends State<TemperatureScreen>
   // Page view for period switching (daily / weekly / monthly / yearly)
   late final PageController _pageController;
   final ValueNotifier<int> _pageIndexNotifier = ValueNotifier<int>(0);
+
+  // Tracks the active page's vertical scroll offset so the period nav can
+  // collapse as the user scrolls (and re-expand when they scroll back up).
+  final ValueNotifier<double> _activeScrollOffsetNotifier =
+      ValueNotifier<double>(0.0);
+
+  // Combined height of the period segmented control plus its bottom padding —
+  // i.e. how far the user must scroll to fully collapse the nav.
+  static const double _kPeriodTabsCollapseHeight = 54.0;
+
   static const List<String> _periodKeys = ['daily', 'week', 'month', 'year'];
   bool _isSharing = false;
   final GlobalKey _dailyRepaintKey = GlobalKey();
@@ -347,6 +357,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
     ]) {
       if (c.hasClients) c.jumpTo(0);
     }
+    _activeScrollOffsetNotifier.value = 0.0;
   }
 
   /// Called whenever [_locationService] notifies listeners.
@@ -432,6 +443,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
     _splashScreenTimer?.cancel();
     _splashScreenTimer = null;
     _pageIndexNotifier.dispose();
+    _activeScrollOffsetNotifier.dispose();
     _dailyScrollController.dispose();
     _weekScrollController.dispose();
     _monthScrollController.dispose();
@@ -1332,69 +1344,110 @@ class TemperatureScreenState extends State<TemperatureScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildPageHeader(context),
-                  Padding(
-                    padding: EdgeInsets.only(
-                      left: sidePad,
-                      right: sidePad,
-                      bottom: kTitleRowBottomPadding,
-                    ),
-                    child: ValueListenableBuilder<int>(
-                      valueListenable: _pageIndexNotifier,
-                      builder: (_, pageIndex, __) =>
-                          _buildPeriodTabs(pageIndex),
+                  ValueListenableBuilder<double>(
+                    valueListenable: _activeScrollOffsetNotifier,
+                    builder: (_, offset, child) {
+                      final t = (offset / _kPeriodTabsCollapseHeight)
+                          .clamp(0.0, 1.0);
+                      return ClipRect(
+                        child: SizedBox(
+                          height: _kPeriodTabsCollapseHeight * (1 - t),
+                          child: Opacity(
+                            opacity: 1 - t,
+                            child: OverflowBox(
+                              minHeight: _kPeriodTabsCollapseHeight,
+                              maxHeight: _kPeriodTabsCollapseHeight,
+                              alignment: Alignment.topCenter,
+                              child: child,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        left: sidePad,
+                        right: sidePad,
+                        bottom: kTitleRowBottomPadding,
+                      ),
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: _pageIndexNotifier,
+                        builder: (_, pageIndex, __) =>
+                            _buildPeriodTabs(pageIndex),
+                      ),
                     ),
                   ),
                   Expanded(
-                    child: PageView(
-                      controller: _pageController,
-                      onPageChanged: (index) {
-                        HapticFeedback.selectionClick();
-                        _pageIndexNotifier.value = index;
-                        _dismissCoachmark();
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: (n) {
+                        if (n.metrics.axis == Axis.vertical) {
+                          _activeScrollOffsetNotifier.value = n.metrics.pixels;
+                        }
+                        return false;
                       },
-                      children: [
-                        // Page 0: Daily
-                        _buildPeriodPage(
-                          context,
-                          pageIndex: 0,
-                          pageKey: _dailyPageKey,
-                          repaintKey: _dailyRepaintKey,
-                          periodKey: 'daily',
-                          periodLabel: 'daily',
-                          scrollController: _dailyScrollController,
-                          onDataLoaded: _startCoachmarkIfPending,
-                        ),
-                        // Page 1: Weekly
-                        _buildPeriodPage(
-                          context,
-                          pageIndex: 1,
-                          pageKey: _weekPageKey,
-                          repaintKey: _weekRepaintKey,
-                          periodKey: 'week',
-                          periodLabel: 'Past week',
-                          scrollController: _weekScrollController,
-                        ),
-                        // Page 2: Monthly
-                        _buildPeriodPage(
-                          context,
-                          pageIndex: 2,
-                          pageKey: _monthPageKey,
-                          repaintKey: _monthRepaintKey,
-                          periodKey: 'month',
-                          periodLabel: 'Past month',
-                          scrollController: _monthScrollController,
-                        ),
-                        // Page 3: Yearly
-                        _buildPeriodPage(
-                          context,
-                          pageIndex: 3,
-                          pageKey: _yearPageKey,
-                          repaintKey: _yearRepaintKey,
-                          periodKey: 'year',
-                          periodLabel: 'Past year',
-                          scrollController: _yearScrollController,
-                        ),
-                      ],
+                      child: PageView(
+                        controller: _pageController,
+                        onPageChanged: (index) {
+                          HapticFeedback.selectionClick();
+                          _pageIndexNotifier.value = index;
+                          // Sync the period-nav collapse state to the new
+                          // active page's scroll position, otherwise the nav
+                          // would keep the previous page's collapse state.
+                          final controllers = [
+                            _dailyScrollController,
+                            _weekScrollController,
+                            _monthScrollController,
+                            _yearScrollController,
+                          ];
+                          final c = controllers[index];
+                          _activeScrollOffsetNotifier.value =
+                              c.hasClients ? c.offset : 0.0;
+                          _dismissCoachmark();
+                        },
+                        children: [
+                          // Page 0: Daily
+                          _buildPeriodPage(
+                            context,
+                            pageIndex: 0,
+                            pageKey: _dailyPageKey,
+                            repaintKey: _dailyRepaintKey,
+                            periodKey: 'daily',
+                            periodLabel: 'daily',
+                            scrollController: _dailyScrollController,
+                            onDataLoaded: _startCoachmarkIfPending,
+                          ),
+                          // Page 1: Weekly
+                          _buildPeriodPage(
+                            context,
+                            pageIndex: 1,
+                            pageKey: _weekPageKey,
+                            repaintKey: _weekRepaintKey,
+                            periodKey: 'week',
+                            periodLabel: 'Past week',
+                            scrollController: _weekScrollController,
+                          ),
+                          // Page 2: Monthly
+                          _buildPeriodPage(
+                            context,
+                            pageIndex: 2,
+                            pageKey: _monthPageKey,
+                            repaintKey: _monthRepaintKey,
+                            periodKey: 'month',
+                            periodLabel: 'Past month',
+                            scrollController: _monthScrollController,
+                          ),
+                          // Page 3: Yearly
+                          _buildPeriodPage(
+                            context,
+                            pageIndex: 3,
+                            pageKey: _yearPageKey,
+                            repaintKey: _yearRepaintKey,
+                            periodKey: 'year',
+                            periodLabel: 'Past year',
+                            scrollController: _yearScrollController,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
