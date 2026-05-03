@@ -560,60 +560,68 @@ class _LocationRow extends StatelessWidget {
     return Semantics(
       label: isSelected ? '$label, selected' : label,
       button: true,
-      child: Container(
-        margin: margin,
-        decoration: BoxDecoration(
-          color: kTextPrimaryColour.withValues(alpha: isSelected ? 0.16 : 0.1),
+      child: Padding(
+        padding: margin,
+        child: Material(
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(18),
-        ),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          splashColor: kButtonColour.withValues(alpha: 0.1),
-          highlightColor: kButtonColour.withValues(alpha: 0.05),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Flag emoji when a country code is known; pin icon otherwise.
-                if (flag != null)
-                  SizedBox(
-                    width: kIconSize + 3,
-                    child: Text(
-                      flag,
-                      style: const TextStyle(fontSize: 20),
-                      textAlign: TextAlign.center,
+          child: Ink(
+            decoration: BoxDecoration(
+              color:
+                  kTextPrimaryColour.withValues(alpha: isSelected ? 0.16 : 0.1),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(18),
+              splashColor: kButtonColour.withValues(alpha: 0.1),
+              highlightColor: kButtonColour.withValues(alpha: 0.05),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Flag emoji when a country code is known; pin icon otherwise.
+                    if (flag != null)
+                      SizedBox(
+                        width: kIconSize + 3,
+                        child: Text(
+                          flag,
+                          style: const TextStyle(fontSize: 20),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    else
+                      Icon(
+                        Icons.location_on_outlined,
+                        size: kIconSize + 3,
+                        color: color,
+                      ),
+                    const SizedBox(width: 14),
+                    Flexible(
+                      child: Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: kFontSizeBody,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
                     ),
-                  )
-                else
-                  Icon(
-                    Icons.location_on_outlined,
-                    size: kIconSize + 3,
-                    color: color,
-                  ),
-                const SizedBox(width: 14),
-                Flexible(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: kFontSizeBody,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                  ),
+                    if (isSelected) ...[
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.check,
+                        size: kIconSize + 3,
+                        color: color,
+                      ),
+                    ],
+                  ],
                 ),
-                if (isSelected) ...[
-                  const SizedBox(width: 6),
-                  Icon(
-                    Icons.check,
-                    size: kIconSize + 3,
-                    color: color,
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
         ),
