@@ -234,6 +234,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
           final contentWidth = isTablet
               ? kTabletMaxContentWidth.clamp(0.0, constraints.maxWidth)
               : constraints.maxWidth;
+          final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
           return Center(
             child: SizedBox(
               width: contentWidth,
@@ -258,13 +259,16 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                           ),
                           const Spacer(),
                           if (widget.canDismiss)
-                            IconButton(
-                              icon: Icon(
-                                Icons.close,
-                                color: kGreyLabelColour,
-                                size: kIconSize + 2,
+                            _TapDetector(
+                              onTap: () => Navigator.of(context).pop(),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Icon(
+                                  Icons.close,
+                                  color: kGreyLabelColour,
+                                  size: kIconSize + 2,
+                                ),
                               ),
-                              onPressed: () => Navigator.of(context).pop(),
                             ),
                         ],
                       ),
@@ -283,11 +287,15 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                         onClear: _clearSearch,
                       ),
                     ),
-                    // Scrollable content — search results or normal lists
+                    // Scrollable content — search results or normal lists.
+                    // Bottom padding accounts for the software keyboard so
+                    // list items are never obscured by it.
                     Expanded(
-                      child: _searchQuery.isNotEmpty
-                          ? _buildSearchContent()
-                          : FutureBuilder<_SheetData>(
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: keyboardInset),
+                        child: _searchQuery.isNotEmpty
+                            ? _buildSearchContent()
+                            : FutureBuilder<_SheetData>(
                               future: _dataFuture,
                               builder: (context, snapshot) {
                                 if (snapshot.connectionState !=
@@ -312,6 +320,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                                     isTablet: isTablet);
                               },
                             ),
+                      ),
                     ),
                   ],
                 ),
@@ -562,24 +571,18 @@ class _LocationRow extends StatelessWidget {
       button: true,
       child: Padding(
         padding: margin,
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-          child: Ink(
+        child: _TapDetector(
+          onTap: onTap,
+          child: DecoratedBox(
             decoration: BoxDecoration(
               color:
                   kTextPrimaryColour.withValues(alpha: isSelected ? 0.16 : 0.1),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(18),
-              splashColor: kButtonColour.withValues(alpha: 0.1),
-              highlightColor: kButtonColour.withValues(alpha: 0.05),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                child: Row(
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     // Flag emoji when a country code is known; pin icon otherwise.
@@ -625,7 +628,6 @@ class _LocationRow extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 }
@@ -638,21 +640,77 @@ class _ShowMoreButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 20, bottom: 8),
-      child: TextButton(
-        onPressed: onTap,
-        style: TextButton.styleFrom(
-          padding: EdgeInsets.zero,
-          minimumSize: Size.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-        child: Text(
-          'Show more...',
-          style: TextStyle(
-            color: kButtonColour,
-            fontSize: kFontSizeBody - 2,
+      child: _TapDetector(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Text(
+            'Show more...',
+            style: TextStyle(
+              color: kButtonColour,
+              fontSize: kFontSizeBody - 2,
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Detects single-finger taps at the raw pointer level, bypassing the gesture
+/// arena. This is robust to spurious multi-touch input (e.g. iOS Simulator
+/// phantom touches) that can otherwise prevent [GestureDetector.onTap] and
+/// [InkWell] from firing.
+class _TapDetector extends StatefulWidget {
+  final VoidCallback? onTap;
+  final Widget child;
+
+  const _TapDetector({required this.onTap, required this.child});
+
+  @override
+  State<_TapDetector> createState() => _TapDetectorState();
+}
+
+class _TapDetectorState extends State<_TapDetector> {
+  // Active pointer being tracked. We accept the first pointer to land within
+  // our bounds and fire onTap when it lifts close to where it landed.
+  int? _trackedPointer;
+  Offset? _downPosition;
+
+  static const double _slop = 18.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (event) {
+        if (widget.onTap == null) return;
+        if (_trackedPointer == null) {
+          _trackedPointer = event.pointer;
+          _downPosition = event.localPosition;
+        }
+      },
+      onPointerMove: (event) {
+        if (event.pointer != _trackedPointer) return;
+        final down = _downPosition;
+        if (down == null) return;
+        if ((event.localPosition - down).distance > _slop) {
+          _trackedPointer = null;
+          _downPosition = null;
+        }
+      },
+      onPointerUp: (event) {
+        if (event.pointer != _trackedPointer) return;
+        _trackedPointer = null;
+        _downPosition = null;
+        widget.onTap?.call();
+      },
+      onPointerCancel: (event) {
+        if (event.pointer != _trackedPointer) return;
+        _trackedPointer = null;
+        _downPosition = null;
+      },
+      child: widget.child,
     );
   }
 }

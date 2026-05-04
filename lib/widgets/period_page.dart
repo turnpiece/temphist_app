@@ -529,22 +529,34 @@ class PeriodPageState extends State<PeriodPage>
   List<Widget> _buildSlivers(BuildContext context) {
     final slivers = <Widget>[];
 
+    // Loading/error/empty states share the same horizontal padding as the
+    // rest of the page content so messages aren't flush to the screen edge.
+    final sidePadding = EdgeInsets.symmetric(
+      horizontal: kScreenPadding + kContentHorizontalMargin,
+    );
+
     if (widget.topContent != null) {
       slivers.add(SliverToBoxAdapter(child: widget.topContent!));
     }
 
     if (_data == null && _error == null) {
-      slivers.add(SliverToBoxAdapter(child: _buildLoadingState()));
+      slivers.add(SliverToBoxAdapter(
+        child: Padding(padding: sidePadding, child: _buildLoadingState()),
+      ));
       return slivers;
     }
 
     if (_error != null) {
-      slivers.add(SliverToBoxAdapter(child: _buildErrorState()));
+      slivers.add(SliverToBoxAdapter(
+        child: Padding(padding: sidePadding, child: _buildErrorState()),
+      ));
       return slivers;
     }
 
     if (_data != null && _data!.values.isEmpty) {
-      slivers.add(SliverToBoxAdapter(child: _buildEmptyState()));
+      slivers.add(SliverToBoxAdapter(
+        child: Padding(padding: sidePadding, child: _buildEmptyState()),
+      ));
       return slivers;
     }
 
