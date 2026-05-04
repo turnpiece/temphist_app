@@ -80,6 +80,7 @@ const double kSummaryBubbleVerticalPadding = 12.0;
 const Color kSummaryBubbleColour = kSummaryColour;
 const Color kSummaryTextColour = Colors.white;
 
+const Color kErrorColour = Color(0xFFFFAA33);
 const Color kStatsBubbleColour = Color(0xFF607090);
 const Color kStdDevColour = Color(0xFF8AAFD0);
 const double kStatsFontSize = 15.0;

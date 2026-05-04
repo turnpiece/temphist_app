@@ -87,7 +87,7 @@ class CompletenessSection extends StatelessWidget {
             children: [
               Icon(
                 isRetrying ? Icons.hourglass_empty : Icons.error_outline,
-                color: isRetrying ? kGreyLabelColour : kButtonColour,
+                color: isRetrying ? kGreyLabelColour : kErrorColour,
                 size: kIconSize,
               ),
               const SizedBox(width: 8),
@@ -95,7 +95,7 @@ class CompletenessSection extends StatelessWidget {
                 child: Text(
                   isRetrying ? 'Retrying…' : 'Failed to load some chart data.',
                   style: TextStyle(
-                    color: isRetrying ? kGreyLabelColour : kButtonColour,
+                    color: isRetrying ? kGreyLabelColour : kErrorColour,
                     fontSize: kFontSizeBody - 1,
                     fontWeight: FontWeight.w400,
                   ),
@@ -114,13 +114,13 @@ class CompletenessSection extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: kButtonColour.withValues(alpha: 0.2),
+                        color: kErrorColour.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text(
                         'Retry',
                         style: TextStyle(
-                          color: kButtonColour,
+                          color: kErrorColour,
                           fontSize: kFontSizeBody - 2,
                           fontWeight: FontWeight.w500,
                         ),

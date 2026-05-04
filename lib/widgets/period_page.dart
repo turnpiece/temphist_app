@@ -827,13 +827,13 @@ class PeriodPageState extends State<PeriodPage>
         children: [
           Row(
             children: [
-              const Icon(Icons.error_outline, color: kButtonColour, size: 17),
+              const Icon(Icons.error_outline, color: kErrorColour, size: 17),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   _error!,
                   style: const TextStyle(
-                      color: kButtonColour, fontSize: kFontSizeBody),
+                      color: kErrorColour, fontSize: kFontSizeBody),
                 ),
               ),
             ],
@@ -848,13 +848,13 @@ class PeriodPageState extends State<PeriodPage>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: kButtonColour.withValues(alpha: 0.2),
+                  color: kErrorColour.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Text(
                   'Retry',
                   style: TextStyle(
-                      color: kButtonColour,
+                      color: kErrorColour,
                       fontSize: kFontSizeBody,
                       fontWeight: FontWeight.w500),
                 ),
