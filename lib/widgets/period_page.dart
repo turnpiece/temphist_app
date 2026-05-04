@@ -576,39 +576,54 @@ class PeriodPageState extends State<PeriodPage>
     final presentation = chartPresentation;
 
     if (data.summary.isNotEmpty) {
+      final double screenWidth = MediaQuery.of(context).size.width;
+      final bool isSmallPhone = screenWidth < kSmallPhoneBreakpointWidth;
+      final double summaryLineCount = screenWidth >= kTabletBreakpointWidth
+          ? kSummaryMinLinesTablet
+          : kSummaryMinLines;
+      final double summaryBubbleHeight =
+          kSummaryFontSize * kSummaryLineHeight * summaryLineCount +
+              kSummaryBubbleVerticalPadding * 2;
+      final double sideMargin =
+          isSmallPhone ? 0 : kScreenPadding + kContentHorizontalMargin;
       slivers.add(
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.only(
-              left: kScreenPadding + kContentHorizontalMargin,
-              right: kScreenPadding + kContentHorizontalMargin,
+              left: sideMargin,
+              right: sideMargin,
               bottom: kSectionBottomPadding,
             ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: kSummaryFontSize *
-                        kSummaryLineHeight *
-                        (MediaQuery.of(context).size.width >=
-                                kTabletBreakpointWidth
-                            ? kSummaryMinLinesTablet
-                            : kSummaryMinLines) +
-                    8,
+            child: Container(
+              constraints: BoxConstraints(minHeight: summaryBubbleHeight),
+              padding: EdgeInsets.symmetric(
+                horizontal:
+                    isSmallPhone ? kScreenPadding + kContentHorizontalMargin : 12,
+                vertical: kSummaryBubbleVerticalPadding,
               ),
-              child: Text(
-                data.summary,
-                style: const TextStyle(
-                  color: kSummaryColour,
-                  fontSize: kSummaryFontSize,
-                  fontWeight: FontWeight.w400,
-                  height: kSummaryLineHeight,
+              decoration: BoxDecoration(
+                color: kSummaryBubbleColour.withValues(alpha: 0.5),
+                borderRadius: isSmallPhone
+                    ? BorderRadius.zero
+                    : BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: Text(
+                  data.summary,
+                  style: const TextStyle(
+                    color: kSummaryTextColour,
+                    fontSize: kSummaryFontSize,
+                    fontWeight: FontWeight.w400,
+                    height: kSummaryLineHeight,
+                  ),
+                  strutStyle: const StrutStyle(
+                    fontSize: kSummaryFontSize,
+                    height: kSummaryLineHeight,
+                    forceStrutHeight: true,
+                  ),
+                  softWrap: true,
+                  maxLines: null,
                 ),
-                strutStyle: const StrutStyle(
-                  fontSize: kSummaryFontSize,
-                  height: kSummaryLineHeight,
-                  forceStrutHeight: true,
-                ),
-                softWrap: true,
-                maxLines: null,
               ),
             ),
           ),
@@ -693,6 +708,7 @@ class PeriodPageState extends State<PeriodPage>
   Widget _buildContent(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= kTabletBreakpointWidth;
+    final isSmallPhone = screenWidth < kSmallPhoneBreakpointWidth;
     final leftPadding = kScreenPadding + kContentHorizontalMargin;
     final rightPadding = leftPadding;
 
@@ -719,7 +735,11 @@ class PeriodPageState extends State<PeriodPage>
 
           // Data loaded
           if (_data != null && _data!.values.isNotEmpty)
-            ..._buildDataContent(isTablet: isTablet),
+            ..._buildDataContent(
+              isTablet: isTablet,
+              isSmallPhone: isSmallPhone,
+              parentHorizontalPadding: leftPadding,
+            ),
         ],
       ),
     );
@@ -819,7 +839,11 @@ class PeriodPageState extends State<PeriodPage>
     );
   }
 
-  List<Widget> _buildDataContent({bool isTablet = false}) {
+  List<Widget> _buildDataContent({
+    bool isTablet = false,
+    bool isSmallPhone = false,
+    double parentHorizontalPadding = 0,
+  }) {
     final data = _data!;
     final currentYear = DateTime.now().year;
     // Convert API values to chart data
@@ -838,30 +862,55 @@ class PeriodPageState extends State<PeriodPage>
       if (data.summary.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: kSummaryFontSize *
-                      kSummaryLineHeight *
-                      (isTablet ? kSummaryMinLinesTablet : kSummaryMinLines) +
-                  8,
-            ),
-            child: Text(
-              data.summary,
-              style: const TextStyle(
-                color: kSummaryColour,
-                fontSize: kSummaryFontSize,
-                fontWeight: FontWeight.w400,
-                height: kSummaryLineHeight,
+          child: Builder(builder: (context) {
+            final double summaryLineCount =
+                isTablet ? kSummaryMinLinesTablet : kSummaryMinLines;
+            final double summaryBubbleHeight =
+                kSummaryFontSize * kSummaryLineHeight * summaryLineCount +
+                    kSummaryBubbleVerticalPadding * 2;
+            final container = Container(
+              constraints: BoxConstraints(minHeight: summaryBubbleHeight),
+              padding: EdgeInsets.symmetric(
+                horizontal: isSmallPhone ? parentHorizontalPadding : 12,
+                vertical: kSummaryBubbleVerticalPadding,
               ),
-              strutStyle: const StrutStyle(
-                fontSize: kSummaryFontSize,
-                height: kSummaryLineHeight,
-                forceStrutHeight: true,
+              decoration: BoxDecoration(
+                color: kSummaryBubbleColour.withValues(alpha: 0.5),
+                borderRadius: isSmallPhone
+                    ? BorderRadius.zero
+                    : BorderRadius.circular(10),
               ),
-              softWrap: true,
-              maxLines: null,
-            ),
-          ),
+              child: Center(
+                child: Text(
+                  data.summary,
+                  style: const TextStyle(
+                    color: kSummaryTextColour,
+                    fontSize: kSummaryFontSize,
+                    fontWeight: FontWeight.w400,
+                    height: kSummaryLineHeight,
+                  ),
+                  strutStyle: const StrutStyle(
+                    fontSize: kSummaryFontSize,
+                    height: kSummaryLineHeight,
+                    forceStrutHeight: true,
+                  ),
+                  softWrap: true,
+                  maxLines: null,
+                ),
+              ),
+            );
+            if (!isSmallPhone) return container;
+            final double screenWidth = MediaQuery.of(context).size.width;
+            return OverflowBox(
+              alignment: Alignment.topLeft,
+              minWidth: screenWidth,
+              maxWidth: screenWidth,
+              child: Transform.translate(
+                offset: Offset(-parentHorizontalPadding, 0),
+                child: container,
+              ),
+            );
+          }),
         ),
       // Chart — skip client-side conversion when the API already returned
       // data in the requested unit.

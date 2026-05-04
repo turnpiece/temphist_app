@@ -71,7 +71,14 @@ const double kSummaryFontSize =
     kFontSizeBody; // Changed from -2 for consistency
 const double kSummaryLineHeight = 1.2;
 const double kSummaryMinLines = 4;
-const double kSummaryMinLinesTablet = 2;
+const double kSummaryMinLinesTablet = 3;
+const double kSmallPhoneBreakpointWidth = 380.0;
+const double kSummaryBubbleVerticalPadding = 12.0;
+// Summary bubble colour scheme — swap these two to try alternatives:
+// Option A: const kSummaryBubbleColour = Color(0xFF1A3D24); kSummaryTextColour = Colors.white;
+// Option C: kSummaryBubbleColour = kSummaryColour; kSummaryTextColour = kSummaryColour;
+const Color kSummaryBubbleColour = kSummaryColour;
+const Color kSummaryTextColour = Colors.white;
 
 /// Enable verbose logging in production builds via dart-define.
 /// Usage: flutter build ios --dart-define=VERBOSE_LOGS=true
