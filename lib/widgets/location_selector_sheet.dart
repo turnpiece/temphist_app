@@ -768,41 +768,39 @@ class _SearchFieldState extends State<_SearchField> {
       autocorrect: false,
       enableSuggestions: false,
       style: TextStyle(
-        color: _hasFocus ? kTextPrimaryColour : kLocationPopularColour,
+        color: kTextPrimaryColour,
         fontSize: kFontSizeBody,
       ),
       decoration: InputDecoration(
         hintText: 'Search…',
         hintStyle: TextStyle(
-          color: kGreyLabelColour.withValues(alpha: 0.7),
+          color: kTextPrimaryColour.withValues(alpha: 0.75),
           fontSize: kFontSizeBody,
         ),
-        prefixIcon: const Icon(Icons.search,
-            color: kGreyLabelColour, size: kIconSize + 3),
+        prefixIcon: Icon(Icons.search,
+            color: kTextPrimaryColour.withValues(alpha: 0.75), size: kIconSize + 3),
         suffixIcon: widget.controller.text.isNotEmpty
             ? IconButton(
-                icon: const Icon(Icons.close,
-                    color: kGreyLabelColour, size: kIconSize + 1),
+                icon: Icon(Icons.close,
+                    color: kTextPrimaryColour.withValues(alpha: 0.5), size: kIconSize + 1),
                 onPressed: widget.onClear,
               )
             : null,
         filled: true,
-        fillColor: kBackgroundColour.withValues(alpha: 0.6),
+        fillColor: Colors.white.withValues(alpha: 0.14),
         contentPadding:
             const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide:
-              BorderSide(color: kGreyLabelColour.withValues(alpha: 0.3)),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide:
-              BorderSide(color: kGreyLabelColour.withValues(alpha: 0.3)),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: kButtonColour.withValues(alpha: 0.45)),
+          borderSide: BorderSide.none,
         ),
       ),
     );
