@@ -650,51 +650,44 @@ List<TemperatureChartData> generateTrendData(
   final middleTemp =
       tempsWithData.reduce((a, b) => a + b) / tempsWithData.length;
 
-  final minYear = yearsWithData.first;
-  final maxYear = yearsWithData.last;
-
-  final List<TemperatureChartData> trendData = [];
   final currentYear = DateTime.now().year;
-  for (int year = minYear; year <= maxYear; year++) {
-    final yearsFromMiddle = year - middleYear;
-    final trendTemp = middleTemp + (slope * yearsFromMiddle / 10);
-    trendData.add(TemperatureChartData(
-      year: year.toString(),
-      temperature: trendTemp,
-      isCurrentYear: year == currentYear,
+  final extendedYear = currentYear + 5;
+  return [
+    TemperatureChartData(
+      year: kChartStartYear.toString(),
+      temperature: middleTemp + (slope * (kChartStartYear - middleYear) / 10),
+      isCurrentYear: false,
       hasData: true,
-    ));
-  }
-  return trendData;
+    ),
+    TemperatureChartData(
+      year: extendedYear.toString(),
+      temperature: middleTemp + (slope * (extendedYear - middleYear) / 10),
+      isCurrentYear: false,
+      hasData: true,
+    ),
+  ];
 }
 
-/// Generate a horizontal average line across the year range.
+/// Generate a horizontal average line spanning the full chart axis range.
 List<TemperatureChartData> generateAverageData(
   List<TemperatureChartData> chartData,
   double averageTemp,
 ) {
-  if (chartData.isEmpty) return [];
+  if (chartData.isEmpty || !chartData.any((d) => d.hasData)) return [];
 
-  final yearsWithData = chartData
-      .where((d) => d.hasData)
-      .map((d) => int.tryParse(d.year) ?? 0)
-      .where((y) => y > 0)
-      .toList();
-  if (yearsWithData.isEmpty) return [];
-
-  yearsWithData.sort();
-  final minYear = yearsWithData.first;
-  final maxYear = yearsWithData.last;
-
-  final List<TemperatureChartData> averageData = [];
-  final currentYear = DateTime.now().year;
-  for (int year = minYear; year <= maxYear; year++) {
-    averageData.add(TemperatureChartData(
-      year: year.toString(),
+  final extendedYear = DateTime.now().year + 5;
+  return [
+    TemperatureChartData(
+      year: kChartStartYear.toString(),
       temperature: averageTemp,
-      isCurrentYear: year == currentYear,
+      isCurrentYear: false,
       hasData: true,
-    ));
-  }
-  return averageData;
+    ),
+    TemperatureChartData(
+      year: extendedYear.toString(),
+      temperature: averageTemp,
+      isCurrentYear: false,
+      hasData: true,
+    ),
+  ];
 }
