@@ -47,6 +47,26 @@ String formatTrendSlope(
       : 'Trend: Falling at $formatted$unit';
 }
 
+/// Returns the trend value phrase without a "Trend: " prefix, optionally
+/// including an error margin: e.g. "Rising at 1.1±0.1°C/decade".
+String formatTrendValue(
+  double slopePerDecade, {
+  double? slopeError,
+  required bool isFahrenheit,
+  bool convert = true,
+}) {
+  final value = (isFahrenheit && convert) ? slopePerDecade * 9 / 5 : slopePerDecade;
+  final errorValue =
+      (slopeError != null && isFahrenheit && convert) ? slopeError * 9 / 5 : slopeError;
+  final unit = isFahrenheit ? '°F/decade' : '°C/decade';
+  final formatted = value.abs().toStringAsFixed(1);
+  final errorStr = errorValue != null ? ' ± ${errorValue.toStringAsFixed(1)}' : '';
+  if (value.abs() < 0.05) return 'Steady at $formatted$errorStr$unit';
+  return value > 0
+      ? 'Rising at $formatted$errorStr$unit'
+      : 'Falling at $formatted$errorStr$unit';
+}
+
 /// Return the unit suffix string: `"°F"` or `"°C"`.
 String temperatureUnitLabel({required bool isFahrenheit}) =>
     isFahrenheit ? '°F' : '°C';

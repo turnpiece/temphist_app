@@ -176,7 +176,11 @@ class PeriodCacheService {
         'average': {'mean': d.average.mean},
         if (d.standardDeviation != null)
           'standard_deviation': d.standardDeviation,
-        'trend': {'slope': d.trend.slope, 'unit': d.trend.unit},
+        'trend': {
+          'slope': d.trend.slope,
+          'unit': d.trend.unit,
+          if (d.trend.slopeError != null) 'slope_error': d.trend.slopeError,
+        },
         'summary': d.summary,
         if (d.metadata != null)
           'metadata': {

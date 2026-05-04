@@ -125,13 +125,19 @@ class PeriodTrend {
   final double slope;
   final String unit;
 
-  PeriodTrend({required this.slope, required this.unit});
+  /// Standard error of the slope per decade, in the same unit as [slope].
+  /// Used to display an error margin, e.g. "Rising at 1.1±0.1°C/decade".
+  final double? slopeError;
+
+  PeriodTrend({required this.slope, required this.unit, this.slopeError});
 
   factory PeriodTrend.fromJson(Map<String, dynamic> json) {
     final s = json['slope'];
+    final e = json['slope_error'];
     return PeriodTrend(
       slope: s != null ? (s as num).toDouble() : 0.0,
       unit: json['unit'] ?? '',
+      slopeError: e is num ? e.toDouble() : null,
     );
   }
 }

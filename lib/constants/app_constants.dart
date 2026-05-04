@@ -80,6 +80,10 @@ const double kSummaryBubbleVerticalPadding = 12.0;
 const Color kSummaryBubbleColour = kSummaryColour;
 const Color kSummaryTextColour = Colors.white;
 
+const Color kStatsBubbleColour = Color(0xFF607090);
+const Color kStdDevColour = Color(0xFF8AAFD0);
+const double kStatsFontSize = 15.0;
+
 /// Enable verbose logging in production builds via dart-define.
 /// Usage: flutter build ios --dart-define=VERBOSE_LOGS=true
 const bool verboseLogs =

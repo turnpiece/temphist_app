@@ -574,10 +574,11 @@ class PeriodPageState extends State<PeriodPage>
         )
         .toList();
     final presentation = chartPresentation;
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isSmallPhone = screenWidth < kSmallPhoneBreakpointWidth;
+    final double contentHPadding = kScreenPadding + kContentHorizontalMargin;
 
     if (data.summary.isNotEmpty) {
-      final double screenWidth = MediaQuery.of(context).size.width;
-      final bool isSmallPhone = screenWidth < kSmallPhoneBreakpointWidth;
       final double summaryLineCount = screenWidth >= kTabletBreakpointWidth
           ? kSummaryMinLinesTablet
           : kSummaryMinLines;
@@ -662,42 +663,68 @@ class PeriodPageState extends State<PeriodPage>
       SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.only(
-            left: kScreenPadding + kContentHorizontalMargin,
-            right: kScreenPadding + kContentHorizontalMargin,
+            top: kSectionTopPadding,
+            left: isSmallPhone ? 0 : contentHPadding,
+            right: isSmallPhone ? 0 : contentHPadding,
+            bottom: kSectionBottomPadding,
+          ),
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(
+              horizontal: isSmallPhone ? contentHPadding : 12,
+              vertical: kSummaryBubbleVerticalPadding,
+            ),
+            decoration: BoxDecoration(
+              color: kStatsBubbleColour.withValues(alpha: 0.4),
+              borderRadius:
+                  isSmallPhone ? BorderRadius.zero : BorderRadius.circular(10),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildStatRow(
+                  'Average',
+                  formatTemperature(data.average.mean,
+                      isFahrenheit: widget.isFahrenheit,
+                      convert: needsConversion),
+                  kAverageColour,
+                ),
+                if (data.standardDeviation != null) ...[
+                  const SizedBox(height: 6),
+                  _buildStatRow(
+                    'Standard deviation',
+                    formatTemperature(data.standardDeviation!,
+                        isFahrenheit: widget.isFahrenheit,
+                        convert: needsConversion),
+                    kStdDevColour,
+                  ),
+                ],
+                const SizedBox(height: 6),
+                _buildStatRow(
+                  'Trend',
+                  formatTrendValue(data.trend.slope,
+                      slopeError: data.trend.slopeError,
+                      isFahrenheit: widget.isFahrenheit,
+                      convert: needsConversion),
+                  kTrendColour,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    slivers.add(
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: contentHPadding,
+            right: contentHPadding,
             bottom:
                 MediaQuery.of(context).padding.bottom + kContentVerticalPadding,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: kSectionBottomPadding),
-              Padding(
-                padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                child: Text(
-                  'Average: ${formatTemperature(data.average.mean, isFahrenheit: widget.isFahrenheit, convert: needsConversion)}',
-                  style: const TextStyle(
-                    color: kAverageColour,
-                    fontSize: kFontSizeBody,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-                child: Text(
-                  formatTrendSlope(
-                    data.trend.slope,
-                    isFahrenheit: widget.isFahrenheit,
-                    convert: needsConversion,
-                  ),
-                  style: const TextStyle(
-                    color: kTrendColour,
-                    fontSize: kFontSizeBody,
-                  ),
-                ),
-              ),
-              _buildCompletenessSection(data),
-            ],
-          ),
+          child: _buildCompletenessSection(data),
         ),
       ),
     );
@@ -930,33 +957,90 @@ class PeriodPageState extends State<PeriodPage>
               showTemperatureAxis: true,
               standardDeviation: data.standardDeviation,
             ),
+            const SizedBox(height: kSectionTopPadding),
+            // Stats bubble
+            Builder(builder: (context) {
+              final statsContainer = Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSmallPhone ? parentHorizontalPadding : 12,
+                  vertical: kSummaryBubbleVerticalPadding,
+                ),
+                decoration: BoxDecoration(
+                  color: kStatsBubbleColour.withValues(alpha: 0.4),
+                  borderRadius: isSmallPhone
+                      ? BorderRadius.zero
+                      : BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildStatRow(
+                      'Average',
+                      formatTemperature(data.average.mean,
+                          isFahrenheit: widget.isFahrenheit,
+                          convert: needsConversion),
+                      kAverageColour,
+                    ),
+                    if (data.standardDeviation != null) ...[
+                      const SizedBox(height: 6),
+                      _buildStatRow(
+                        'Std Dev',
+                        formatTemperature(data.standardDeviation!,
+                            isFahrenheit: widget.isFahrenheit,
+                            convert: needsConversion),
+                        kStdDevColour,
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    _buildStatRow(
+                      'Trend',
+                      formatTrendValue(data.trend.slope,
+                          slopeError: data.trend.slopeError,
+                          isFahrenheit: widget.isFahrenheit,
+                          convert: needsConversion),
+                      kTrendColour,
+                    ),
+                  ],
+                ),
+              );
+              if (!isSmallPhone) return statsContainer;
+              final double screenWidth = MediaQuery.of(context).size.width;
+              return OverflowBox(
+                alignment: Alignment.topLeft,
+                minWidth: screenWidth,
+                maxWidth: screenWidth,
+                child: Transform.translate(
+                  offset: Offset(-parentHorizontalPadding, 0),
+                  child: statsContainer,
+                ),
+              );
+            }),
             const SizedBox(height: kSectionBottomPadding),
-            // Average text
-            Padding(
-              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-              child: Text(
-                'Average: ${formatTemperature(data.average.mean, isFahrenheit: widget.isFahrenheit, convert: needsConversion)}',
-                style: const TextStyle(
-                    color: kAverageColour, fontSize: kFontSizeBody),
-              ),
-            ),
-            // Trend text
-            Padding(
-              padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-              child: Text(
-                formatTrendSlope(data.trend.slope,
-                    isFahrenheit: widget.isFahrenheit,
-                    convert: needsConversion),
-                style: const TextStyle(
-                    color: kTrendColour, fontSize: kFontSizeBody),
-              ),
-            ),
           ],
         );
       }),
       // Completeness notice
       _buildCompletenessSection(data),
     ];
+  }
+
+  Widget _buildStatRow(String label, String value, Color colour) {
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(fontSize: kStatsFontSize, color: colour),
+        children: [
+          TextSpan(
+            text: '$label  ',
+            style: const TextStyle(fontWeight: FontWeight.w400),
+          ),
+          TextSpan(
+            text: value,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildCompletenessSection(PeriodTemperatureData data) {
