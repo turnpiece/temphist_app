@@ -16,6 +16,7 @@ class OnboardingTapPage extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final isSmall = constraints.maxHeight < 500;
           return SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -25,8 +26,8 @@ class OnboardingTapPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const TapBarIllustration(),
-                    const SizedBox(height: 32),
-                    ..._textContent(),
+                    SizedBox(height: isSmall ? 16 : 32),
+                    ..._textContent(isSmall: isSmall),
                   ],
                 ),
               ),
@@ -37,22 +38,22 @@ class OnboardingTapPage extends StatelessWidget {
     );
   }
 
-  List<Widget> _textContent() => [
-        const Text(
+  List<Widget> _textContent({required bool isSmall}) => [
+        Text(
           'Tap for details',
           style: TextStyle(
             color: kHeadingColour,
-            fontSize: 24,
+            fontSize: isSmall ? 20.0 : 24.0,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.3,
           ),
         ),
-        const SizedBox(height: 12),
-        const Text(
+        SizedBox(height: isSmall ? 8 : 12),
+        Text(
           'Tap any bar to see the exact temperature recorded for that year.',
           style: TextStyle(
             color: kTextPrimaryColour,
-            fontSize: kFontSizeBody,
+            fontSize: isSmall ? 15.0 : kFontSizeBody,
             height: 1.5,
           ),
         ),

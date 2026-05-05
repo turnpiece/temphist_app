@@ -50,10 +50,31 @@ class OnboardingDayPage extends StatelessWidget {
         ..._textContent(date, year, isSmall: isSmall),
       ];
 
+  Widget _colourItem(Color colour, double fraction, String text, double barHeight, double bodySize) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FractionallySizedBox(
+          widthFactor: fraction,
+          child: Container(
+            height: barHeight,
+            decoration: BoxDecoration(
+              color: colour,
+              borderRadius: BorderRadius.circular(barHeight / 2),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(text, style: TextStyle(color: kTextPrimaryColour, fontSize: bodySize, height: 1.4)),
+      ],
+    );
+  }
+
   List<Widget> _textContent(String date, int year, {required bool isSmall}) {
     final titleSize = isSmall ? 20.0 : 24.0;
     final bodySize = isSmall ? 15.0 : kFontSizeBody;
     final gap = isSmall ? 8.0 : 12.0;
+    final barHeight = isSmall ? 6.0 : 8.0;
     return [
       Text(
         'Today in history',
@@ -76,18 +97,11 @@ class OnboardingDayPage extends StatelessWidget {
         ),
       ),
       SizedBox(height: gap),
-      Text(
-        'Longer bars represent warmer years and are redder.',
-        style: TextStyle(color: kBarWarmColour, fontSize: bodySize),
-      ),
-      Text(
-        'Mid-length bars are around average and grey.',
-        style: TextStyle(color: kBarNeutralColour, fontSize: bodySize),
-      ),
-      Text(
-        'Shorter bars represent cooler years and are bluer.',
-        style: TextStyle(color: kBarCoolColour, fontSize: bodySize),
-      ),
+      _colourItem(kBarWarmColour, 0.90, 'Longer bars represent warmer years.', barHeight, bodySize),
+      SizedBox(height: gap),
+      _colourItem(kBarNeutralColour, 0.60, 'Mid-length bars are around average.', barHeight, bodySize),
+      SizedBox(height: gap),
+      _colourItem(kBarCoolColour, 0.35, 'Shorter bars represent cooler years.', barHeight, bodySize),
     ];
   }
 }

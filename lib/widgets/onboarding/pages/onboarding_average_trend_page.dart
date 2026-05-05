@@ -54,7 +54,7 @@ class OnboardingAverageTrendPage extends StatelessWidget {
 
   List<Widget> _legendWidgets() => [
         const Text(
-          'Average: the historical mean temperature for this date.',
+          'Average: the historical mean temperature for this period.',
           style: TextStyle(
             color: kAverageColour,
             fontSize: kFontSizeBody,
@@ -63,7 +63,8 @@ class OnboardingAverageTrendPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         const Text(
-          'Trend: shows whether temperatures are rising or falling over the years.',
+          'Trend: shows whether temperatures are rising or falling. '
+          'Below each chart you can see the numerical rate of warming or cooling per decade along with the error margin, indicating how reliable the trend is.',
           style: TextStyle(
             color: kTrendLineColour,
             fontSize: kFontSizeBody,
