@@ -390,15 +390,17 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
       padding: const EdgeInsets.only(bottom: 24),
       children: [
         // "Current location" shows the physical GPS location, if known.
-        // Always a single full-width row.
         if (widget.gpsLocation.isNotEmpty) ...[
           _SectionHeader('Current', color: kHeadingColour),
-          _LocationRow(
-            apiLocation: widget.gpsLocation,
-            isSelected: widget.selectedLocation == widget.gpsLocation,
-            selectedColor: kBarCurrentYearColour,
-            onTap: () => _select(widget.gpsLocation),
-          ),
+          if (isTablet)
+            _buildTwoColumnGrid([widget.gpsLocation], kBarCurrentYearColour)
+          else
+            _LocationRow(
+              apiLocation: widget.gpsLocation,
+              isSelected: widget.selectedLocation == widget.gpsLocation,
+              selectedColor: kBarCurrentYearColour,
+              onTap: () => _select(widget.gpsLocation),
+            ),
         ],
         // Recent — two-column grid on tablets, single column on phones.
         if (data.recentLocations.isNotEmpty) ...[

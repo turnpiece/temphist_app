@@ -1502,13 +1502,13 @@ class TemperatureScreenState extends State<TemperatureScreen>
                             if (headerFlag != null)
                               Text(
                                 headerFlag,
-                                style: const TextStyle(fontSize: kIconSize + 2),
+                                style: const TextStyle(fontSize: kIconSize + 6),
                               )
                             else
                               Icon(
                                 Icons.location_on_outlined,
                                 color: locationColour.withValues(alpha: 0.8),
-                                size: kIconSize + 2,
+                                size: kIconSize + 6,
                               ),
                             const SizedBox(width: 6),
                             Expanded(
