@@ -122,7 +122,7 @@ class _Body extends StatelessWidget {
         _Section(
           title: 'Reading the chart',
           body:
-              'Each bar represents the temperature recorded on the same date in a different year. Bar colours show how warm or cool that year was compared with the average.',
+              'Each bar represents the mean temperature recorded on the same date, or the same week or month or year, in a different year. Bar colours show how warm or cool that year was compared with the 50-year average.',
           bullets: [
             _Bullet(
                 color: kBarCurrentYearColour, label: 'Green bar — this year'),
@@ -145,14 +145,14 @@ class _Body extends StatelessWidget {
             _Bullet(
                 color: kAverageColour,
                 label:
-                    'Average (grey dotted line) — the historical mean temperature for this date.'),
+                    'Average (grey dotted line) — the historical mean temperature for this series.'),
             _Bullet(
                 color: kTrendColour,
                 label:
-                    'Trend (yellow line) — shows whether temperatures are rising or falling over the decades.'),
+                    'Trend (yellow line) — shows whether temperatures are rising, falling or steady over the decades.'),
           ],
           footer:
-              'Trend accuracy increases with longer time periods. The trend is most reliable on the Year view, where each data point averages a full year of readings. On the Day view it reflects a single date each year, so day-to-day weather variation can make it less meaningful.',
+              'The error margin on the trend gives an idea as to how reliable it is. Trend accuracy increases with longer time periods. The trend is most reliable on the Year view, where each data point averages a full year of readings. On the Day view it reflects a single date each year, so day-to-day weather variation can make it less meaningful.',
         ),
         _Section(
           title: 'Time periods',

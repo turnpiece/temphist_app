@@ -89,7 +89,7 @@ class OnboardingDayPage extends StatelessWidget {
       Text(
         'The main screen shows today\'s date across multiple years — '
         'so on $date you\'ll see $date $year, $date ${year - 1}, '
-        '$date ${year - 2} and so on.',
+        '$date ${year - 2} and so on. Each bar represents the mean temperature for that date.',
         style: TextStyle(
           color: kTextPrimaryColour,
           fontSize: bodySize,
