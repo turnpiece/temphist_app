@@ -373,7 +373,7 @@ Color _barColorForAnomaly(
 ///
 /// Used by both the daily view (progressive loading) and period views
 /// (weekly, monthly, yearly) which load all data in one API call.
-class TemperatureBarChart extends StatelessWidget {
+class TemperatureBarChart extends StatefulWidget {
   final List<TemperatureChartData> chartData;
   final double? averageTemperature;
   final double? trendSlope;
@@ -414,20 +414,113 @@ class TemperatureBarChart extends StatelessWidget {
   });
 
   @override
+  State<TemperatureBarChart> createState() => _TemperatureBarChartState();
+}
+
+class _TemperatureBarChartState extends State<TemperatureBarChart> {
+  late final TooltipBehavior _tooltipBehavior;
+
+  // Updated during build so the tooltip builder always sees current data.
+  TemperatureChartPresentation? _presentation;
+
+  @override
+  void initState() {
+    super.initState();
+    _tooltipBehavior = TooltipBehavior(
+      enable: true,
+      color: Colors.black87,
+      canShowMarker: false,
+      header: '',
+      duration: 6000,
+      textStyle: const TextStyle(fontSize: kFontSizeBody),
+      builder: (data, point, series, pointIndex, seriesIndex) {
+        final presentation = _presentation;
+        if (presentation == null) return const SizedBox.shrink();
+
+        final d = data as TemperatureChartData;
+        final displayTemp = presentation.shouldConvert
+            ? celsiusToFahrenheit(d.temperature)
+            : d.temperature;
+
+        Widget? anomalyWidget;
+        if (d.anomaly != null) {
+          final rawAnomaly = presentation.shouldConvert
+              ? d.anomaly! * 9 / 5
+              : d.anomaly!;
+          final displayAnomaly =
+              double.parse(rawAnomaly.toStringAsFixed(1));
+          final String direction;
+          final String sign;
+          if (displayAnomaly > 0) {
+            direction = 'above';
+            sign = '+';
+          } else if (displayAnomaly < 0) {
+            direction = 'below';
+            sign = '−';
+          } else {
+            direction = 'at the';
+            sign = '';
+          }
+          final anomalyText =
+              '$sign${displayAnomaly.abs().toStringAsFixed(1)}${presentation.unitLabel} $direction average';
+          final baseColor = d.barFillColor ?? Colors.white;
+          final hsl = HSLColor.fromColor(baseColor);
+          final anomalyColor =
+              hsl.withLightness(hsl.lightness.clamp(0.80, 1.0)).toColor();
+          anomalyWidget = Text(
+            anomalyText,
+            style: TextStyle(
+              color: anomalyColor,
+              fontSize: kFontSizeBody - 2,
+            ),
+          );
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.black87,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                d.year,
+                style: const TextStyle(
+                    color: Colors.white, fontSize: kFontSizeBody - 2),
+              ),
+              Text(
+                '${displayTemp.toStringAsFixed(1)}${presentation.unitLabel} (Mean)',
+                style: const TextStyle(
+                    color: Colors.white, fontSize: kFontSizeBody - 2),
+              ),
+              if (anomalyWidget != null) anomalyWidget,
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final presentation = this.presentation ??
+    _presentation = widget.presentation ??
         buildTemperatureChartPresentation(
           context: context,
-          chartData: chartData,
-          averageTemperature: averageTemperature,
-          isFahrenheit: isFahrenheit,
-          needsConversion: needsConversion,
-          standardDeviation: standardDeviation,
+          chartData: widget.chartData,
+          averageTemperature: widget.averageTemperature,
+          isFahrenheit: widget.isFahrenheit,
+          needsConversion: widget.needsConversion,
+          standardDeviation: widget.standardDeviation,
         );
+
+    final presentation = _presentation;
 
     if (presentation == null) {
       return SizedBox(
-        height: height,
+        height: widget.height,
         child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -459,43 +552,21 @@ class TemperatureBarChart extends StatelessWidget {
           final chartWidth = computeTemperatureChartWidth(context);
 
           final chart = SfCartesianChart(
-            key: ValueKey('${isFahrenheit}_$showTemperatureAxis'),
+            key: ValueKey('${widget.isFahrenheit}_${widget.showTemperatureAxis}'),
             isTransposed: true,
             margin: const EdgeInsets.only(
               left: kChartHorizontalMargin,
               right: kChartRightMargin,
             ),
-            tooltipBehavior: TooltipBehavior(
-              enable: true,
-              color: Colors.black87,
-              format: 'point.x: point.y${presentation.unitLabel}',
-              canShowMarker: false,
-              header: '',
-              textStyle: const TextStyle(fontSize: kFontSizeBody),
-              builder: (data, point, series, pointIndex, seriesIndex) {
-                final d = data as TemperatureChartData;
-                final displayTemp = presentation.shouldConvert
-                    ? celsiusToFahrenheit(d.temperature)
-                    : d.temperature;
-                return Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.black87,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    '${d.year}: ${displayTemp.toStringAsFixed(1)}${presentation.unitLabel}',
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: kFontSizeBody - 4),
-                  ),
-                );
-              },
-            ),
+            tooltipBehavior: _tooltipBehavior,
+            onChartTouchInteractionDown: (_) {
+              _tooltipBehavior.hide();
+            },
             series: _buildSeries(
               presentation.yAxisMin,
               presentation.styledChartData,
-              averageTemperature,
-              trendSlope,
+              widget.averageTemperature,
+              widget.trendSlope,
             ),
             primaryXAxis: NumericAxis(
               labelStyle: const TextStyle(
@@ -526,21 +597,22 @@ class TemperatureBarChart extends StatelessWidget {
               majorGridLines: MajorGridLines(
                   width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
               labelStyle: TextStyle(
-                fontSize: showTemperatureAxis ? kFontSizeAxisLabel : 1,
-                color:
-                    showTemperatureAxis ? kGreyLabelColour : Colors.transparent,
+                fontSize: widget.showTemperatureAxis ? kFontSizeAxisLabel : 1,
+                color: widget.showTemperatureAxis
+                    ? kGreyLabelColour
+                    : Colors.transparent,
                 fontFamilyFallback: kChartAxisFontFamilyFallback,
               ),
               plotOffset: 0,
               interval: presentation.yAxisInterval,
               labelPosition: ChartDataLabelPosition.outside,
               majorTickLines: MajorTickLines(
-                size: showTemperatureAxis ? 4 : 0,
-                width: showTemperatureAxis ? 1 : 0,
+                size: widget.showTemperatureAxis ? 4 : 0,
+                width: widget.showTemperatureAxis ? 1 : 0,
                 color: kAxisLabelColour,
               ),
               axisLine: AxisLine(
-                width: showTemperatureAxis ? 1 : 0,
+                width: widget.showTemperatureAxis ? 1 : 0,
                 color: kAxisLabelColour,
               ),
             ),
@@ -549,10 +621,10 @@ class TemperatureBarChart extends StatelessWidget {
           );
 
           return isTablet
-              ? SizedBox(height: height, width: chartWidth, child: chart)
+              ? SizedBox(height: widget.height, width: chartWidth, child: chart)
               : Center(
-                  child:
-                      SizedBox(height: height, width: chartWidth, child: chart),
+                  child: SizedBox(
+                      height: widget.height, width: chartWidth, child: chart),
                 );
         },
       ),
@@ -588,7 +660,7 @@ class TemperatureBarChart extends StatelessWidget {
           right: Radius.circular(4),
         ),
       ),
-      if (avg != null && !isLoading)
+      if (avg != null && !widget.isLoading)
         LineSeries<TemperatureChartData, int>(
           dataSource: generateAverageData(data, avg),
           xValueMapper: (TemperatureChartData data, _) =>
@@ -602,7 +674,7 @@ class TemperatureBarChart extends StatelessWidget {
           markerSettings: const MarkerSettings(isVisible: false),
           enableTooltip: false,
         ),
-      if (slope != null && !isLoading)
+      if (slope != null && !widget.isLoading)
         LineSeries<TemperatureChartData, int>(
           dataSource: generateTrendData(data, slope),
           xValueMapper: (TemperatureChartData data, _) =>
