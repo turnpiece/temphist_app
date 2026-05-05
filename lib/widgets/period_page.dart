@@ -566,9 +566,11 @@ class PeriodPageState extends State<PeriodPage>
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isSmallPhone = screenWidth < kSmallPhoneBreakpointWidth;
     final double contentHPadding = kScreenPadding + kContentHorizontalMargin;
+    final bool isTablet = screenWidth >= kTabletBreakpointWidth;
+    final double bubbleInnerHPadding = isTablet ? 20.0 : 12.0;
 
     if (data.summary.isNotEmpty) {
-      final double summaryLineCount = screenWidth >= kTabletBreakpointWidth
+      final double summaryLineCount = isTablet
           ? kSummaryMinLinesTablet
           : kSummaryMinLines;
       final double summaryBubbleHeight =
@@ -588,7 +590,7 @@ class PeriodPageState extends State<PeriodPage>
               constraints: BoxConstraints(minHeight: summaryBubbleHeight),
               padding: EdgeInsets.symmetric(
                 horizontal:
-                    isSmallPhone ? kScreenPadding + kContentHorizontalMargin : 12,
+                    isSmallPhone ? kScreenPadding + kContentHorizontalMargin : bubbleInnerHPadding,
                 vertical: kSummaryBubbleVerticalPadding,
               ),
               decoration: BoxDecoration(
@@ -660,7 +662,7 @@ class PeriodPageState extends State<PeriodPage>
           child: Container(
             width: double.infinity,
             padding: EdgeInsets.symmetric(
-              horizontal: isSmallPhone ? contentHPadding : 12,
+              horizontal: isSmallPhone ? contentHPadding : bubbleInnerHPadding,
               vertical: kSummaryBubbleVerticalPadding,
             ),
             decoration: BoxDecoration(

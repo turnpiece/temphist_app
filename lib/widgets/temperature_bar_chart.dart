@@ -68,7 +68,8 @@ class TemperatureChartPresentation {
 }
 
 const double kTemperatureChartTopAxisHeight = 22.0;
-const double kChartXAxisPlotOffset = 20.0;
+const double kChartXAxisPlotOffsetStart = 8.0;
+const double kChartXAxisPlotOffsetEnd = 20.0;
 
 double computeTemperatureChartWidth(BuildContext context) {
   final screenWidth = MediaQuery.of(context).size.width;
@@ -199,7 +200,8 @@ class TemperatureChartTopAxis extends StatelessWidget {
             maximum: DateTime.now().year.toDouble(),
             interval: 5,
             labelFormat: '{value}',
-            plotOffset: kChartXAxisPlotOffset,
+            plotOffsetStart: kChartXAxisPlotOffsetStart,
+            plotOffsetEnd: kChartXAxisPlotOffsetEnd,
             axisLine: const AxisLine(width: 0),
           ),
           primaryYAxis: NumericAxis(
@@ -547,8 +549,6 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
       padding: EdgeInsets.zero,
       child: Builder(
         builder: (context) {
-          final screenWidth = MediaQuery.of(context).size.width;
-          final isTablet = screenWidth >= kTabletBreakpointWidth;
           final chartWidth = computeTemperatureChartWidth(context);
 
           final chart = SfCartesianChart(
@@ -581,7 +581,8 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
               maximum: DateTime.now().year.toDouble(),
               interval: 5,
               labelFormat: '{value}',
-              plotOffset: kChartXAxisPlotOffset,
+              plotOffsetStart: kChartXAxisPlotOffsetStart,
+              plotOffsetEnd: kChartXAxisPlotOffsetEnd,
               axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
             ),
             primaryYAxis: NumericAxis(
@@ -597,7 +598,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
               majorGridLines: MajorGridLines(
                   width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
               labelStyle: TextStyle(
-                fontSize: widget.showTemperatureAxis ? kFontSizeAxisLabel : 1,
+                fontSize: kFontSizeAxisLabel,
                 color: widget.showTemperatureAxis
                     ? kGreyLabelColour
                     : Colors.transparent,
@@ -607,25 +608,27 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
               interval: presentation.yAxisInterval,
               labelPosition: ChartDataLabelPosition.outside,
               majorTickLines: MajorTickLines(
-                size: widget.showTemperatureAxis ? 4 : 0,
-                width: widget.showTemperatureAxis ? 1 : 0,
-                color: kAxisLabelColour,
+                size: 4,
+                width: 1,
+                color: widget.showTemperatureAxis
+                    ? kAxisLabelColour
+                    : Colors.transparent,
               ),
               axisLine: AxisLine(
-                width: widget.showTemperatureAxis ? 1 : 0,
-                color: kAxisLabelColour,
+                width: 1,
+                color: widget.showTemperatureAxis
+                    ? kAxisLabelColour
+                    : Colors.transparent,
               ),
             ),
             plotAreaBorderWidth: 0,
             enableAxisAnimation: false,
           );
 
-          return isTablet
-              ? SizedBox(height: widget.height, width: chartWidth, child: chart)
-              : Center(
-                  child: SizedBox(
-                      height: widget.height, width: chartWidth, child: chart),
-                );
+          return Center(
+            child: SizedBox(
+                height: widget.height, width: chartWidth, child: chart),
+          );
         },
       ),
     );
