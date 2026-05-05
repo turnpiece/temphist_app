@@ -492,7 +492,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
                     color: Colors.white, fontSize: kFontSizeBody - 2),
               ),
               Text(
-                '${displayTemp.toStringAsFixed(1)}${presentation.unitLabel} (Mean)',
+                '${displayTemp.toStringAsFixed(1)}${presentation.unitLabel} (mean)',
                 style: const TextStyle(
                     color: Colors.white, fontSize: kFontSizeBody - 2),
               ),
