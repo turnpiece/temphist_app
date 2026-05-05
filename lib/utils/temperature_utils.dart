@@ -38,7 +38,7 @@ String formatTrendSlope(
 }) {
   final value = (isFahrenheit && convert) ? slopePerDecade * 9 / 5 : slopePerDecade;
   final unit = isFahrenheit ? '°F/decade' : '°C/decade';
-  final formatted = value.abs().toStringAsFixed(1);
+  final formatted = value.abs().toStringAsFixed(2);
   if (value.abs() < 0.05) {
     return 'Trend: Steady at $formatted$unit';
   }
@@ -59,8 +59,8 @@ String formatTrendValue(
   final errorValue =
       (slopeError != null && isFahrenheit && convert) ? slopeError * 9 / 5 : slopeError;
   final unit = isFahrenheit ? '°F/decade' : '°C/decade';
-  final formatted = value.abs().toStringAsFixed(1);
-  final errorStr = errorValue != null ? ' ± ${errorValue.toStringAsFixed(1)}' : '';
+  final formatted = value.abs().toStringAsFixed(2);
+  final errorStr = errorValue != null ? ' ± ${errorValue.toStringAsFixed(2)}' : '';
   if (value.abs() < 0.05) return 'Steady at $formatted$errorStr$unit';
   return value > 0
       ? 'Rising at $formatted$errorStr$unit'
