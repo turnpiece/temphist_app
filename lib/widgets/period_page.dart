@@ -562,17 +562,6 @@ class PeriodPageState extends State<PeriodPage>
 
     final data = _data!;
     final needsConversion = widget.isFahrenheit && !data.isFahrenheit;
-    final chartData = data.values
-        .map(
-          (v) => TemperatureChartData(
-            year: v.year.toString(),
-            temperature: v.temperature,
-            isCurrentYear: v.year == DateTime.now().year,
-            hasData: true,
-            anomaly: v.anomaly,
-          ),
-        )
-        .toList();
     final presentation = chartPresentation;
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isSmallPhone = screenWidth < kSmallPhoneBreakpointWidth;
@@ -606,7 +595,7 @@ class PeriodPageState extends State<PeriodPage>
                 color: kSummaryBubbleColour.withValues(alpha: 0.5),
                 borderRadius: isSmallPhone
                     ? BorderRadius.zero
-                    : BorderRadius.circular(10),
+                    : BorderRadius.circular(kBubbleBorderRadius),
               ),
               child: Center(
                 child: Text(
@@ -646,7 +635,7 @@ class PeriodPageState extends State<PeriodPage>
     slivers.add(
       SliverToBoxAdapter(
         child: TemperatureBarChart(
-          chartData: chartData,
+          chartData: presentation?.styledChartData ?? [],
           averageTemperature: data.average.mean,
           trendSlope: data.trend.slope,
           isLoading: false,
@@ -654,7 +643,7 @@ class PeriodPageState extends State<PeriodPage>
           isFahrenheit: widget.isFahrenheit,
           needsConversion: needsConversion,
           showTemperatureAxis: false,
-          standardDeviation: data.standardDeviation,
+          presentation: presentation,
         ),
       ),
     );
@@ -677,7 +666,7 @@ class PeriodPageState extends State<PeriodPage>
             decoration: BoxDecoration(
               color: kStatsBubbleColour.withValues(alpha: 0.4),
               borderRadius:
-                  isSmallPhone ? BorderRadius.zero : BorderRadius.circular(10),
+                  isSmallPhone ? BorderRadius.zero : BorderRadius.circular(kBubbleBorderRadius),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -905,7 +894,7 @@ class PeriodPageState extends State<PeriodPage>
                 color: kSummaryBubbleColour.withValues(alpha: 0.5),
                 borderRadius: isSmallPhone
                     ? BorderRadius.zero
-                    : BorderRadius.circular(10),
+                    : BorderRadius.circular(kBubbleBorderRadius),
               ),
               child: Center(
                 child: Text(
@@ -970,7 +959,7 @@ class PeriodPageState extends State<PeriodPage>
                   color: kStatsBubbleColour.withValues(alpha: 0.4),
                   borderRadius: isSmallPhone
                       ? BorderRadius.zero
-                      : BorderRadius.circular(10),
+                      : BorderRadius.circular(kBubbleBorderRadius),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

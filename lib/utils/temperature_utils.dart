@@ -23,30 +23,6 @@ String formatTemperature(
   return '${display.toStringAsFixed(decimals)}$unit';
 }
 
-/// Format a trend slope for display.
-///
-/// When [isFahrenheit] is true and [convert] is true (the default), the slope
-/// is assumed to be in °C/decade and is scaled by ×1.8 (no +32 offset, since
-/// slope is a rate).  When [convert] is false the value is already in the
-/// target unit.
-///
-/// Both units use 1 decimal place (e.g. "0.3°C/decade", "0.8°F/decade").
-String formatTrendSlope(
-  double slopePerDecade, {
-  required bool isFahrenheit,
-  bool convert = true,
-}) {
-  final value = (isFahrenheit && convert) ? slopePerDecade * 9 / 5 : slopePerDecade;
-  final unit = isFahrenheit ? '°F/decade' : '°C/decade';
-  final formatted = value.abs().toStringAsFixed(2);
-  if (value.abs() < 0.05) {
-    return 'Trend: Steady at $formatted$unit';
-  }
-  return value > 0
-      ? 'Trend: Rising at $formatted$unit'
-      : 'Trend: Falling at $formatted$unit';
-}
-
 /// Returns the trend value phrase without a "Trend: " prefix, optionally
 /// including an error margin: e.g. "Rising at 1.1±0.1°C/decade".
 String formatTrendValue(

@@ -4,12 +4,13 @@ A Flutter app that visualises historical average temperatures using interactive 
 
 ## Features
 
-- **Temperature history charts** — bar chart showing the same date/week/month/year across all recorded years
+- **Temperature history charts** — bar chart showing the same date/week/month/year across all recorded years, coloured warm/cool by Z-score (climate-stripes style)
 - **Four time-period views** — Day, Week, Month, Year, swipeable
-- **Average & trend lines** — historical mean and long-term temperature trend
+- **Average & trend lines** — historical mean and long-term temperature trend with error margin
+- **Stats bubble** — standard deviation and trend rate displayed below the chart
 - **Location search** — search any city in the world by name
 - **Automatic location detection** — uses GPS when permission is granted; falls back to a picker if not
-- **Recent & popular locations** — quick access to places you've been and a curated global list
+- **Recent & popular locations** — quick access to places you've been and an API-driven global list
 - **°C / °F toggle** — US locations default to Fahrenheit
 - **Social sharing** — shareable snapshot links with Open Graph previews
 

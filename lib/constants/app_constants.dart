@@ -18,7 +18,7 @@ const kBarWarmColour = Color(0xFFFF3B30);
 const kBarCoolColour = Color(0xFF3B82F6);
 const kBarNeutralColour = Color(0xFF8E8E93);
 const kBarCurrentYearBorderColour = Color(0xFF00FF7F);
-const kLocationRecentColour = Color(0xFF7EA08A);
+const kLocationRecentColour = Color(0xFF6DC88A);
 const kLocationPopularColour = Color(0xFFD0D4DE);
 const kAxisLabelColour = Color(0xFFECECEC);
 const kAxisGridColour = kAxisLabelColour;
@@ -74,9 +74,7 @@ const double kSummaryMinLines = 4;
 const double kSummaryMinLinesTablet = 3;
 const double kSmallPhoneBreakpointWidth = 380.0;
 const double kSummaryBubbleVerticalPadding = 12.0;
-// Summary bubble colour scheme — swap these two to try alternatives:
-// Option A: const kSummaryBubbleColour = Color(0xFF1A3D24); kSummaryTextColour = Colors.white;
-// Option C: kSummaryBubbleColour = kSummaryColour; kSummaryTextColour = kSummaryColour;
+const double kBubbleBorderRadius = 10.0;
 const Color kSummaryBubbleColour = kSummaryColour;
 const Color kSummaryTextColour = Colors.white;
 

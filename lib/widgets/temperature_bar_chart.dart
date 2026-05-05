@@ -68,6 +68,7 @@ class TemperatureChartPresentation {
 }
 
 const double kTemperatureChartTopAxisHeight = 22.0;
+const double kChartXAxisPlotOffset = 20.0;
 
 double computeTemperatureChartWidth(BuildContext context) {
   final screenWidth = MediaQuery.of(context).size.width;
@@ -198,7 +199,7 @@ class TemperatureChartTopAxis extends StatelessWidget {
             maximum: DateTime.now().year.toDouble(),
             interval: 5,
             labelFormat: '{value}',
-            plotOffset: 20,
+            plotOffset: kChartXAxisPlotOffset,
             axisLine: const AxisLine(width: 0),
           ),
           primaryYAxis: NumericAxis(
@@ -235,6 +236,11 @@ class TemperatureChartTopAxis extends StatelessWidget {
     );
   }
 }
+
+/// Neutral-band threshold for the fallback anomaly normalisation path (no SD).
+/// Expressed as a fraction of the largest observed warm/cool anomaly in the
+/// series; values below this fraction are rendered as neutral grey.
+const double _kFallbackNeutralBand = 0.12;
 
 /// |Z| at which a bar is fully saturated red (warm) or blue (cool).
 /// Roughly the 95th percentile of a normal distribution (|Z| >= 2 covers ~5%
@@ -339,7 +345,6 @@ Color _barColorForAnomaly(
   double maxWarmAnomaly,
   double maxCoolAnomaly,
 ) {
-  const double neutralBand = 0.12;
   double normalized;
   if (anomaly > 0) {
     normalized = maxWarmAnomaly == 0 ? 0 : anomaly / maxWarmAnomaly;
@@ -349,12 +354,13 @@ Color _barColorForAnomaly(
     normalized = 0;
   }
 
-  if (normalized <= neutralBand) {
+  if (normalized <= _kFallbackNeutralBand) {
     return kBarNeutralColour;
   }
 
-  final blend =
-      ((normalized - neutralBand) / (1 - neutralBand)).clamp(0.0, 1.0);
+  final blend = ((normalized - _kFallbackNeutralBand) /
+          (1 - _kFallbackNeutralBand))
+      .clamp(0.0, 1.0);
   return Color.lerp(
         kBarNeutralColour,
         anomaly >= 0 ? kBarWarmColour : kBarCoolColour,
@@ -388,6 +394,11 @@ class TemperatureBarChart extends StatelessWidget {
   /// so coloring is statistically meaningful and consistent across periods.
   final double? standardDeviation;
 
+  /// Pre-built presentation from a parent widget. When provided, skips the
+  /// call to [buildTemperatureChartPresentation] so the Z-score styling pass
+  /// only runs once per build.
+  final TemperatureChartPresentation? presentation;
+
   const TemperatureBarChart({
     super.key,
     required this.chartData,
@@ -399,18 +410,20 @@ class TemperatureBarChart extends StatelessWidget {
     this.needsConversion = true,
     this.showTemperatureAxis = true,
     this.standardDeviation,
+    this.presentation,
   });
 
   @override
   Widget build(BuildContext context) {
-    final presentation = buildTemperatureChartPresentation(
-      context: context,
-      chartData: chartData,
-      averageTemperature: averageTemperature,
-      isFahrenheit: isFahrenheit,
-      needsConversion: needsConversion,
-      standardDeviation: standardDeviation,
-    );
+    final presentation = this.presentation ??
+        buildTemperatureChartPresentation(
+          context: context,
+          chartData: chartData,
+          averageTemperature: averageTemperature,
+          isFahrenheit: isFahrenheit,
+          needsConversion: needsConversion,
+          standardDeviation: standardDeviation,
+        );
 
     if (presentation == null) {
       return SizedBox(
@@ -497,7 +510,7 @@ class TemperatureBarChart extends StatelessWidget {
               maximum: DateTime.now().year.toDouble(),
               interval: 5,
               labelFormat: '{value}',
-              plotOffset: 20,
+              plotOffset: kChartXAxisPlotOffset,
               axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
             ),
             primaryYAxis: NumericAxis(
