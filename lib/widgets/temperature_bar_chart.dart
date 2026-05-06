@@ -69,7 +69,7 @@ class TemperatureChartPresentation {
 
 const double kTemperatureChartTopAxisHeight = 22.0;
 const double kChartXAxisPlotOffsetStart = 8.0;
-const double kChartXAxisPlotOffsetEnd = 20.0;
+const double kChartXAxisPlotOffsetEnd = 8.0;
 
 double computeTemperatureChartWidth(BuildContext context) {
   final screenWidth = MediaQuery.of(context).size.width;
@@ -598,7 +598,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
               majorGridLines: MajorGridLines(
                   width: 0.5, color: kAxisGridColour.withValues(alpha: 0.3)),
               labelStyle: TextStyle(
-                fontSize: kFontSizeAxisLabel,
+                fontSize: widget.showTemperatureAxis ? kFontSizeAxisLabel : 1,
                 color: widget.showTemperatureAxis
                     ? kGreyLabelColour
                     : Colors.transparent,
