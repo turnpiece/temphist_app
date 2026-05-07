@@ -39,7 +39,8 @@ class PeriodTemperatureData {
   bool get isFahrenheit => unitGroup == 'fahrenheit';
 
   factory PeriodTemperatureData.fromJson(Map<String, dynamic> json) {
-    final stdDev = json['standard_deviation'];
+    final avgJson = json['average'] ?? {};
+    final stdDev = avgJson['standard_deviation'];
     return PeriodTemperatureData(
       period: json['period'] ?? '',
       location: json['location'] ?? '',
@@ -49,7 +50,7 @@ class PeriodTemperatureData {
       values: (json['values'] as List? ?? [])
           .map((v) => PeriodDataPoint.fromJson(v))
           .toList(),
-      average: PeriodAverage.fromJson(json['average'] ?? {}),
+      average: PeriodAverage.fromJson(avgJson),
       trend: PeriodTrend.fromJson(json['trend'] ?? {}),
       summary: json['summary'] ?? '',
       metadata: json['metadata'] != null

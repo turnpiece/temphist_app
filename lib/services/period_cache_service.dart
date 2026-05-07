@@ -173,9 +173,11 @@ class PeriodCacheService {
                   if (v.anomaly != null) 'anomaly': v.anomaly,
                 })
             .toList(),
-        'average': {'mean': d.average.mean},
-        if (d.standardDeviation != null)
-          'standard_deviation': d.standardDeviation,
+        'average': {
+          'mean': d.average.mean,
+          if (d.standardDeviation != null)
+            'standard_deviation': d.standardDeviation,
+        },
         'trend': {
           'slope': d.trend.slope,
           'unit': d.trend.unit,

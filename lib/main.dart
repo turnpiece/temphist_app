@@ -320,7 +320,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
   // Combined height of the period segmented control plus its bottom padding —
   // i.e. how far the user must scroll to fully collapse the nav.
-  static const double _kPeriodTabsCollapseHeight = 54.0;
+  static const double _kPeriodTabsCollapseHeight = 58.0;
 
   static const List<String> _periodKeys = ['daily', 'week', 'month', 'year'];
   bool _isSharing = false;
@@ -1685,7 +1685,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
                           color: i == pageIndex
                               ? kSegmentedControlSelectedTextColour
                               : kSegmentedControlUnselectedTextColour,
-                          fontSize: kSummaryFontSize,
+                          fontSize: kFontSizeBody - 2,
                           fontWeight: i == pageIndex
                               ? FontWeight.w600
                               : FontWeight.w400,
