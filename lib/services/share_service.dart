@@ -153,37 +153,20 @@ class ShareService {
     }
   }
 
-  /// Opens the system share sheet with the chart image (if available) and URL.
+  /// Opens the system share sheet with the share URL.
   ///
-  /// When [imageFile] is provided the PNG is attached directly to the message
-  /// so recipients see the chart immediately; the URL is included as text.
-  /// Falls back to URI-only sharing if no image was captured.
+  /// Passes the URL as a native NSURL activity item on iOS so iMessage and
+  /// other apps receive a tappable rich link card (image + title + domain)
+  /// built from the share page's Open Graph tags — matching the single
+  /// clickable card produced when sharing from the website.
   ///
   /// [shareButtonKey] is used to compute the popover anchor rect required on
   /// iPad. Pass the key attached to the share button widget.
   Future<void> share({
     required String shareUrl,
-    File? imageFile,
     GlobalKey? shareButtonKey,
   }) async {
     final rect = _buttonRect(shareButtonKey);
-
-    if (imageFile != null && await imageFile.exists()) {
-      try {
-        await SharePlus.instance.share(
-          ShareParams(
-            files: [XFile(imageFile.path, mimeType: 'image/png')],
-            text: shareUrl,
-            sharePositionOrigin: rect,
-          ),
-        );
-        return;
-      } catch (e) {
-        DebugUtils.logLazy(
-            () => 'ShareService: shareXFiles failed, falling back to uri: $e');
-      }
-    }
-
     await SharePlus.instance.share(
       ShareParams(
         uri: Uri.parse(shareUrl),

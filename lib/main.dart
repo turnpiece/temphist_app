@@ -1590,20 +1590,15 @@ class TemperatureScreenState extends State<TemperatureScreen>
     setState(() => _isSharing = true);
     try {
       final String periodKey;
-      final GlobalKey captureKey;
       switch (pageIndex) {
         case 0:
           periodKey = 'daily';
-          captureKey = _dailyRepaintKey;
         case 1:
           periodKey = 'week';
-          captureKey = _weekRepaintKey;
         case 2:
           periodKey = 'month';
-          captureKey = _monthRepaintKey;
         case 3:
           periodKey = 'year';
-          captureKey = _yearRepaintKey;
         default:
           return;
       }
@@ -1616,26 +1611,13 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
       final shareService = ShareService();
 
-      final periodLabel = _buildPeriodHeaderLabel(pageIndex);
-      final locationLabel =
-          _displayLocation.isNotEmpty ? _displayLocation : _determinedLocation;
-      final footerText = '$locationLabel — $periodLabel';
-
-      // Create the server-side share record and capture the chart in parallel.
-      final shareUrlFuture = shareService.createShare(
+      final shareUrl = await shareService.createShare(
         location: _determinedLocation,
         period: periodKey,
         identifier: identifier,
         refYear: refYear,
         unit: unit,
       );
-      final imageFuture = shareService.captureWidget(
-        captureKey,
-        footerText: footerText,
-      );
-
-      final shareUrl = await shareUrlFuture;
-      final imageFile = await imageFuture;
 
       // Clear the spinner before opening the native sheet. The share future
       // may never resolve on iOS if the user dismisses without selecting an
@@ -1644,7 +1626,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
       await shareService.share(
         shareUrl: shareUrl,
-        imageFile: imageFile,
         shareButtonKey: null,
       );
     } catch (e) {
