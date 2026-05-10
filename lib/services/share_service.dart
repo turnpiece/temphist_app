@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 
-import '../config/app_config.dart';
 import '../constants/app_constants.dart';
 import '../utils/debug_utils.dart';
 import 'temperature_service.dart';
@@ -32,7 +31,7 @@ class ShareService {
     required String unit,
   }) async {
     final token = await _temperatureService.getAuthToken();
-    final url = Uri.parse('${AppConfig.apiBaseUrl}/v1/shares');
+    final url = Uri.parse('https://api.temphist.com/v1/shares');
 
     DebugUtils.logLazy(() => 'ShareService: creating share for $period/$identifier ($location)');
 

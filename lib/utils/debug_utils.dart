@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import '../config/app_config.dart';
 import '../constants/app_constants.dart';
 
 /// Centralized debug utility functions that are only active in debug mode
@@ -105,12 +104,6 @@ class DebugUtils {
     }
   }
   
-  /// Check if debug mode is enabled (uses kDebugMode and custom config for zero-cost)
-  static bool get isEnabled => kDebugMode && AppConfig.isDebugMode;
-  
-  /// Check if verbose logging is enabled (uses verboseLogs constant)
-  static bool get isVerboseEnabled => (kDebugMode && AppConfig.isDebugMode) || verboseLogs;
-  
-  /// Check if debug UI should be shown (still uses AppConfig for app-specific settings)
-  static bool get shouldShowDebugUI => AppConfig.shouldShowDebugFeatures;
+  static bool get isEnabled => kDebugMode;
+  static bool get isVerboseEnabled => kDebugMode || verboseLogs;
 }

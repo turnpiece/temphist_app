@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import '../models/temperature_data.dart';
 import '../models/period_temperature_data.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../config/app_config.dart';
 import '../utils/debug_utils.dart';
 import '../constants/app_constants.dart';
 import '../models/app_exceptions.dart';
@@ -398,7 +397,7 @@ class TemperatureService {
 
   TemperatureService({
     String? apiBaseUrl,
-  }) : apiBaseUrl = apiBaseUrl ?? AppConfig.apiBaseUrl;
+  }) : apiBaseUrl = apiBaseUrl ?? 'https://api.temphist.com';
 
   /// Retrieve Firebase ID token for authentication with retry logic
   Future<String> getAuthToken() async {

@@ -17,7 +17,6 @@ import 'services/temperature_service.dart';
 import 'services/share_service.dart';
 import 'services/location_service.dart';
 import 'services/period_cache_service.dart';
-import 'config/app_config.dart';
 import 'utils/debug_utils.dart';
 import 'widgets/period_page.dart';
 import 'widgets/splash_screen.dart';
@@ -287,11 +286,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
   bool _onboardingCheckComplete = false;
   bool _locationSelectorAutoOpened = false;
 
-  // Simulation state for testing
-  bool _simulateAverageFailure = AppConfig.defaultSimulateAverageFailure;
-  bool _simulateTrendFailure = AppConfig.defaultSimulateTrendFailure;
-  bool _simulateSummaryFailure = AppConfig.defaultSimulateSummaryFailure;
-
   geo.Position? get _lastPosition => _locationService.lastPosition;
 
   // Incremented whenever the location/unit changes so in-flight prefetch
@@ -385,16 +379,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
     _weekScrollController = ScrollController();
     _monthScrollController = ScrollController();
     _yearScrollController = ScrollController();
-
-    // Debug mode detection logging
-    DebugUtils.logLazy(() => '🔧 Debug mode detection:');
-    DebugUtils.logLazy(() => '  - kDebugMode: $kDebugMode');
-    DebugUtils.logLazy(
-        () => '  - AppConfig.isDebugMode: ${AppConfig.isDebugMode}');
-    DebugUtils.logLazy(
-        () => '  - AppConfig.enableDebugUI: ${AppConfig.enableDebugUI}');
-    DebugUtils.logLazy(() =>
-        '  - AppConfig.shouldShowDebugFeatures: ${AppConfig.shouldShowDebugFeatures}');
 
     // Load temperature unit preference (°C / °F) and rebuild on change.
     _unitService.load();
@@ -564,38 +548,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
   static const Duration _historicalDataCacheExpiration = Duration(hours: 24);
   static const Duration _summaryCacheExpiration = Duration(hours: 1);
   static const Duration _averageTrendCacheExpiration = Duration(hours: 6);
-
-  Future<void> _clearCache() async {
-    await _safeSharedPreferencesOperation(() async {
-      final prefs = await SharedPreferences.getInstance();
-
-      // Get all keys to find cache entries
-      final keys = prefs.getKeys();
-
-      // Clear chart data cache
-      await prefs.remove('cachedChartData');
-
-      // Clear API response caches (average, trend, summary)
-      for (final key in keys) {
-        if (key.startsWith('api_')) {
-          await prefs.remove(key);
-        }
-      }
-
-      // Clear temperature data caches
-      for (final key in keys) {
-        if (key.startsWith('tempData_')) {
-          await prefs.remove(key);
-        }
-      }
-
-      // Clear location cache
-      await prefs.remove('cachedLocation');
-
-      DebugUtils.logLazy(() =>
-          'All cache cleared: chart data, API responses, temperature data, and location');
-    }, 'clear cache');
-  }
 
   /// Clean up expired cache entries
   Future<void> _cleanupExpiredCache() async {
@@ -876,45 +828,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
     });
   }
 
-  Future<void> _handleRefresh() async {
-    DebugUtils.logLazy(() => 'Full refresh triggered');
-
-    TemperatureService.clearCache();
-
-    if (AppConfig.enableEndpointFailureSimulation) {
-      await _clearCache();
-    }
-
-    if (!mounted) return;
-    _locationService.reset();
-
-    await _initializeApp();
-  }
-
-  /// Force refresh without using cache (for debugging/testing)
-  Future<void> _handleForceRefresh() async {
-    DebugUtils.logLazy(() => 'Force refresh triggered - clearing all cache');
-
-    TemperatureService.clearCache();
-    await _clearCache();
-
-    if (!mounted) return;
-    _locationService.reset();
-    await _initializeApp();
-  }
-
-  /// Clear only location cache (for testing different locations in Simulator)
-  Future<void> _handleLocationRefresh() async {
-    DebugUtils.logLazy(
-        () => 'Location refresh triggered - clearing location cache only');
-
-    await _locationService.clearCache();
-
-    if (!mounted) return;
-    _locationService.reset();
-    await _initializeApp();
-  }
-
   /// Opens the settings sheet.
   void _showSettings() {
     SettingsSheet.show(
@@ -970,34 +883,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
     _prefetchPeriodData();
   }
 
-  /// Test date change detection (for debugging)
-  void _handleTestDateChange() {
-    DebugUtils.logLazy(
-        () => 'Test date change triggered - simulating date change detection');
-    // Pretend the last load was for a different date, then run the check.
-    _lastDateIdentifier = '00-00';
-    _checkAndRefreshDataIfDateChanged();
-  }
-
-  /// Clear all cache (for debugging)
-  Future<void> _handleClearCache() async {
-    DebugUtils.logLazy(
-        () => 'Clear cache triggered - clearing all cached data');
-
-    // Clear all cache
-    await _clearCache();
-
-    // Show feedback only if widget is still mounted
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cache cleared successfully'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-    }
-  }
-
   Widget _buildGradientBackground() {
     return SizedBox.expand(
       child: Container(
@@ -1009,307 +894,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
               kBackgroundColour, // Top color
               kBackgroundColourDark, // Bottom color
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVersionSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Debug Info:',
-          style: TextStyle(
-            color: kGreyLabelColour,
-            fontSize: kFontSizeBody - 2,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Version: ${AppConfig.fullVersion}',
-          style: TextStyle(
-            color: kGreyLabelColour,
-            fontSize: kFontSizeBody - 3,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-        Text(
-          'Release: ${AppConfig.releaseDate}',
-          style: TextStyle(
-            color: kGreyLabelColour,
-            fontSize: kFontSizeBody - 3,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDebugToggleSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Debug Mode - Simulate Endpoint Failures:',
-          style: TextStyle(
-            color: kGreyLabelColour,
-            fontSize: kFontSizeBody - 1,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Use Wrap for responsive button layout
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildDebugToggleButton('Average', 'average'),
-            _buildDebugToggleButton('Trend', 'trend'),
-            _buildDebugToggleButton('Summary', 'summary'),
-            _buildResetAllButton(),
-            _buildForceRefreshButton(),
-            _buildLocationRefreshButton(),
-            _buildTestDateChangeButton(),
-            _buildClearCacheButton(),
-          ],
-        ),
-        if (AppConfig.enableEndpointFailureSimulation) ...[
-          const SizedBox(height: 8),
-          Text(
-            'Simulation Active: ${_simulateAverageFailure ? "Average" : ""}${_simulateTrendFailure ? "${_simulateAverageFailure ? ", " : ""}Trend" : ""}${_simulateSummaryFailure ? "${(_simulateAverageFailure || _simulateTrendFailure) ? ", " : ""}Summary" : ""}',
-            style: TextStyle(
-              color: kHeadingColour,
-              fontSize: kFontSizeBody - 2,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildDebugToggleButton(String label, String endpoint) {
-    bool isSimulating = false;
-
-    switch (endpoint) {
-      case 'average':
-        isSimulating = _simulateAverageFailure;
-        break;
-      case 'trend':
-        isSimulating = _simulateTrendFailure;
-        break;
-      case 'summary':
-        isSimulating = _simulateSummaryFailure;
-        break;
-    }
-
-    return GestureDetector(
-      onTap: () async {
-        setState(() {
-          switch (endpoint) {
-            case 'average':
-              _simulateAverageFailure = !_simulateAverageFailure;
-              break;
-            case 'trend':
-              _simulateTrendFailure = !_simulateTrendFailure;
-              break;
-            case 'summary':
-              _simulateSummaryFailure = !_simulateSummaryFailure;
-              break;
-          }
-        });
-
-        // Show feedback
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  '${isSimulating ? 'Disabled' : 'Enabled'} $label failure simulation'),
-              duration: const Duration(seconds: 1),
-            ),
-          );
-        }
-
-        // If we're enabling a simulation, trigger a refresh to see the failure
-        if (!isSimulating) {
-          // Clear cache when enabling simulation to ensure fresh data loading
-          await _clearCache();
-          if (mounted) {
-            _handleRefresh();
-          }
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: isSimulating
-              ? kAccentColour
-              : kGreyLabelColour.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSimulating ? Colors.white : kGreyLabelColour,
-            fontSize: kFontSizeBody - 2,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildResetAllButton() {
-    return GestureDetector(
-      onTap: () async {
-        setState(() {
-          _simulateAverageFailure = false;
-          _simulateTrendFailure = false;
-          _simulateSummaryFailure = false;
-        });
-        // Show feedback
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('All failure simulations reset'),
-            duration: const Duration(seconds: 1),
-          ),
-        );
-        // Clear cache and refresh to ensure clean state
-        await _clearCache();
-        if (mounted) _handleRefresh();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: kGreyLabelColour.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          'Reset All',
-          style: TextStyle(
-            color: kGreyLabelColour,
-            fontSize: kFontSizeBody - 2,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildForceRefreshButton() {
-    return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Force refresh - clearing all cache'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-        _handleForceRefresh();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: kAccentColour.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          'Force Refresh',
-          style: TextStyle(
-            color: kAccentColour,
-            fontSize: kFontSizeBody - 2,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLocationRefreshButton() {
-    return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location refresh - clearing location cache'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-        _handleLocationRefresh();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: kGreyLabelColour.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          'Location Refresh',
-          style: TextStyle(
-            color: kGreyLabelColour,
-            fontSize: kFontSizeBody - 2,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTestDateChangeButton() {
-    return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Simulating date change - clearing data and reloading...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        _handleTestDateChange();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: Colors.orange.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          'Test Date Change',
-          style: TextStyle(
-            color: Colors.orange,
-            fontSize: kFontSizeBody - 2,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClearCacheButton() {
-    return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Clearing all cache...'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-        _handleClearCache();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: kButtonColour.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          'Clear Cache',
-          style: TextStyle(
-            color: kButtonColour,
-            fontSize: kFontSizeBody - 2,
-            fontWeight: FontWeight.w500,
           ),
         ),
       ),
@@ -1568,10 +1152,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
                 ],
               ),
             ),
-            if (AppConfig.shouldShowDebugFeatures) ...[
-              _buildDebugPadding(context, _buildDebugToggleSection()),
-              _buildDebugPadding(context, _buildVersionSection()),
-            ],
           ],
         );
       },
@@ -1779,21 +1359,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
         isFahrenheit: _isFahrenheit,
         onDataLoaded: onDataLoaded,
       ),
-    );
-  }
-
-  Widget _buildDebugPadding(BuildContext context, Widget child) {
-    final leftPadding =
-        _standardHorizontalPadding().clamp(0.0, double.infinity);
-    final rightPadding = leftPadding;
-
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: 8.0, // Reduced bottom padding for debug sections
-        left: leftPadding,
-        right: rightPadding,
-      ),
-      child: child,
     );
   }
 

@@ -55,25 +55,9 @@ The actual config files are gitignored.
 flutter run
 ```
 
-## Build Configuration
+## Debug Logging
 
-The app uses a layered config system in `lib/config/`:
-
-| File | Purpose |
-| ---- | ------- |
-| `build_config.dart` | Detects debug vs release build |
-| `debug_config.dart` | Debug-specific settings |
-| `production_config.dart` | Production settings |
-| `app_config.dart` | Unified interface used throughout the app |
-
-Use `AppConfig` in code rather than checking `kDebugMode` directly:
-
-```dart
-if (AppConfig.isDebugMode) { ... }
-if (AppConfig.shouldShowDebugFeatures) { ... }
-```
-
-Use `DebugUtils` for logging (no-ops in production):
+Use `DebugUtils` for logging — calls are no-ops in release builds:
 
 ```dart
 DebugUtils.logLazy(() => 'message');
@@ -82,9 +66,10 @@ DebugUtils.logLazy(() => 'message');
 ## Scripts
 
 ```bash
-./scripts/switch_to_debug.sh       # Enable debug mode
-./scripts/switch_to_production.sh  # Enable production mode
-./scripts/check_mode.sh            # Show current mode
+./scripts/create_release.sh patch    # Bump version, tag, and push (see Releasing below)
+./scripts/simulator_screenshots.sh   # Set simulator status bar to clean screenshot state
+./scripts/record_preview.sh          # Record an App Store–ready App Preview from the Simulator
+./scripts/regenerate_certificates.sh # Nuke and regenerate iOS certificates via fastlane match
 ```
 
 ## Releasing
