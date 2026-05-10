@@ -324,10 +324,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
   static const List<String> _periodKeys = ['daily', 'week', 'month', 'year'];
   bool _isSharing = false;
-  final GlobalKey _dailyRepaintKey = GlobalKey();
-  final GlobalKey _weekRepaintKey = GlobalKey();
-  final GlobalKey _monthRepaintKey = GlobalKey();
-  final GlobalKey _yearRepaintKey = GlobalKey();
   late final ScrollController _dailyScrollController;
   late final ScrollController _weekScrollController;
   late final ScrollController _monthScrollController;
@@ -1410,7 +1406,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
                             context,
                             pageIndex: 0,
                             pageKey: _dailyPageKey,
-                            repaintKey: _dailyRepaintKey,
                             periodKey: 'daily',
                             periodLabel: 'daily',
                             scrollController: _dailyScrollController,
@@ -1421,7 +1416,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
                             context,
                             pageIndex: 1,
                             pageKey: _weekPageKey,
-                            repaintKey: _weekRepaintKey,
                             periodKey: 'week',
                             periodLabel: 'Past week',
                             scrollController: _weekScrollController,
@@ -1431,7 +1425,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
                             context,
                             pageIndex: 2,
                             pageKey: _monthPageKey,
-                            repaintKey: _monthRepaintKey,
                             periodKey: 'month',
                             periodLabel: 'Past month',
                             scrollController: _monthScrollController,
@@ -1441,7 +1434,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
                             context,
                             pageIndex: 3,
                             pageKey: _yearPageKey,
-                            repaintKey: _yearRepaintKey,
                             periodKey: 'year',
                             periodLabel: 'Past year',
                             scrollController: _yearScrollController,
@@ -1701,9 +1693,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
     );
   }
 
-  /// Period heading shown at the top of the share-image RepaintBoundary,
-  /// e.g. "Week ending 1 May". Location is shown in the persistent header
-  /// above the scroll content, so it is not repeated here.
   Widget _buildLocationAndHeadingContent(int pageIndex) {
     return Text(
       _buildPeriodHeaderLabel(pageIndex),
@@ -1758,7 +1747,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
     BuildContext context, {
     required int pageIndex,
     required GlobalKey<PeriodPageState> pageKey,
-    required GlobalKey repaintKey,
     required String periodKey,
     required String periodLabel,
     required ScrollController scrollController,
@@ -1770,7 +1758,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
     final sidePad = _standardHorizontalPadding();
     return RepaintBoundary(
-      key: repaintKey,
       child: PeriodPage(
         key: pageKey,
         periodKey: periodKey,
