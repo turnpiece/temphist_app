@@ -342,7 +342,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     if (_searchResults.isEmpty) {
       return Center(
         child: Text(
-          'No locations found.\nTry a more specific search, e.g. "Birmingham, Alabama, US".',
+          'No locations found.',
           textAlign: TextAlign.center,
           style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
         ),
