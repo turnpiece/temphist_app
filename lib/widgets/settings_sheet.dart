@@ -191,12 +191,22 @@ class _SettingsSheetState extends State<SettingsSheet> {
                           color: kGreyLabelColour,
                           size: kIconSize + 2,
                         ),
-                        onTap: () {
+                        onTap: () async {
                           Navigator.of(context).pop();
-                          launchUrl(
-                            Uri.parse(kPrivacyPolicyUrl),
+                          final uri = Uri.parse(kPrivacyPolicyUrl);
+                          final ok = await launchUrl(
+                            uri,
                             mode: LaunchMode.externalApplication,
                           );
+                          if (!context.mounted) return;
+                          if (!ok) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                    'Could not open the privacy policy link.'),
+                              ),
+                            );
+                          }
                         },
                       ),
 

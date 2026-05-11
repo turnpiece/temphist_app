@@ -284,9 +284,6 @@ class _Section extends StatelessWidget {
 }
 
 /// A colour-dot + label row used inside [_Section].
-///
-/// When [description] is provided the [label] is rendered in [color] (bold)
-/// and the description follows in the standard grey style.
 class _Bullet {
   final Color color;
   final String label;

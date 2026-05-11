@@ -60,6 +60,44 @@ const double kSectionTopPadding = 14.0;
 /// App constants
 const String kAppTitle = 'TempHist';
 
+const String _kApiBaseUrlDefine = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: '',
+);
+
+String _normalizeApiOrigin(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return 'https://api.temphist.com';
+  return trimmed.endsWith('/')
+      ? trimmed.substring(0, trimmed.length - 1)
+      : trimmed;
+}
+
+/// API origin (no trailing slash).
+///
+/// Set at compile/run time with `--dart-define=API_BASE_URL=...` (e.g. dev API).
+/// If unset or blank, uses `https://api.temphist.com`.
+///
+/// Example: `flutter run --dart-define=API_BASE_URL=https://devapi.temphist.com`
+///
+/// Override in tests via [TemperatureService] constructor.
+final String kApiBaseUrl = _normalizeApiOrigin(_kApiBaseUrlDefine);
+
+/// Maps app period keys (`daily`, `week`, `month`, `year`) to v1 records API path segments.
+String kApiRecordsPeriodSegment(String period) {
+  switch (period) {
+    case 'week':
+      return 'weekly';
+    case 'month':
+      return 'monthly';
+    case 'year':
+      return 'yearly';
+    case 'daily':
+    default:
+      return 'daily';
+  }
+}
+
 /// Font size constants - control text sizing throughout the app
 const double kFontSizeTitle = 26.0;
 const double kFontSizeLocation = 21.0;

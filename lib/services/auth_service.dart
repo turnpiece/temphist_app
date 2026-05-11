@@ -49,7 +49,7 @@ class AuthService {
           return;
         }
 
-        // Exponential backoff: 2 s, 4 s, 6 s, …
+        // Linear backoff between attempts: 2 s, 4 s, 6 s, …
         final delay = Duration(seconds: attempts * 2);
         DebugUtils.logLazy(
             () => '⏳ Waiting ${delay.inSeconds}s before retry...');

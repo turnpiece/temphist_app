@@ -12,15 +12,8 @@ import 'temperature_service.dart';
 class ShareService {
   final TemperatureService _temperatureService;
 
-  ShareService() : _temperatureService = TemperatureService();
-
-  /// Maps the app's short period keys to the API's canonical period names.
-  static String _apiPeriod(String period) => switch (period) {
-        'week' => 'weekly',
-        'month' => 'monthly',
-        'year' => 'yearly',
-        _ => period, // 'daily' passes through unchanged
-      };
+  ShareService({TemperatureService? temperatureService})
+      : _temperatureService = temperatureService ?? TemperatureService();
 
   /// Creates a share record on the server and returns the short share URL.
   Future<String> createShare({
@@ -31,7 +24,8 @@ class ShareService {
     required String unit,
   }) async {
     final token = await _temperatureService.getAuthToken();
-    final url = Uri.parse('https://api.temphist.com/v1/shares');
+    final url =
+        Uri.parse('${_temperatureService.apiBaseUrl}/v1/shares');
 
     DebugUtils.logLazy(() => 'ShareService: creating share for $period/$identifier ($location)');
 
@@ -44,7 +38,7 @@ class ShareService {
       },
       body: jsonEncode({
         'location': location,
-        'period': _apiPeriod(period),
+        'period': kApiRecordsPeriodSegment(period),
         'identifier': identifier,
         'ref_year': refYear,
         'unit': unit,

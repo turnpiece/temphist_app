@@ -27,16 +27,10 @@ class PeriodPage extends StatefulWidget {
   /// Short location for display (e.g. "London, UK"). Falls back to [location].
   final String? displayLocation;
 
-  /// Callback invoked when pull-to-refresh is triggered.
-  final Future<void> Function()? onRefresh;
-
   /// GPS coordinates used for Hive cache key. Optional — cache is skipped
   /// if not provided (e.g. when using default location).
   final double? latitude;
   final double? longitude;
-
-  /// Whether this widget wraps its own scroll/refresh UI.
-  final bool useInternalScroll;
 
   /// Whether to display temperatures in Fahrenheit.
   final bool isFahrenheit;
@@ -47,10 +41,6 @@ class PeriodPage extends StatefulWidget {
   /// Optional widget inserted above the chart content inside the scroll view.
   final Widget? topContent;
 
-  /// Called once after the page successfully loads (or reloads) data.
-  /// Useful for triggering downstream actions like showing a coachmark.
-  final VoidCallback? onDataLoaded;
-
   const PeriodPage({
     super.key,
     required this.periodKey,
@@ -59,12 +49,9 @@ class PeriodPage extends StatefulWidget {
     this.displayLocation,
     this.latitude,
     this.longitude,
-    this.onRefresh,
-    this.useInternalScroll = true,
     this.isFahrenheit = false,
     this.scrollController,
     this.topContent,
-    this.onDataLoaded,
   });
 
   @override
@@ -292,7 +279,6 @@ class PeriodPageState extends State<PeriodPage>
           _isLoading = false;
           _lastFetchKey = _fetchKey;
         });
-        widget.onDataLoaded?.call();
       }
     } on RateLimitException {
       if (mounted && _fetchGeneration == generation) {
@@ -481,16 +467,7 @@ class PeriodPageState extends State<PeriodPage>
   void reload() {
     _lastFetchKey = '';
     _data = null;
-    _fetchData();
-  }
-
-  /// Public refresh hook for external RefreshIndicator.
-  Future<void> refresh() async {
-    _lastFetchKey = '';
-    await _fetchData(bypassCache: true);
-    if (widget.onRefresh != null) {
-      await widget.onRefresh!();
-    }
+    _fetchData(bypassCache: true);
   }
 
   @override
@@ -506,15 +483,10 @@ class PeriodPageState extends State<PeriodPage>
       );
     }
 
-    if (!widget.useInternalScroll) {
-      return _buildContent(context);
-    }
-
     return RefreshIndicator(
       onRefresh: () async {
         _lastFetchKey = '';
-        await _fetchData();
-        if (widget.onRefresh != null) await widget.onRefresh!();
+        await _fetchData(bypassCache: true);
       },
       color: kAccentColour,
       backgroundColor: kBackgroundColour,
@@ -641,7 +613,7 @@ class PeriodPageState extends State<PeriodPage>
           averageTemperature: data.average.mean,
           trendSlope: data.trend.slope,
           isLoading: false,
-          height: 800,
+          height: kChartHeight,
           isFahrenheit: widget.isFahrenheit,
           needsConversion: needsConversion,
           showTemperatureAxis: false,
@@ -723,46 +695,6 @@ class PeriodPageState extends State<PeriodPage>
     return slivers;
   }
 
-  Widget _buildContent(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth >= kTabletBreakpointWidth;
-    final isSmallPhone = screenWidth < kSmallPhoneBreakpointWidth;
-    final leftPadding = kScreenPadding + kContentHorizontalMargin;
-    final rightPadding = leftPadding;
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: leftPadding,
-        right: rightPadding,
-        bottom: MediaQuery.of(context).padding.bottom + kContentVerticalPadding,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Loading state — show whenever we have no data and no error,
-          // regardless of _isLoading flag. This ensures the spinner appears
-          // immediately when data is cleared (e.g. location/unit change)
-          // without waiting for _fetchData's setState to fire.
-          if (_data == null && _error == null) _buildLoadingState(),
-
-          // Error state
-          if (_error != null) _buildErrorState(),
-
-          // Empty state — data returned but no values to display
-          if (_data != null && _data!.values.isEmpty) _buildEmptyState(),
-
-          // Data loaded
-          if (_data != null && _data!.values.isNotEmpty)
-            ..._buildDataContent(
-              isTablet: isTablet,
-              isSmallPhone: isSmallPhone,
-              parentHorizontalPadding: leftPadding,
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildLoadingState() {
     return Padding(
       padding: const EdgeInsets.only(top: 40),
@@ -834,7 +766,7 @@ class PeriodPageState extends State<PeriodPage>
             label: 'Retry loading ${widget.periodLabel.toLowerCase()} data',
             button: true,
             child: GestureDetector(
-              onTap: _fetchData,
+              onTap: () => _fetchData(bypassCache: true),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -855,165 +787,6 @@ class PeriodPageState extends State<PeriodPage>
         ],
       ),
     );
-  }
-
-  List<Widget> _buildDataContent({
-    bool isTablet = false,
-    bool isSmallPhone = false,
-    double parentHorizontalPadding = 0,
-  }) {
-    final data = _data!;
-    final currentYear = DateTime.now().year;
-    // Convert API values to chart data
-    final chartData = data.values.map((v) {
-      return TemperatureChartData(
-        year: v.year.toString(),
-        temperature: v.temperature,
-        isCurrentYear: v.year == currentYear,
-        hasData: true,
-        anomaly: v.anomaly,
-      );
-    }).toList();
-
-    return [
-      // Summary
-      if (data.summary.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.only(bottom: kSectionBottomPadding),
-          child: Builder(builder: (context) {
-            final double summaryLineCount =
-                isTablet ? kSummaryMinLinesTablet : kSummaryMinLines;
-            final double summaryBubbleHeight =
-                kSummaryFontSize * kSummaryLineHeight * summaryLineCount +
-                    kSummaryBubbleVerticalPadding * 2;
-            final container = Container(
-              constraints: BoxConstraints(minHeight: summaryBubbleHeight),
-              padding: EdgeInsets.symmetric(
-                horizontal: isSmallPhone ? parentHorizontalPadding : 12,
-                vertical: kSummaryBubbleVerticalPadding,
-              ),
-              decoration: BoxDecoration(
-                color: kSummaryBubbleColour.withValues(alpha: 0.5),
-                borderRadius: isSmallPhone
-                    ? BorderRadius.zero
-                    : BorderRadius.circular(kBubbleBorderRadius),
-              ),
-              child: Center(
-                child: Text(
-                  data.summary,
-                  style: const TextStyle(
-                    color: kSummaryTextColour,
-                    fontSize: kSummaryFontSize,
-                    fontWeight: FontWeight.w400,
-                    height: kSummaryLineHeight,
-                  ),
-                  strutStyle: const StrutStyle(
-                    fontSize: kSummaryFontSize,
-                    height: kSummaryLineHeight,
-                    forceStrutHeight: true,
-                  ),
-                  softWrap: true,
-                  maxLines: null,
-                ),
-              ),
-            );
-            if (!isSmallPhone) return container;
-            final double screenWidth = MediaQuery.of(context).size.width;
-            return OverflowBox(
-              alignment: Alignment.topLeft,
-              minWidth: screenWidth,
-              maxWidth: screenWidth,
-              child: Transform.translate(
-                offset: Offset(-parentHorizontalPadding, 0),
-                child: container,
-              ),
-            );
-          }),
-        ),
-      // Chart — skip client-side conversion when the API already returned
-      // data in the requested unit.
-      Builder(builder: (_) {
-        final needsConversion = widget.isFahrenheit && !data.isFahrenheit;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TemperatureBarChart(
-              chartData: chartData,
-              averageTemperature: data.average.mean,
-              trendSlope: data.trend.slope,
-              isLoading: false,
-              height: 800,
-              isFahrenheit: widget.isFahrenheit,
-              needsConversion: needsConversion,
-              showTemperatureAxis: true,
-              standardDeviation: data.standardDeviation,
-            ),
-            const SizedBox(height: kSectionTopPadding),
-            // Stats bubble
-            Builder(builder: (context) {
-              final statsContainer = Container(
-                width: double.infinity,
-                padding: EdgeInsets.symmetric(
-                  horizontal: isSmallPhone ? parentHorizontalPadding : 12,
-                  vertical: kSummaryBubbleVerticalPadding,
-                ),
-                decoration: BoxDecoration(
-                  color: kStatsBubbleColour.withValues(alpha: 0.4),
-                  borderRadius: isSmallPhone
-                      ? BorderRadius.zero
-                      : BorderRadius.circular(kBubbleBorderRadius),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildStatRow(
-                      'Average',
-                      formatTemperature(data.average.mean,
-                          isFahrenheit: widget.isFahrenheit,
-                          convert: needsConversion),
-                      kAverageColour,
-                    ),
-                    if (data.standardDeviation != null) ...[
-                      const SizedBox(height: 6),
-                      _buildStatRow(
-                        'Std Dev',
-                        formatTemperature(data.standardDeviation!,
-                            isFahrenheit: widget.isFahrenheit,
-                            convert: needsConversion),
-                        kStdDevColour,
-                      ),
-                    ],
-                    const SizedBox(height: 6),
-                    _buildStatRow(
-                      'Trend',
-                      formatTrendValue(data.trend.slope,
-                          slopeError: data.trend.slopeError,
-                          isFahrenheit: widget.isFahrenheit,
-                          convert: needsConversion),
-                      kTrendColour,
-                    ),
-                  ],
-                ),
-              );
-              if (!isSmallPhone) return statsContainer;
-              final double screenWidth = MediaQuery.of(context).size.width;
-              return OverflowBox(
-                alignment: Alignment.topLeft,
-                minWidth: screenWidth,
-                maxWidth: screenWidth,
-                child: Transform.translate(
-                  offset: Offset(-parentHorizontalPadding, 0),
-                  child: statsContainer,
-                ),
-              );
-            }),
-            const SizedBox(height: kSectionBottomPadding),
-          ],
-        );
-      }),
-      // Completeness notice
-      _buildCompletenessSection(data),
-    ];
   }
 
   Widget _buildStatRow(String label, String value, Color colour) {

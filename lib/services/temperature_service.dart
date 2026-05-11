@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
-import '../models/temperature_data.dart';
 import '../models/period_temperature_data.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../utils/debug_utils.dart';
@@ -9,14 +8,6 @@ import '../constants/app_constants.dart';
 import '../models/app_exceptions.dart';
 import 'auth_service.dart';
 export '../models/app_exceptions.dart';
-
-/// Extension to capitalize the first letter of a string
-extension StringExtension on String {
-  String capitalize() {
-    if (isEmpty) return this;
-    return this[0].toUpperCase() + substring(1);
-  }
-}
 
 class TemperatureService {
   static const int _kMaxCacheEntries = 20;
@@ -397,7 +388,7 @@ class TemperatureService {
 
   TemperatureService({
     String? apiBaseUrl,
-  }) : apiBaseUrl = apiBaseUrl ?? 'https://api.temphist.com';
+  }) : apiBaseUrl = apiBaseUrl ?? kApiBaseUrl;
 
   /// Retrieve Firebase ID token for authentication with retry logic
   Future<String> getAuthToken() async {
@@ -426,114 +417,6 @@ class TemperatureService {
     }
   }
 
-  Future<TemperatureData> fetchTemperature(String city, String date) async {
-    return _fetchTemperatureData('weather', city, date);
-  }
-
-  Future<TemperatureData> fetchCompleteData(String city, String date, {
-    String? unitGroup,
-  }) async {
-    // Extract month-day from the date (e.g., "2025-06-18" -> "06-18")
-    final monthDay = date.length >= 10 ? date.substring(5) : date;
-    final json = await _fetchV1Records('daily', city, monthDay, unitGroup: unitGroup);
-    return TemperatureData.fromJson(json);
-  }
-
-  /// Common helper function for fetching data from API endpoints
-  Future<Map<String, dynamic>> _fetchApiData(String endpoint, String city, String date, {
-    String? unitGroup,
-  }) async {
-    final normalizedEndpoint = endpoint.replaceAll('/', '').toLowerCase();
-
-    // Legacy endpoints for summary/average/trend were removed; route to v1.
-    if (normalizedEndpoint == 'summary' ||
-        normalizedEndpoint == 'average' ||
-        normalizedEndpoint == 'trend') {
-      final json =
-          await _fetchV1Subresource('daily', city, date, normalizedEndpoint,
-              unitGroup: unitGroup);
-      final data = json['data'];
-      if (normalizedEndpoint == 'summary') {
-        return {
-          'summary': data,
-          'metadata': json['metadata'],
-          'period': json['period'],
-          'location': json['location'],
-          'identifier': json['identifier'],
-        };
-      }
-      if (normalizedEndpoint == 'average') {
-        final mean = (data is Map<String, dynamic>) ? data['mean'] : null;
-        return {
-          'average': mean,
-          'data': data,
-          'metadata': json['metadata'],
-          'period': json['period'],
-          'location': json['location'],
-          'identifier': json['identifier'],
-        };
-      }
-      final slope = (data is Map<String, dynamic>) ? data['slope'] : null;
-      final unit = (data is Map<String, dynamic>) ? data['unit'] : null;
-      return {
-        'slope': slope,
-        'unit': unit,
-        'data': data,
-        'metadata': json['metadata'],
-        'period': json['period'],
-        'location': json['location'],
-        'identifier': json['identifier'],
-      };
-    }
-
-    final token = await getAuthToken();
-    final url = Uri.parse('$apiBaseUrl/$normalizedEndpoint/$city/$date');
-
-    DebugUtils.logLazy(() => 'Fetching /$normalizedEndpoint/ for city=$city, date=$date');
-
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final responseBody = response.body;
-      DebugUtils.logLazy(
-        () => '${normalizedEndpoint.capitalize()} API Response for $city/$date: $responseBody',
-      );
-      
-      if (responseBody.isEmpty) {
-        throw ApiResponseException('empty response from $normalizedEndpoint');
-      }
-
-      final json = jsonDecode(responseBody);
-      if (json == null) {
-        throw ApiResponseException('null response body from $normalizedEndpoint');
-      }
-      
-      return json;
-    } else {
-      DebugUtils.logLazy(
-        () => '${normalizedEndpoint.capitalize()} API Error Response: ${response.statusCode} - ${response.body}',
-      );
-      
-      // Check if it's a rate limit error
-      if (response.statusCode == 429) {
-        try {
-          final errorJson = jsonDecode(response.body);
-          final detail = errorJson['detail']?.toString() ?? 'Rate limit exceeded';
-          throw RateLimitException(detail);
-        } catch (e) {
-          throw RateLimitException('Rate limit exceeded');
-        }
-      }
-      
-      throw ApiException(response.statusCode, normalizedEndpoint);
-    }
-  }
-
   /// Build a v1 records URL, optionally appending `?unit_group=...`.
   Uri _buildV1Url(
     String apiPeriod,
@@ -552,149 +435,12 @@ class TemperatureService {
     return base;
   }
 
-  /// Fetch v1 records data (full response) for a specific period and identifier.
-  Future<Map<String, dynamic>> _fetchV1Records(
-    String period,
-    String location,
-    String identifier, {
-    String? unitGroup,
-  }) async {
-    final token = await getAuthToken();
-    final apiPeriod = _apiPeriodPath(period);
-    final encodedLocation = Uri.encodeComponent(location);
-    final url = _buildV1Url(apiPeriod, encodedLocation, identifier,
-        unitGroup: unitGroup);
-
-    DebugUtils.logLazy(() => 'Fetching v1 records: $url');
-
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      },
-    ).timeout(const Duration(seconds: kApiLongTimeoutSeconds));
-
-    if (response.statusCode == 429) {
-      throw RateLimitException('Rate limit exceeded fetching v1 records');
-    }
-
-    if (response.statusCode != 200) {
-      throw ApiException(response.statusCode, 'v1/records/$apiPeriod');
-    }
-
-    return jsonDecode(response.body) as Map<String, dynamic>;
-  }
-
-  /// Fetch a v1 subresource (average/trend/summary) for daily records.
-  Future<Map<String, dynamic>> _fetchV1Subresource(
-    String period,
-    String location,
-    String identifier,
-    String subresource, {
-    String? unitGroup,
-  }) async {
-    final token = await getAuthToken();
-    final apiPeriod = _apiPeriodPath(period);
-    final encodedLocation = Uri.encodeComponent(location);
-    final url = _buildV1Url(apiPeriod, encodedLocation, identifier,
-        suffix: subresource, unitGroup: unitGroup);
-
-    DebugUtils.logLazy(() => 'Fetching v1 subresource ($subresource): $url');
-
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      },
-    ).timeout(const Duration(seconds: kApiLongTimeoutSeconds));
-
-    if (response.statusCode == 429) {
-      throw RateLimitException('Rate limit exceeded fetching $subresource');
-    }
-
-    if (response.statusCode != 200) {
-      throw ApiException(response.statusCode, 'v1/records/$subresource');
-    }
-
-    return jsonDecode(response.body) as Map<String, dynamic>;
-  }
-
-  /// Common helper function for fetching TemperatureData from API endpoints
-  Future<TemperatureData> _fetchTemperatureData(String endpoint, String city, String date) async {
-    final json = await _fetchApiData(endpoint, city, date);
-    return TemperatureData.fromJson(json);
-  }
-
-  Future<Map<String, dynamic>> fetchAverageData(String city, String date, {
-    String? unitGroup,
-  }) async {
-    final json = await _fetchV1Subresource('daily', city, date, 'average',
-        unitGroup: unitGroup);
-    final data = json['data'];
-    final mean = (data is Map<String, dynamic>) ? data['mean'] : null;
-    return {
-      'average': mean,
-      'data': data,
-      'metadata': json['metadata'],
-      'period': json['period'],
-      'location': json['location'],
-      'identifier': json['identifier'],
-    };
-  }
-
-  Future<Map<String, dynamic>> fetchTrendData(String city, String date, {
-    String? unitGroup,
-  }) async {
-    final json = await _fetchV1Subresource('daily', city, date, 'trend',
-        unitGroup: unitGroup);
-    final data = json['data'];
-    final slope = (data is Map<String, dynamic>) ? data['slope'] : null;
-    final unit = (data is Map<String, dynamic>) ? data['unit'] : null;
-    return {
-      'slope': slope,
-      'unit': unit,
-      'data': data,
-      'metadata': json['metadata'],
-      'period': json['period'],
-      'location': json['location'],
-      'identifier': json['identifier'],
-    };
-  }
-
-  Future<Map<String, dynamic>> fetchSummaryData(String city, String date, {
-    String? unitGroup,
-  }) async {
-    final json = await _fetchV1Subresource('daily', city, date, 'summary',
-        unitGroup: unitGroup);
-    return {
-      'summary': json['data'],
-      'metadata': json['metadata'],
-      'period': json['period'],
-      'location': json['location'],
-      'identifier': json['identifier'],
-    };
-  }
-
   // ---------------------------------------------------------------------------
   // v1 Records API — used for period views (daily, weekly, monthly, yearly)
   // ---------------------------------------------------------------------------
 
   /// Maps internal period keys to API path segments.
-  static String _apiPeriodPath(String period) {
-    switch (period) {
-      case 'week':
-        return 'weekly';
-      case 'month':
-        return 'monthly';
-      case 'year':
-        return 'yearly';
-      case 'daily':
-      default:
-        return 'daily';
-    }
-  }
+  static String _apiPeriodPath(String period) => kApiRecordsPeriodSegment(period);
 
   /// Fetch period temperature data using the async job endpoint with a
   /// synchronous fallback, mirroring the web app's approach.

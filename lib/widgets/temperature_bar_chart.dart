@@ -51,16 +51,6 @@ class TemperatureChartPresentation {
     required this.shouldConvert,
   });
 
-  List<double> get axisTicks {
-    final ticks = <double>[];
-    var value = yAxisMin;
-    while (value <= yAxisMax + 0.0001) {
-      ticks.add(value);
-      value += yAxisInterval;
-    }
-    return ticks;
-  }
-
   String formatAxisLabel(double rawValue) {
     final display = shouldConvert ? celsiusToFahrenheit(rawValue) : rawValue;
     return '${display.toStringAsFixed(0)}$unitLabel';

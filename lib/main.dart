@@ -235,7 +235,8 @@ class TempHist extends StatelessWidget {
       // Cap Dynamic Type — beyond the limit chart labels, location header, and
       // settings sheet overflow. iPads have more room so allow a higher cap.
       builder: (context, child) {
-        final isIpad = MediaQuery.of(context).size.shortestSide >= 768;
+        final isIpad = MediaQuery.of(context).size.shortestSide >=
+            kTabletBreakpointWidth;
         return MediaQuery.withClampedTextScaling(
           maxScaleFactor: isIpad ? 1.6 : 1.3,
           child: child!,
@@ -331,11 +332,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
   bool _hasSeenOnboarding =
       true; // default true to avoid flash during async check
 
-  // Swipe coachmark
-  bool _coachmarkPending = false;
-  bool _showSwipeCoachmark = false;
-  bool _coachmarkFadingOut = false;
-
   /// Resets scroll positions on all period pages to the top and clears the
   /// collapsed-header state. Call whenever the content is about to reload.
   void _resetScrollPositions() {
@@ -388,8 +384,8 @@ class TemperatureScreenState extends State<TemperatureScreen>
     _locationService.addListener(_onLocationChanged);
     _locationService.onSignificantLocationChange = _refreshLocationAndData;
 
-    // Start network connectivity monitoring
-    _startConnectivityMonitoring();
+    // Start network connectivity monitoring (async: initial check before listen)
+    unawaited(_startConnectivityMonitoring());
 
     // Start minimum splash screen timer
     _startSplashScreenTimer();
@@ -406,9 +402,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
     // Check whether to show the one-time onboarding flow
     _checkOnboarding();
-
-    // Check whether to show the one-time swipe coachmark
-    _checkSwipeCoachmark();
   }
 
   @override
@@ -587,7 +580,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
                     expiration = _averageTrendCacheExpiration;
                     break;
                   default:
-                    expiration = Duration(hours: 1);
+                    expiration = const Duration(hours: 1);
                 }
               } else {
                 continue; // Skip unknown cache types
@@ -652,66 +645,10 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
     if (mounted) {
       setState(() => _hasSeenOnboarding = true);
-      // Now that the main screen is visible, start the coachmark if it was
-      // held back because data loaded while onboarding was still showing.
-      _startCoachmarkIfPending();
       // If the app had no location when it started, open the selector now
       // that the user has finished onboarding.
       _maybeAutoOpenLocationSelector();
     }
-  }
-
-  /// Check whether the swipe coachmark should be shown (first launch only).
-  Future<void> _checkSwipeCoachmark() async {
-    // In debug builds, reset so the coachmark is always visible for testing.
-    if (kDebugMode) {
-      await _safeSharedPreferencesOperation(() async {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('swipeCoachmarkShown');
-      }, 'reset swipe coachmark flag');
-    }
-
-    final shown = await _safeSharedPreferencesOperation<bool>(() async {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool('swipeCoachmarkShown') ?? false;
-    }, 'load swipe coachmark flag');
-
-    if (shown == true) return;
-
-    // Mark as pending — will be shown once the chart finishes loading.
-    if (mounted) _coachmarkPending = true;
-  }
-
-  /// Show the coachmark now and start the auto-dismiss timer.
-  /// Called via PeriodPage's onDataLoaded callback and from
-  /// [_completeOnboarding].  Does nothing if the user is still in the
-  /// onboarding flow — the coachmark stays pending and is started once
-  /// onboarding completes.
-  void _startCoachmarkIfPending() {
-    if (!_coachmarkPending) return;
-    if (!_hasSeenOnboarding) return;
-    _coachmarkPending = false;
-    if (mounted) {
-      setState(() {
-        _showSwipeCoachmark = true;
-        _coachmarkFadingOut = false;
-      });
-      Future.delayed(const Duration(seconds: 8), _dismissCoachmark);
-    }
-  }
-
-  /// Fade out and permanently dismiss the swipe coachmark.
-  void _dismissCoachmark() {
-    if (!_showSwipeCoachmark || _coachmarkFadingOut) return;
-    if (mounted) {
-      setState(() {
-        _coachmarkFadingOut = true;
-      });
-    }
-    _safeSharedPreferencesOperation(() async {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('swipeCoachmarkShown', true);
-    }, 'save swipe coachmark shown');
   }
 
   Future<void> _determineLocation() async {
@@ -901,12 +838,13 @@ class TemperatureScreenState extends State<TemperatureScreen>
   }
 
   /// Top-level layout: fixed header (title + debug) and swipeable PageView below.
-  Widget _buildPageLayout(BuildContext context, double chartHeight) {
+  Widget _buildPageLayout(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = MediaQuery.of(context).size.width;
-        final isTablet = screenWidth >= 768;
-        final maxContentWidth = isTablet ? 650.0 : constraints.maxWidth;
+        final isTablet = screenWidth >= kTabletBreakpointWidth;
+        final maxContentWidth =
+            isTablet ? kTabletMaxContentWidth : constraints.maxWidth;
         final contentWidth = constraints.maxWidth > maxContentWidth
             ? maxContentWidth
             : constraints.maxWidth;
@@ -982,7 +920,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
                           final c = controllers[index];
                           _activeScrollOffsetNotifier.value =
                               c.hasClients ? c.offset : 0.0;
-                          _dismissCoachmark();
                         },
                         children: [
                           // Page 0: Daily
@@ -993,7 +930,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
                             periodKey: 'daily',
                             periodLabel: 'daily',
                             scrollController: _dailyScrollController,
-                            onDataLoaded: _startCoachmarkIfPending,
                           ),
                           // Page 1: Weekly
                           _buildPeriodPage(
@@ -1159,22 +1095,17 @@ class TemperatureScreenState extends State<TemperatureScreen>
   }
 
   Future<void> _shareCurrentPeriod(int pageIndex) async {
+    final periodKey = switch (pageIndex) {
+      0 => 'daily',
+      1 => 'week',
+      2 => 'month',
+      3 => 'year',
+      _ => null,
+    };
+    if (periodKey == null) return;
+
     setState(() => _isSharing = true);
     try {
-      final String periodKey;
-      switch (pageIndex) {
-        case 0:
-          periodKey = 'daily';
-        case 1:
-          periodKey = 'week';
-        case 2:
-          periodKey = 'month';
-        case 3:
-          periodKey = 'year';
-        default:
-          return;
-      }
-
       final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
       final dateToUse = DateTime.parse(dateInfo['date']!);
       final identifier = dateIdentifier(dateToUse);
@@ -1202,7 +1133,15 @@ class TemperatureScreenState extends State<TemperatureScreen>
       );
     } catch (e) {
       DebugUtils.logLazy(() => 'Share failed: $e');
-      if (mounted) setState(() => _isSharing = false);
+      if (mounted) {
+        setState(() => _isSharing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not create share link. Please try again.'),
+            backgroundColor: kErrorColour,
+          ),
+        );
+      }
     }
   }
 
@@ -1320,9 +1259,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
   }
 
   /// Builds a period page (daily, weekly, monthly, or yearly).
-  /// All four periods use the same PeriodPage widget — the only difference
-  /// is the periodKey/periodLabel and the daily page additionally wires up
-  /// the coachmark callback.
   Widget _buildPeriodPage(
     BuildContext context, {
     required int pageIndex,
@@ -1330,7 +1266,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
     required String periodKey,
     required String periodLabel,
     required ScrollController scrollController,
-    VoidCallback? onDataLoaded,
   }) {
     final isAtGps = _locationService.isAtGpsCity(_determinedLocation);
     final lat = isAtGps ? _lastPosition?.latitude : null;
@@ -1346,7 +1281,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
         displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
         latitude: lat,
         longitude: lon,
-        useInternalScroll: true,
         scrollController: scrollController,
         topContent: Padding(
           padding: EdgeInsets.only(
@@ -1357,7 +1291,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
           child: _buildLocationAndHeadingContent(pageIndex),
         ),
         isFahrenheit: _isFahrenheit,
-        onDataLoaded: onDataLoaded,
       ),
     );
   }
@@ -1365,27 +1298,28 @@ class TemperatureScreenState extends State<TemperatureScreen>
   double _standardHorizontalPadding() =>
       kScreenPadding + kContentHorizontalMargin;
 
-  /// Start monitoring network connectivity
-  void _startConnectivityMonitoring() {
-    // Check initial connectivity status asynchronously without blocking
-    () async {
-      try {
-        final initialResults = await Connectivity().checkConnectivity();
-        if (mounted) {
-          _isOnline = initialResults.any((result) =>
-              result == ConnectivityResult.mobile ||
-              result == ConnectivityResult.wifi ||
-              result == ConnectivityResult.ethernet);
-          DebugUtils.logLazy(() =>
-              '🌐 Initial connectivity status: ${_isOnline ? "online" : "offline"}');
-        }
-      } catch (e) {
-        DebugUtils.logLazy(() => '⚠️ Failed to check initial connectivity: $e');
-        // Default to online if check fails (already set to true by default)
+  /// Start monitoring network connectivity: initial check completes before
+  /// subscribing so the first [onConnectivityChanged] event does not race ahead
+  /// of [checkConnectivity] and overwrite a correct offline state.
+  Future<void> _startConnectivityMonitoring() async {
+    try {
+      final initialResults = await Connectivity().checkConnectivity();
+      if (mounted) {
+        _isOnline = initialResults.any((result) =>
+            result == ConnectivityResult.mobile ||
+            result == ConnectivityResult.wifi ||
+            result == ConnectivityResult.ethernet);
+        DebugUtils.logLazy(() =>
+            '🌐 Initial connectivity status: ${_isOnline ? "online" : "offline"}');
+        setState(() {});
       }
-    }();
+    } catch (e) {
+      DebugUtils.logLazy(() => '⚠️ Failed to check initial connectivity: $e');
+      // Default to online if check fails (already set to true by default)
+    }
 
-    // Start listening for changes immediately
+    if (!mounted) return;
+
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
       (List<ConnectivityResult> results) {
         final wasOnline = _isOnline;
@@ -1413,6 +1347,31 @@ class TemperatureScreenState extends State<TemperatureScreen>
           });
         }
       },
+    );
+  }
+
+  Widget _buildOfflineBanner() {
+    return Material(
+      color: kStatsBubbleColour,
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+        child: Row(
+          children: [
+            Icon(Icons.wifi_off, color: kErrorColour, size: kIconSize + 2),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'You appear to be offline. Data may be unavailable until you reconnect.',
+                style: TextStyle(
+                  color: kTextPrimaryColour.withValues(alpha: 0.95),
+                  fontSize: kFontSizeBody - 2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1457,9 +1416,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Ensure system UI overlay is set correctly
-    _setSystemUIOverlayStyle();
-
     // Show splash screen while app is initializing OR minimum time hasn't elapsed
     // Skip splash screen in test mode
     if (widget.testFuture == null &&
@@ -1474,8 +1430,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
       );
     }
 
-    final double chartHeight = kChartHeight;
-
     Widget appContent = Scaffold(
       body: Stack(
         children: [
@@ -1484,7 +1438,13 @@ class TemperatureScreenState extends State<TemperatureScreen>
           // Foreground content with fixed header and swipeable pages
           SafeArea(
             bottom: false,
-            child: _buildPageLayout(context, chartHeight),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!_isOnline) _buildOfflineBanner(),
+                Expanded(child: _buildPageLayout(context)),
+              ],
+            ),
           ),
         ],
       ),
@@ -1506,92 +1466,3 @@ class TemperatureScreenState extends State<TemperatureScreen>
 }
 
 String _formatDayMonth(DateTime date) => date_utils.formatDateWithOrdinal(date);
-
-/// Animated right-arrow hint shown inline with the page-indicator dots.
-///
-/// Slides a chevron to the right and fades it out, then snaps back and
-/// repeats — identical timing to [SwipeGestureIndicator] but compact
-/// (icon only, no text). The [running] flag stops the animation controller
-/// when the parent hides this widget, avoiding unnecessary CPU use.
-class _DotsSwipeHint extends StatefulWidget {
-  final bool running;
-  const _DotsSwipeHint({required this.running});
-
-  @override
-  State<_DotsSwipeHint> createState() => _DotsSwipeHintState();
-}
-
-class _DotsSwipeHintState extends State<_DotsSwipeHint>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _slide;
-  late final Animation<double> _fade;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-    if (widget.running) _controller.repeat();
-
-    _slide = TweenSequence([
-      TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: 14.0)
-            .chain(CurveTween(curve: Curves.easeInOut)),
-        weight: 55,
-      ),
-      TweenSequenceItem(tween: ConstantTween(0.0), weight: 45),
-    ]).animate(_controller);
-
-    _fade = TweenSequence([
-      TweenSequenceItem(tween: ConstantTween(1.0), weight: 40),
-      TweenSequenceItem(
-        tween: Tween(begin: 1.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 15,
-      ),
-      TweenSequenceItem(
-        tween:
-            Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.easeIn)),
-        weight: 10,
-      ),
-      TweenSequenceItem(tween: ConstantTween(1.0), weight: 35),
-    ]).animate(_controller);
-  }
-
-  @override
-  void didUpdateWidget(_DotsSwipeHint old) {
-    super.didUpdateWidget(old);
-    if (widget.running && !old.running) {
-      _controller.repeat();
-    } else if (!widget.running && old.running) {
-      _controller.stop();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (_, __) => Opacity(
-        opacity: _fade.value,
-        child: Transform.translate(
-          offset: Offset(_slide.value, 0),
-          child: Icon(
-            Icons.chevron_right,
-            color: kBarCurrentYearColour,
-            size: kIconSize + 2,
-          ),
-        ),
-      ),
-    );
-  }
-}
