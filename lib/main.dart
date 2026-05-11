@@ -782,6 +782,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
       gpsLocation: _locationService.gpsLocation,
       selectedLocation: _determinedLocation,
       onLocationSelected: _onLocationSelected,
+      connectivityOnline: _isOnline,
     );
   }
 
@@ -794,6 +795,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
       selectedLocation: _determinedLocation,
       onLocationSelected: _onLocationSelected,
       canDismiss: false,
+      connectivityOnline: _isOnline,
     );
   }
 

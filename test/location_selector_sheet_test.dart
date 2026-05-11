@@ -12,12 +12,14 @@ Widget _sheet({
   String gpsLocation = '',
   String selectedLocation = '',
   void Function(String)? onLocationSelected,
+  bool connectivityOnline = true,
 }) {
   return MaterialApp(
     home: LocationSelectorSheet(
       gpsLocation: gpsLocation,
       selectedLocation: selectedLocation,
       onLocationSelected: onLocationSelected ?? (_) {},
+      connectivityOnline: connectivityOnline,
     ),
   );
 }
@@ -40,6 +42,29 @@ void main() {
 
   tearDown(() {
     SharedPreferences.setMockInitialValues({});
+  });
+
+  group('LocationSelectorSheet — offline hint', () {
+    testWidgets('shows offline guidance and disables search when not online',
+        (tester) async {
+      await tester.pumpWidget(
+        _sheet(
+          gpsLocation: 'Sydney, Australia',
+          selectedLocation: 'Sydney, Australia',
+          connectivityOnline: false,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.textContaining('You appear to be offline'), findsOneWidget);
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.enabled, isFalse);
+      expect(
+        (field.decoration as InputDecoration?)?.hintText,
+        'Search (needs connection)',
+      );
+    });
   });
 
   group('LocationSelectorSheet — current location section', () {

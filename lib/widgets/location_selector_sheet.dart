@@ -39,12 +39,20 @@ class LocationSelectorSheet extends StatefulWidget {
   /// has been determined.
   final bool canDismiss;
 
+  /// Whether the app believes the network is reachable (from connectivity).
+  /// When false, popular locations are not fetched (avoids long timeouts) and
+  /// search fails fast with an offline message — current GPS and recents
+  /// still work. Connectivity can be wrong briefly; search remains available
+  /// if the user opens the sheet while online and loses connection afterward.
+  final bool connectivityOnline;
+
   const LocationSelectorSheet({
     super.key,
     required this.gpsLocation,
     required this.selectedLocation,
     required this.onLocationSelected,
     this.canDismiss = true,
+    this.connectivityOnline = true,
   });
 
   /// Show the location selector as a full-screen modal that slides up.
@@ -58,6 +66,7 @@ class LocationSelectorSheet extends StatefulWidget {
     required String selectedLocation,
     required void Function(String) onLocationSelected,
     bool canDismiss = true,
+    bool connectivityOnline = true,
   }) {
     return showGeneralDialog(
       context: context,
@@ -70,6 +79,7 @@ class LocationSelectorSheet extends StatefulWidget {
         selectedLocation: selectedLocation,
         onLocationSelected: onLocationSelected,
         canDismiss: canDismiss,
+        connectivityOnline: connectivityOnline,
       ),
       transitionBuilder: (_, animation, __, child) => SlideTransition(
         position: Tween<Offset>(
@@ -126,6 +136,15 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
       return;
     }
 
+    if (!widget.connectivityOnline) {
+      setState(() {
+        _searchQuery = query;
+        _searchResults = [];
+        _searchLoading = false;
+      });
+      return;
+    }
+
     setState(() {
       _searchQuery = query;
       _searchLoading = true;
@@ -139,6 +158,14 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
 
   Future<void> _runSearch(String query) async {
     if (!mounted) return;
+    if (!widget.connectivityOnline) {
+      if (!mounted || _searchQuery != query) return;
+      setState(() {
+        _searchResults = [];
+        _searchLoading = false;
+      });
+      return;
+    }
     try {
       final results = await TemperatureService().searchLocations(query);
       if (!mounted || _searchQuery != query) return;
@@ -194,21 +221,21 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     // be shown as selected.
     final recent = history.where((l) => !isExcluded(l)).toList();
 
-    // Fetch pre-approved locations from API; fall back to the bundled list if
-    // the request fails (e.g. offline) or returns an unexpected format.
+    // Fetch pre-approved locations from API; fall back to empty when the
+    // request fails or returns an unexpected format.
     // Exclude GPS history city names to avoid duplicates with recent list.
     final recentCities = {for (final h in history) cityName(h)};
     bool isExcludedFromPopular(String loc) =>
         isExcluded(loc) || recentCities.contains(cityName(loc));
 
-    List<String> popular;
-    try {
-      final allPreapproved =
-          await TemperatureService().fetchPreapprovedLocations();
-      popular = allPreapproved.where((l) => !isExcludedFromPopular(l)).toList()
-        ..shuffle();
-    } catch (_) {
-      popular = [];
+    List<String> popular = [];
+    if (widget.connectivityOnline) {
+      try {
+        final allPreapproved =
+            await TemperatureService().fetchPreapprovedLocations();
+        popular = allPreapproved.where((l) => !isExcludedFromPopular(l)).toList()
+          ..shuffle();
+      } catch (_) {}
     }
 
     return _SheetData(recentLocations: recent, popularLocations: popular);
@@ -277,6 +304,33 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                       color: kGreyLabelColour.withValues(alpha: 0.3),
                       height: 1,
                     ),
+                    if (!widget.connectivityOnline)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.wifi_off,
+                              size: kIconSize + 2,
+                              color: kErrorColour.withValues(alpha: 0.9),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'You appear to be offline. Current location '
+                                'and recents may still work if they were loaded '
+                                'before.',
+                                style: TextStyle(
+                                  color: kGreyLabelColour,
+                                  fontSize: kFontSizeBody - 2,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     // Search field
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
@@ -285,6 +339,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                         onChanged: _onSearchChanged,
                         onSubmitted: _onSearchSubmitted,
                         onClear: _clearSearch,
+                        enabled: widget.connectivityOnline,
                       ),
                     ),
                     // Scrollable content — search results or normal lists.
@@ -342,7 +397,10 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     if (_searchResults.isEmpty) {
       return Center(
         child: Text(
-          'No locations found.',
+          !widget.connectivityOnline
+              ? "Can't search while offline. Connect to the internet, "
+                  'or pick a location below.'
+              : 'No locations found.',
           textAlign: TextAlign.center,
           style: TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
         ),
@@ -722,12 +780,14 @@ class _SearchField extends StatefulWidget {
   final void Function(String) onChanged;
   final void Function(String) onSubmitted;
   final VoidCallback onClear;
+  final bool enabled;
 
   const _SearchField({
     required this.controller,
     required this.onChanged,
     required this.onSubmitted,
     required this.onClear,
+    this.enabled = true,
   });
 
   @override
@@ -763,6 +823,7 @@ class _SearchFieldState extends State<_SearchField> {
     return TextField(
       focusNode: _focusNode,
       controller: widget.controller,
+      enabled: widget.enabled,
       onChanged: widget.onChanged,
       onSubmitted: widget.onSubmitted,
       textInputAction: TextInputAction.go,
@@ -774,14 +835,14 @@ class _SearchFieldState extends State<_SearchField> {
         fontSize: kFontSizeBody,
       ),
       decoration: InputDecoration(
-        hintText: 'Search…',
+        hintText: widget.enabled ? 'Search…' : 'Search (needs connection)',
         hintStyle: TextStyle(
           color: kTextPrimaryColour.withValues(alpha: 0.75),
           fontSize: kFontSizeBody,
         ),
         prefixIcon: Icon(Icons.search,
             color: kTextPrimaryColour.withValues(alpha: 0.75), size: kIconSize + 3),
-        suffixIcon: widget.controller.text.isNotEmpty
+        suffixIcon: widget.enabled && widget.controller.text.isNotEmpty
             ? IconButton(
                 icon: Icon(Icons.close,
                     color: kTextPrimaryColour.withValues(alpha: 0.5), size: kIconSize + 1),
