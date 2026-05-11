@@ -260,19 +260,31 @@ List<TemperatureChartData> _styleChartDataForPresentation(
 
   final baseline = averageTemperature;
   if (baseline == null) {
+    double maxWarmAnomaly = 0;
+    double maxCoolAnomaly = 0;
+    for (final d in validValues) {
+      final a = d.anomaly;
+      if (a == null) continue;
+      if (a > maxWarmAnomaly) maxWarmAnomaly = a;
+      if (a < 0 && a.abs() > maxCoolAnomaly) maxCoolAnomaly = a.abs();
+    }
     return data
         .map(
-          (d) => TemperatureChartData(
-            year: d.year,
-            temperature: d.temperature,
-            isCurrentYear: d.isCurrentYear,
-            hasData: d.hasData,
-            anomaly: d.anomaly,
-            barFillColor:
-                d.isCurrentYear ? kBarCurrentYearColour : kBarNeutralColour,
-            barBorderColor:
-                d.isCurrentYear ? kBarCurrentYearColour : kBarNeutralColour,
-          ),
+          (d) {
+            final a = d.anomaly;
+            final fill = a == null
+                ? kBarNeutralColour
+                : _barColorForAnomaly(a, maxWarmAnomaly, maxCoolAnomaly);
+            return TemperatureChartData(
+              year: d.year,
+              temperature: d.temperature,
+              isCurrentYear: d.isCurrentYear,
+              hasData: d.hasData,
+              anomaly: d.anomaly,
+              barFillColor: fill,
+              barBorderColor: fill,
+            );
+          },
         )
         .toList();
   }
@@ -295,11 +307,9 @@ List<TemperatureChartData> _styleChartDataForPresentation(
 
   return data.map((d) {
     final anomaly = d.anomaly ?? (d.temperature - baseline);
-    final fillColor = d.isCurrentYear
-        ? kBarCurrentYearColour
-        : useZScore
-            ? _barColorForZScore(anomaly / standardDeviation)
-            : _barColorForAnomaly(anomaly, maxWarmAnomaly, maxCoolAnomaly);
+    final fillColor = useZScore
+        ? _barColorForZScore(anomaly / standardDeviation)
+        : _barColorForAnomaly(anomaly, maxWarmAnomaly, maxCoolAnomaly);
     return TemperatureChartData(
       year: d.year,
       temperature: d.temperature,

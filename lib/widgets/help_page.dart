@@ -125,7 +125,9 @@ class _Body extends StatelessWidget {
               'Each bar represents the mean temperature recorded on the same date, or the same week or month or year, in a different year. Bar colours show how warm or cool that year was compared with the 50-year average.',
           bullets: [
             _Bullet(
-                color: kBarCurrentYearColour, label: 'Green bar — this year'),
+                color: kHeadingColour,
+                label:
+                    'Latest year — same red, grey or blue scale as every other year, from its temperature anomaly'),
             _Bullet(
                 color: kBarCoolColour,
                 label: 'Blue bars — cooler than average years'),
