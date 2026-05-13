@@ -52,15 +52,14 @@ class ShareService {
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return data['url'] as String;
+    return canonicalShareSnapshotUrl(data['url'] as String);
   }
 
   /// Opens the system share sheet with the share URL.
   ///
   /// Passes the URL as a native NSURL activity item on iOS so iMessage and
-  /// other apps receive a tappable rich link card (image + title + domain)
-  /// built from the share page's Open Graph tags — matching the single
-  /// clickable card produced when sharing from the website.
+  /// other apps can fetch the public share page HTML and show a link preview
+  /// (Open Graph title, image, domain) — the same as sharing from the website.
   ///
   /// [shareButtonKey] is used to compute the popover anchor rect required on
   /// iPad. Pass the key attached to the share button widget.

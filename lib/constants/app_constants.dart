@@ -83,6 +83,23 @@ String _normalizeApiOrigin(String raw) {
 /// Override in tests via [TemperatureService] constructor.
 final String kApiBaseUrl = _normalizeApiOrigin(_kApiBaseUrlDefine);
 
+/// Public HTTPS origin for snapshot share pages (`/s/:id`). No trailing slash.
+///
+/// The API may live on another host ([kApiBaseUrl]); share links must still
+/// point here so Messages and other apps fetch HTML with Open Graph previews.
+const String kSharePageOrigin = 'https://temphist.com';
+
+/// Rewrites a share URL from the API (any host) to [kSharePageOrigin] when it
+/// contains `/s/:id`, so OS share sheets load public Open Graph HTML.
+String canonicalShareSnapshotUrl(String apiReturnedUrl) {
+  final trimmed = apiReturnedUrl.trim();
+  final id = RegExp(r'/s/([^/?#]+)').firstMatch(trimmed)?.group(1);
+  if (id != null && id.isNotEmpty) {
+    return '$kSharePageOrigin/s/$id';
+  }
+  return trimmed;
+}
+
 /// Maps app period keys (`daily`, `week`, `month`, `year`) to v1 records API path segments.
 String kApiRecordsPeriodSegment(String period) {
   switch (period) {
