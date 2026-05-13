@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
 import '../services/location_history_service.dart';
+import '../services/location_selection_service.dart';
 import '../services/temperature_service.dart';
 
 class _SheetData {
@@ -216,27 +217,43 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     bool isExcluded(String loc) =>
         loc.isEmpty || excludedCities.contains(cityName(loc));
 
-    // Recent list: GPS history minus the GPS location itself.
-    // The selected location (if manually chosen) stays in the list so it can
-    // be shown as selected.
-    final recent = history.where((l) => !isExcluded(l)).toList();
+    // Recent list: GPS history minus the GPS location itself, deduplicated by
+    // city name (keeps the newest visit per city, since history is newest-first).
+    final seenCities = <String>{};
+    final recent = history
+        .where((l) => !isExcluded(l) && seenCities.add(cityName(l)))
+        .toList();
 
-    // Fetch pre-approved locations from API; fall back to empty when the
-    // request fails or returns an unexpected format.
-    // Exclude GPS history city names to avoid duplicates with recent list.
+    // Exclusion set for popular: GPS + recent cities.
     final recentCities = {for (final h in history) cityName(h)};
     bool isExcludedFromPopular(String loc) =>
         isExcluded(loc) || recentCities.contains(cityName(loc));
 
-    List<String> popular = [];
+    // User-selected popular — sorted by count desc from the service.
+    final selections = await LocationSelectionService.getAll();
+    final userSelected = selections
+        .map((s) => s.location)
+        .where((l) => !isExcludedFromPopular(l))
+        .toList();
+    final userSelectedCities = {for (final l in userSelected) cityName(l)};
+
+    // API pre-approved fallback — shuffled, deduped against user selections.
+    List<String> apiPopular = [];
     if (widget.connectivityOnline) {
       try {
         final allPreapproved =
             await TemperatureService().fetchPreapprovedLocations();
-        popular = allPreapproved.where((l) => !isExcludedFromPopular(l)).toList()
+        apiPopular = allPreapproved
+            .where((l) =>
+                !isExcludedFromPopular(l) &&
+                !userSelectedCities.contains(cityName(l)))
+            .toList()
           ..shuffle();
       } catch (_) {}
     }
+
+    // User-selected cities first (count-sorted), API pre-approved as fill-in.
+    final popular = [...userSelected, ...apiPopular];
 
     return _SheetData(recentLocations: recent, popularLocations: popular);
   }

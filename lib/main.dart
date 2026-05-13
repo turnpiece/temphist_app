@@ -27,6 +27,7 @@ import 'services/temperature_unit_service.dart';
 import 'utils/temperature_utils.dart';
 import 'constants/app_constants.dart';
 import 'utils/date_utils.dart' as date_utils;
+import 'services/location_selection_service.dart';
 
 // Delegate to shared utility functions
 Map<String, String> _getCurrentDateAndLocation(String determinedLocation) =>
@@ -802,6 +803,11 @@ class TemperatureScreenState extends State<TemperatureScreen>
   /// Called when the user picks a location from the selector sheet.
   Future<void> _onLocationSelected(String apiLocation) async {
     if (apiLocation == _determinedLocation) return;
+
+    // Record manual selection — skip the GPS "Current location" tap.
+    if (apiLocation != _locationService.gpsLocation) {
+      unawaited(LocationSelectionService.record(apiLocation));
+    }
 
     final currentPage = _pageIndexNotifier.value;
     final currentPeriod = _periodKeys[currentPage];

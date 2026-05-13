@@ -82,3 +82,11 @@ ios/Runner/GoogleService-Info.plist
 GoogleService-Info.plist
 google_service_info.b64
 android/app/google-services.json
+
+# Graphify - keep outputs, ignore temp/cache files
+graphify-out/.graphify_python
+graphify-out/.graphify_root
+graphify-out/.graphify_*.json
+graphify-out/.chunk_files_*.txt
+graphify-out/obsidian/
+graphify-out/converted/

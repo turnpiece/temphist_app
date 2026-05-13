@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../constants/app_constants.dart';
 import '../models/location_visit.dart';
 import '../utils/debug_utils.dart';
 
@@ -11,7 +12,7 @@ import '../utils/debug_utils.dart';
 /// locations (from the location selector) are never added.
 class LocationHistoryService {
   static const String _kHistoryKey = 'locationHistory';
-  static const int _kMaxEntries = 50;
+  static const int _kMaxEntries = kLocationHistoryMaxEntries;
 
   /// Add [visit] to the front of the history list.
   ///
