@@ -61,7 +61,7 @@ void main() {
       final field = tester.widget<TextField>(find.byType(TextField));
       expect(field.enabled, isFalse);
       expect(
-        (field.decoration as InputDecoration?)?.hintText,
+        field.decoration?.hintText,
         'Search (needs connection)',
       );
     });
