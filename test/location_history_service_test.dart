@@ -65,15 +65,15 @@ void main() {
       expect(result.first.visitedAt.day, 16);
     });
 
-    test('add caps history at 50 entries, dropping oldest', () async {
-      for (var i = 1; i <= 52; i++) {
+    test('add caps history at 500 entries, dropping oldest', () async {
+      for (var i = 1; i <= 502; i++) {
         await LocationHistoryService.add(
-          _visit('City $i, Country', date: DateTime(2024, 1, i)),
+          _visit('City $i, Country', date: DateTime(2024, 1, 1).add(Duration(days: i))),
         );
       }
       final result = await LocationHistoryService.getAll();
-      expect(result.length, 50);
-      expect(result.first.location, 'City 52, Country');
+      expect(result.length, 500);
+      expect(result.first.location, 'City 502, Country');
       expect(result.last.location, 'City 3, Country');
     });
 

@@ -95,17 +95,17 @@ void main() {
       ]);
     });
 
-    test('record caps at 50 entries, evicting lowest-count entries', () async {
-      // Fill 50 entries each selected once.
-      for (var i = 1; i <= 50; i++) {
+    test('record caps at 100 entries, evicting lowest-count entries', () async {
+      // Fill 100 entries each selected once.
+      for (var i = 1; i <= 100; i++) {
         await LocationSelectionService.record('City $i, Country');
       }
-      expect((await LocationSelectionService.getAll()).length, 50);
+      expect((await LocationSelectionService.getAll()).length, 100);
 
       // Select a new location — should push out the weakest entry.
       await LocationSelectionService.record('New City, Country');
       final result = await LocationSelectionService.getAll();
-      expect(result.length, 50);
+      expect(result.length, 100);
       // The new location is present.
       expect(result.any((e) => e.location == 'New City, Country'), isTrue);
     });

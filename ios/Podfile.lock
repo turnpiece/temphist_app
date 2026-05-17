@@ -1,4 +1,8 @@
 PODS:
+  - AppCheckCore (11.2.0):
+    - GoogleUtilities/Environment (~> 8.0)
+    - GoogleUtilities/UserDefaults (~> 8.0)
+    - PromisesObjC (~> 2.4)
   - connectivity_plus (0.0.1):
     - Flutter
   - Firebase/Auth (12.12.0):
@@ -6,6 +10,11 @@ PODS:
     - FirebaseAuth (~> 12.12.0)
   - Firebase/CoreOnly (12.12.0):
     - FirebaseCore (~> 12.12.0)
+  - firebase_app_check (0.4.3):
+    - Firebase/CoreOnly (~> 12.12.0)
+    - firebase_core
+    - FirebaseAppCheck (~> 12.12.0)
+    - Flutter
   - firebase_auth (6.4.0):
     - Firebase/Auth (= 12.12.0)
     - firebase_core
@@ -13,6 +22,12 @@ PODS:
   - firebase_core (4.7.0):
     - Firebase/CoreOnly (= 12.12.0)
     - Flutter
+  - FirebaseAppCheck (12.12.0):
+    - AppCheckCore (~> 11.0)
+    - FirebaseAppCheckInterop (~> 12.12.0)
+    - FirebaseCore (~> 12.12.0)
+    - GoogleUtilities/Environment (~> 8.1)
+    - GoogleUtilities/UserDefaults (~> 8.1)
   - FirebaseAppCheckInterop (12.12.0)
   - FirebaseAuth (12.12.0):
     - FirebaseAppCheckInterop (~> 12.12.0)
@@ -59,9 +74,13 @@ PODS:
   - GoogleUtilities/Reachability (8.1.0):
     - GoogleUtilities/Logger
     - GoogleUtilities/Privacy
+  - GoogleUtilities/UserDefaults (8.1.0):
+    - GoogleUtilities/Logger
+    - GoogleUtilities/Privacy
   - GTMSessionFetcher/Core (5.2.0)
   - package_info_plus (0.4.5):
     - Flutter
+  - PromisesObjC (2.4.0)
   - RecaptchaInterop (101.0.0)
   - share_plus (0.0.1):
     - Flutter
@@ -73,6 +92,7 @@ PODS:
 
 DEPENDENCIES:
   - connectivity_plus (from `.symlinks/plugins/connectivity_plus/ios`)
+  - firebase_app_check (from `.symlinks/plugins/firebase_app_check/ios`)
   - firebase_auth (from `.symlinks/plugins/firebase_auth/ios`)
   - firebase_core (from `.symlinks/plugins/firebase_core/ios`)
   - Flutter (from `Flutter`)
@@ -85,7 +105,9 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
+    - AppCheckCore
     - Firebase
+    - FirebaseAppCheck
     - FirebaseAppCheckInterop
     - FirebaseAuth
     - FirebaseAuthInterop
@@ -94,11 +116,14 @@ SPEC REPOS:
     - FirebaseCoreInternal
     - GoogleUtilities
     - GTMSessionFetcher
+    - PromisesObjC
     - RecaptchaInterop
 
 EXTERNAL SOURCES:
   connectivity_plus:
     :path: ".symlinks/plugins/connectivity_plus/ios"
+  firebase_app_check:
+    :path: ".symlinks/plugins/firebase_app_check/ios"
   firebase_auth:
     :path: ".symlinks/plugins/firebase_auth/ios"
   firebase_core:
@@ -119,10 +144,13 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/url_launcher_ios/ios"
 
 SPEC CHECKSUMS:
+  AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
   connectivity_plus: cb623214f4e1f6ef8fe7403d580fdad517d2f7dd
   Firebase: aa154fee4e9b8eac17aa42344988865b3e857d33
+  firebase_app_check: 5b83925ced1a26b3491a38a55858424e92c15c61
   firebase_auth: b0aa0a5964e23fba1bf7f32603437edc33b889c4
   firebase_core: 9156a152117c843440b0b990c785aa0259bc5447
+  FirebaseAppCheck: 0194af00329809d8ce918b5244edc18edbd5b4e0
   FirebaseAppCheckInterop: c63ae0d003274f145174849c545ab861593beaf9
   FirebaseAuth: bcfebbc0ca055a6335f2252a90e57363d7ea5e65
   FirebaseAuthInterop: 917aa3a17ecf144d5f1823b51ef372da06909a4b
@@ -135,6 +163,7 @@ SPEC CHECKSUMS:
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
   GTMSessionFetcher: 904bdd2a82c635bcd6f44edf94cc8775c5d1d6e6
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
+  PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb

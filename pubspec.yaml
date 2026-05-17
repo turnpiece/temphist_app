@@ -41,6 +41,7 @@ dependencies:
   # Firebase
   firebase_core: ^4.1.0
   firebase_auth: ^6.0.2
+  firebase_app_check: ^0.4.3
 
   # Added http package
   http: ^1.2.1
