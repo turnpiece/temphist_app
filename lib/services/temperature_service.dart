@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/period_temperature_data.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,6 +22,11 @@ class TemperatureService {
   // list exactly (e.g. "Dubai, United Arab Emirates" or
   // "London, Greater London, United Kingdom").
   static Map<String, String>? _countryNameToCodeCache;
+  // Keyed by display string → canonical API location id (e.g. "london").
+  // Populated from fetchPopularLocations() and searchLocations() responses.
+  static final Map<String, String> _locationIdCache = {};
+  // Session-level dedup: last successfully submitted canonical location id.
+  static String? _lastSubmittedLocationId;
 
   /// Static fallback map of English country names → ISO 3166-1 alpha-2 codes.
   ///
@@ -253,12 +259,18 @@ class TemperatureService {
         final name = e['name']?.toString() ?? '';
         final country = e['country_name']?.toString() ?? '';
         final cc = e['country_code']?.toString() ?? '';
+        final id = e['id']?.toString() ?? '';
         if (name.isNotEmpty && country.isNotEmpty) {
           final loc = '$name, $country';
           if (cc.length == 2) {
             ccMap[loc] = cc.toUpperCase();
             // Also map "United Arab Emirates" → "AE" etc. for GPS lookups.
             countryNameMap[country] = cc.toUpperCase();
+          }
+          if (id.isNotEmpty) {
+            _locationIdCache[loc] = id;
+          } else {
+            DebugUtils.logLazy(() => 'fetchPopularLocations: no id field for "$loc" — selection will not be submitted');
           }
           return loc;
         }
@@ -327,6 +339,7 @@ class TemperatureService {
       final admin1 = item['admin1']?.toString() ?? '';
       final countryName = item['country_name']?.toString() ?? '';
       final countryCode = item['country_code']?.toString() ?? '';
+      final id = item['id']?.toString() ?? '';
       if (countryName.isEmpty) continue;
 
       // Build location string: include admin1 only when it adds disambiguation.
@@ -344,9 +357,47 @@ class TemperatureService {
         _locationCountryCodeCache![loc] = countryCode.toUpperCase();
         _countryNameToCodeCache![countryName] = countryCode.toUpperCase();
       }
+      // Cache canonical id so submitLocationSelection() can look it up.
+      if (id.isNotEmpty) {
+        _locationIdCache[loc] = id;
+      } else {
+        DebugUtils.logLazy(() => 'searchLocations: no id field in response for "$loc" — selection will not be submitted');
+      }
     }
 
     return results;
+  }
+
+  /// Returns the canonical API location id for [displayLocation], or null.
+  ///
+  /// First tries an exact match in [_locationIdCache] (populated when
+  /// [fetchPopularLocations] or [searchLocations] is called). Falls back to a
+  /// city-name fuzzy match so GPS strings like "London, Greater London, United
+  /// Kingdom" resolve to the same id as "London, United Kingdom". The mapping
+  /// is written into the cache on a fuzzy hit so subsequent lookups are O(1).
+  static String? canonicalIdFor(String displayLocation) {
+    final exact = _locationIdCache[displayLocation];
+    if (exact != null) return exact;
+
+    final city = displayLocation.split(',').first.trim().toLowerCase();
+    for (final entry in _locationIdCache.entries) {
+      if (entry.key.split(',').first.trim().toLowerCase() == city) {
+        _locationIdCache[displayLocation] = entry.value;
+        return entry.value;
+      }
+    }
+    return null;
+  }
+
+  /// Seed [_locationIdCache] with [entries] for unit tests.
+  ///
+  /// Also resets [_lastSubmittedLocationId] so session-dedup state is clean.
+  @visibleForTesting
+  static void seedLocationIdCacheForTesting(Map<String, String> entries) {
+    _locationIdCache
+      ..clear()
+      ..addAll(entries);
+    _lastSubmittedLocationId = null;
   }
 
   /// Returns the ISO 3166-1 alpha-2 country code for [location], or null if
@@ -384,6 +435,61 @@ class TemperatureService {
     return String.fromCharCodes(
       countryCode.toUpperCase().codeUnits.map((c) => c + base),
     );
+  }
+
+  /// Submit a location selection signal to `POST /v1/locations/selections`.
+  ///
+  /// Resolves [displayLocation] (e.g. "London, United Kingdom") to a canonical
+  /// API id (e.g. "london") using [canonicalIdFor]. If the id is not cached,
+  /// performs a one-time [searchLocations] call to populate the cache.
+  ///
+  /// Session-level dedup: skips if the same id was already submitted this
+  /// session. Failures are always swallowed — this must never degrade the
+  /// core weather experience.
+  Future<void> submitLocationSelection(String displayLocation) async {
+    DebugUtils.logLazy(() => 'submitLocationSelection: called with "$displayLocation"');
+    if (displayLocation.isEmpty) return;
+
+    String? locationId = canonicalIdFor(displayLocation);
+    DebugUtils.logLazy(() => 'submitLocationSelection: canonicalIdFor → ${locationId ?? "null (not in cache)"}');
+
+    if (locationId == null) {
+      final city = displayLocation.split(',').first.trim();
+      DebugUtils.logLazy(() => 'submitLocationSelection: searching for "$city" to resolve id');
+      try {
+        await searchLocations(city);
+        locationId = canonicalIdFor(displayLocation);
+        DebugUtils.logLazy(() => 'submitLocationSelection: after search → ${locationId ?? "still null"}');
+      } catch (e) {
+        DebugUtils.logLazy(() => 'submitLocationSelection: search failed: $e');
+      }
+    }
+    if (locationId == null) {
+      DebugUtils.logLazy(() => 'submitLocationSelection: skipping "$displayLocation" — could not resolve canonical id');
+      return;
+    }
+
+    if (locationId == _lastSubmittedLocationId) {
+      DebugUtils.logLazy(() => 'submitLocationSelection: skipping "$locationId" — already submitted this session');
+      return;
+    }
+    _lastSubmittedLocationId = locationId;
+
+    try {
+      final token = await getAuthToken();
+      final response = await http.post(
+        Uri.parse('$apiBaseUrl/v1/locations/selections'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'location_id': locationId}),
+      ).timeout(const Duration(seconds: kApiTimeoutSeconds));
+      DebugUtils.logLazy(() => 'submitLocationSelection: submitted "$locationId" → HTTP ${response.statusCode}');
+    } catch (e) {
+      DebugUtils.logLazy(() => 'submitLocationSelection: POST failed (swallowed): $e');
+    }
   }
 
   TemperatureService({

@@ -659,6 +659,13 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
   Future<void> _determineLocation() async {
     await _locationService.determineLocation();
+    // Submit GPS auto-detect to API when the device resolved a real position.
+    if (_locationService.locationSource == LocationSource.gps &&
+        _locationService.determinedLocation.isNotEmpty) {
+      unawaited(TemperatureService().submitLocationSelection(
+        _locationService.determinedLocation,
+      ));
+    }
   }
 
   /// Pre-warm the in-memory and Hive caches for all four periods in parallel.
@@ -809,7 +816,10 @@ class TemperatureScreenState extends State<TemperatureScreen>
   Future<void> _onLocationSelected(String apiLocation) async {
     if (apiLocation == _determinedLocation) return;
 
-    // Record manual selection — skip the GPS "Current location" tap.
+    // Submit selection signal to API for all explicit user picks.
+    DebugUtils.logLazy(() => '_onLocationSelected: submitting "$apiLocation"');
+    unawaited(TemperatureService().submitLocationSelection(apiLocation));
+    // Record to local persistence — skip the GPS "Current location" tap.
     if (apiLocation != _locationService.gpsLocation) {
       unawaited(LocationSelectionService.record(apiLocation));
     }
