@@ -237,13 +237,13 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
         .toList();
     final userSelectedCities = {for (final l in userSelected) cityName(l)};
 
-    // API pre-approved fallback — shuffled, deduped against user selections.
+    // API popular locations — shuffled, deduped against user selections.
     List<String> apiPopular = [];
     if (widget.connectivityOnline) {
       try {
-        final allPreapproved =
-            await TemperatureService().fetchPreapprovedLocations();
-        apiPopular = allPreapproved
+        final allPopular =
+            await TemperatureService().fetchPopularLocations();
+        apiPopular = allPopular
             .where((l) =>
                 !isExcludedFromPopular(l) &&
                 !userSelectedCities.contains(cityName(l)))
@@ -252,7 +252,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
       } catch (_) {}
     }
 
-    // User-selected cities first (count-sorted), API pre-approved as fill-in.
+    // User-selected cities first (count-sorted), API popular as fill-in.
     final popular = [...userSelected, ...apiPopular];
 
     return _SheetData(recentLocations: recent, popularLocations: popular);

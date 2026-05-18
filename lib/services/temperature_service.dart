@@ -12,12 +12,12 @@ export '../models/app_exceptions.dart';
 class TemperatureService {
   static const int _kMaxCacheEntries = 20;
   static final Map<String, PeriodTemperatureData> _periodCache = {};
-  static List<String>? _preapprovedLocationsCache;
+  static List<String>? _popularLocationsCache;
   // Keyed by the full "City, Country" location string → ISO 3166-1 alpha-2 CC.
-  // Populated alongside [_preapprovedLocationsCache] on first fetch.
+  // Populated alongside [_popularLocationsCache] on first fetch.
   static Map<String, String>? _locationCountryCodeCache;
   // Keyed by country name (as returned by the API) → ISO 3166-1 alpha-2 CC.
-  // Used as a fallback for GPS location strings that don't match the preapproved
+  // Used as a fallback for GPS location strings that don't match the popular
   // list exactly (e.g. "Dubai, United Arab Emirates" or
   // "London, Greater London, United Kingdom").
   static Map<String, String>? _countryNameToCodeCache;
@@ -197,22 +197,22 @@ class TemperatureService {
     _periodCache.remove(cacheKey);
   }
 
-  /// Fetches the list of pre-approved locations from the API.
+  /// Fetches the list of popular locations from the API.
   ///
   /// Result is cached in memory for the lifetime of the app so repeated
   /// sheet opens do not make additional network calls.
   /// Throws on network or auth failure — callers should handle and fall back.
-  Future<List<String>> fetchPreapprovedLocations() async {
+  Future<List<String>> fetchPopularLocations() async {
     // Return early only when all derived caches are also populated, so a
     // hot-reload that adds new caches doesn't silently skip populating them.
-    if (_preapprovedLocationsCache != null && _locationCountryCodeCache != null) {
-      return _preapprovedLocationsCache!;
+    if (_popularLocationsCache != null && _locationCountryCodeCache != null) {
+      return _popularLocationsCache!;
     }
 
     final token = await getAuthToken();
-    final url = Uri.parse('$apiBaseUrl/v1/locations/preapproved');
+    final url = Uri.parse('$apiBaseUrl/v1/locations/popular');
 
-    DebugUtils.logLazy(() => 'Fetching pre-approved locations: $url');
+    DebugUtils.logLazy(() => 'Fetching popular locations: $url');
 
     final response = await http.get(
       url,
@@ -223,10 +223,10 @@ class TemperatureService {
     ).timeout(const Duration(seconds: kApiTimeoutSeconds));
 
     DebugUtils.logLazy(() =>
-        'Pre-approved locations response: ${response.statusCode} — ${response.body}');
+        'Popular locations response: ${response.statusCode} — ${response.body}');
 
     if (response.statusCode != 200) {
-      throw ApiException(response.statusCode, 'v1/locations/preapproved');
+      throw ApiException(response.statusCode, 'v1/locations/popular');
     }
 
     final data = jsonDecode(response.body);
@@ -236,7 +236,7 @@ class TemperatureService {
     } else if (data is Map && data['locations'] is List) {
       raw = data['locations'] as List;
     } else {
-      throw ApiException(0, 'Unexpected format from v1/locations/preapproved');
+      throw ApiException(0, 'Unexpected format from v1/locations/popular');
     }
 
     // Build "City, Country" strings matching the format used throughout the app.
@@ -247,7 +247,7 @@ class TemperatureService {
     // flag emojis can be displayed without an extra network call.
     final ccMap = <String, String>{};
     final countryNameMap = <String, String>{};
-    _preapprovedLocationsCache = raw.map<String>((e) {
+    _popularLocationsCache = raw.map<String>((e) {
       if (e is String) return e;
       if (e is Map) {
         final name = e['name']?.toString() ?? '';
@@ -270,13 +270,13 @@ class TemperatureService {
     _locationCountryCodeCache = ccMap;
     _countryNameToCodeCache = countryNameMap;
 
-    return _preapprovedLocationsCache!;
+    return _popularLocationsCache!;
   }
 
   /// Search for locations matching [query] (min 2 characters).
   ///
   /// Delegates to the API's `/v1/locations/search` endpoint, which uses the
-  /// Mapbox Geocoding API when configured and falls back to the preapproved
+  /// Mapbox Geocoding API when configured and falls back to the popular
   /// list in dev/CI environments.
   ///
   /// Returns up to 10 location strings of the form:
@@ -284,7 +284,7 @@ class TemperatureService {
   ///   "City, Country"          (otherwise)
   ///
   /// Also caches country codes for any returned locations so that flag emojis
-  /// work without requiring a separate preapproved-list fetch.
+  /// work without requiring a separate popular-list fetch.
   Future<List<String>> searchLocations(String query) async {
     if (query.trim().length < 2) return [];
 
@@ -352,13 +352,13 @@ class TemperatureService {
   /// Returns the ISO 3166-1 alpha-2 country code for [location], or null if
   /// unknown.
   ///
-  /// First tries an exact match against the preapproved list (e.g.
+  /// First tries an exact match against the popular list (e.g.
   /// "Auckland, New Zealand" → "NZ").  If that fails, extracts the last
   /// comma-segment and looks it up as a country name — this handles GPS
   /// strings like "London, Greater London, United Kingdom" and
-  /// "Dubai, United Arab Emirates" that aren't in the preapproved list.
+  /// "Dubai, United Arab Emirates" that aren't in the popular list.
   ///
-  /// Only populated after [fetchPreapprovedLocations] has been called.
+  /// Only populated after [fetchPopularLocations] has been called.
   static String? countryCodeFor(String location) {
     final exact = _locationCountryCodeCache?[location];
     if (exact != null) return exact;
@@ -368,9 +368,9 @@ class TemperatureService {
     if (parts.length < 2) return null;
     final lastSegment = parts.last.trim();
 
-    // Try the API-sourced cache first (covers exactly the preapproved countries),
-    // then fall back to the hardcoded map so GPS strings always get a flag even
-    // when fetchPreapprovedLocations has not been called or the API is unavailable.
+    // Try the API-sourced cache first, then fall back to the hardcoded map so
+    // GPS strings always get a flag even when fetchPopularLocations has not been
+    // called or the API is unavailable.
     return _countryNameToCodeCache?[lastSegment] ?? _kCountryNameToCode[lastSegment];
   }
 
