@@ -750,7 +750,7 @@ class PeriodPageState extends State<PeriodPage>
         children: [
           Row(
             children: [
-              const Icon(Icons.error_outline, color: kErrorColour, size: 17),
+              const Icon(Icons.error_outline, color: kErrorColour, size: 35),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -762,24 +762,27 @@ class PeriodPageState extends State<PeriodPage>
             ],
           ),
           const SizedBox(height: 16),
-          Semantics(
-            label: 'Retry loading ${widget.periodLabel.toLowerCase()} data',
-            button: true,
-            child: GestureDetector(
-              onTap: () => _fetchData(bypassCache: true),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: kErrorColour.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  'Retry',
-                  style: TextStyle(
-                      color: kErrorColour,
-                      fontSize: kFontSizeBody,
-                      fontWeight: FontWeight.w500),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Semantics(
+              label: 'Retry loading ${widget.periodLabel.toLowerCase()} data',
+              button: true,
+              child: GestureDetector(
+                onTap: () => _fetchData(bypassCache: true),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: kErrorColour.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'Retry',
+                    style: TextStyle(
+                        color: kErrorColour,
+                        fontSize: kFontSizeBody,
+                        fontWeight: FontWeight.w500),
+                  ),
                 ),
               ),
             ),

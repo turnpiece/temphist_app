@@ -121,7 +121,7 @@ const double kFontSizeLocation = 20.0;
 const double kFontSizeBody =
     17.0; // Standard body text, summary, average, trend
 const double kFontSizeAxisLabel = 16.0; // Slightly smaller for chart labels
-const double kIconSize = 17.0;
+const double kIconSize = 20.0;
 const double kSummaryFontSize =
     kFontSizeBody; // Changed from -2 for consistency
 const double kSummaryLineHeight = 1.2;
