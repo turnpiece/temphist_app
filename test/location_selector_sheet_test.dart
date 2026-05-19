@@ -119,8 +119,8 @@ void main() {
     });
   });
 
-  group('LocationSelectorSheet — recent locations section', () {
-    testWidgets('shows "RECENT" section when history is present',
+  group('LocationSelectorSheet — visited locations section', () {
+    testWidgets('shows "VISITED" section when history is present',
         (tester) async {
       SharedPreferences.setMockInitialValues({
         'locationHistory': '["London, United Kingdom","Paris, France"]',
@@ -132,10 +132,10 @@ void main() {
           selectedLocation: 'London, United Kingdom',
         ),
       );
-      expect(find.text('RECENT'), findsOneWidget);
+      expect(find.text('VISITED'), findsOneWidget);
     });
 
-    testWidgets('hides "RECENT" when history is empty',
+    testWidgets('hides "VISITED" when history is empty',
         (tester) async {
       await _pump(
         tester,
@@ -144,7 +144,7 @@ void main() {
           selectedLocation: 'Sydney, Australia',
         ),
       );
-      expect(find.text('RECENT'), findsNothing);
+      expect(find.text('VISITED'), findsNothing);
     });
 
     testWidgets('GPS location is excluded from recent locations list',

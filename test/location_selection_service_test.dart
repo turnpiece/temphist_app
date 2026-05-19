@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -62,35 +64,63 @@ void main() {
       expect(await LocationSelectionService.getAll(), isEmpty);
     });
 
-    test('record increments count on repeated selection', () async {
+    test('record does not increment count within 24 hours (dedup)', () async {
       await LocationSelectionService.record('Tokyo, Japan');
       await LocationSelectionService.record('Tokyo, Japan');
       await LocationSelectionService.record('Tokyo, Japan');
       final result = await LocationSelectionService.getAll();
       expect(result.length, 1);
-      expect(result.first.count, 3);
+      expect(result.first.count, 1);
     });
 
-    test('record updates selectedAt on increment', () async {
+    test('record increments count when more than 24 hours have elapsed',
+        () async {
+      // Pre-seed an entry with selectedAt > 24h ago so the dedup window has passed.
+      final old = LocationSelection(
+        location: 'Tokyo, Japan',
+        displayLocation: 'Tokyo',
+        selectedAt: DateTime.now().subtract(const Duration(hours: 25)),
+        count: 1,
+      );
+      SharedPreferences.setMockInitialValues({
+        'locationSelectionHistory': jsonEncode([old.toJson()]),
+      });
       await LocationSelectionService.record('Tokyo, Japan');
-      final before = (await LocationSelectionService.getAll()).first.selectedAt;
-      await Future.delayed(const Duration(milliseconds: 5));
+      final result = await LocationSelectionService.getAll();
+      expect(result.length, 1);
+      expect(result.first.count, 2);
+    });
+
+    test('record updates selectedAt when incrementing after 24 hours', () async {
+      final old = LocationSelection(
+        location: 'Tokyo, Japan',
+        displayLocation: 'Tokyo',
+        selectedAt: DateTime.now().subtract(const Duration(hours: 25)),
+        count: 1,
+      );
+      SharedPreferences.setMockInitialValues({
+        'locationSelectionHistory': jsonEncode([old.toJson()]),
+      });
+      final before = old.selectedAt;
       await LocationSelectionService.record('Tokyo, Japan');
       final after = (await LocationSelectionService.getAll()).first.selectedAt;
       expect(after.isAfter(before), isTrue);
     });
 
     test('getAll returns entries sorted by count descending', () async {
-      await LocationSelectionService.record('London, United Kingdom');
-      await LocationSelectionService.record('Tokyo, Japan');
-      await LocationSelectionService.record('Tokyo, Japan');
-      await LocationSelectionService.record('Paris, France');
-      await LocationSelectionService.record('Paris, France');
-      await LocationSelectionService.record('Paris, France');
+      // Pre-seed entries with different counts; sorting is independent of record().
+      final old = DateTime.now().subtract(const Duration(days: 5));
+      SharedPreferences.setMockInitialValues({
+        'locationSelectionHistory': jsonEncode([
+          LocationSelection(location: 'London, United Kingdom', displayLocation: 'London', selectedAt: old, count: 1).toJson(),
+          LocationSelection(location: 'Tokyo, Japan', displayLocation: 'Tokyo', selectedAt: old, count: 2).toJson(),
+          LocationSelection(location: 'Paris, France', displayLocation: 'Paris', selectedAt: old, count: 3).toJson(),
+        ]),
+      });
       final result = await LocationSelectionService.getAll();
       expect(result.map((e) => e.location).toList(), [
-        'Paris, France',    // count 3
-        'Tokyo, Japan',     // count 2
+        'Paris, France',          // count 3
+        'Tokyo, Japan',           // count 2
         'London, United Kingdom', // count 1
       ]);
     });
@@ -111,9 +141,16 @@ void main() {
     });
 
     test('record promotes a location above others when its count grows', () async {
-      await LocationSelectionService.record('London, United Kingdom');
-      await LocationSelectionService.record('Tokyo, Japan');
-      // Select London a second time — it should overtake Tokyo.
+      // Pre-seed London with count=1 and an old timestamp so the dedup window
+      // has already passed, then add Tokyo (count=1) and increment London.
+      final old = DateTime.now().subtract(const Duration(hours: 25));
+      SharedPreferences.setMockInitialValues({
+        'locationSelectionHistory': jsonEncode([
+          LocationSelection(location: 'London, United Kingdom', displayLocation: 'London', selectedAt: old, count: 1).toJson(),
+          LocationSelection(location: 'Tokyo, Japan', displayLocation: 'Tokyo', selectedAt: old, count: 1).toJson(),
+        ]),
+      });
+      // Incrementing London after 25h should push its count to 2.
       await LocationSelectionService.record('London, United Kingdom');
       final result = await LocationSelectionService.getAll();
       expect(result.first.location, 'London, United Kingdom');

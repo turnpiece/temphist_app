@@ -56,14 +56,16 @@ Location works in two modes:
 **Manual selection** — tapping the location name at the top of the screen opens the location selector. It shows:
 
 - Current location (if GPS permission is granted)
-- Recent locations (previously visited)
-- A list of pre-approved popular locations
+- Visited locations (places the device's GPS has detected the user physically visiting)
+- A list of popular locations — the user's most-selected cities first, with pre-approved locations as a fallback
+
+Tapping the search bar opens a **Recent Selections** overlay showing up to 10 locations the user has explicitly chosen within the last 30 days, ordered by how often each was selected. Typing in the search bar replaces this overlay with live search results.
 
 The location indicator uses a colour coding system:
 
 - Green — the user's current GPS-detected location
 - Blue — a popular location selected from the app's pre-approved list
-- Red — a recently visited location (previously used in the app, but not the user's current GPS location)
+- Red — a visited location (previously GPS-detected, but not the current position)
 
 ---
 

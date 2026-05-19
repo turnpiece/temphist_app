@@ -659,13 +659,22 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
   Future<void> _determineLocation() async {
     await _locationService.determineLocation();
-    // Submit GPS auto-detect to API when the device resolved a real position.
+    // Record GPS auto-detect to API and local history when the device resolved
+    // a real position.
     if (_locationService.locationSource == LocationSource.gps &&
         _locationService.determinedLocation.isNotEmpty) {
-      unawaited(TemperatureService().submitLocationSelection(
-        _locationService.determinedLocation,
-      ));
+      _recordLocationSelection(_locationService.determinedLocation);
     }
+  }
+
+  /// Submit a location selection to the API and record it locally.
+  ///
+  /// Called for all explicit location choices — GPS auto-detect, manual search
+  /// picks, popular taps, and visited taps. Never called for background or
+  /// programmatic loads.
+  void _recordLocationSelection(String apiLocation) {
+    unawaited(TemperatureService().submitLocationSelection(apiLocation));
+    unawaited(LocationSelectionService.record(apiLocation));
   }
 
   /// Pre-warm the in-memory and Hive caches for all four periods in parallel.
@@ -816,13 +825,9 @@ class TemperatureScreenState extends State<TemperatureScreen>
   Future<void> _onLocationSelected(String apiLocation) async {
     if (apiLocation == _determinedLocation) return;
 
-    // Submit selection signal to API for all explicit user picks.
-    DebugUtils.logLazy(() => '_onLocationSelected: submitting "$apiLocation"');
-    unawaited(TemperatureService().submitLocationSelection(apiLocation));
-    // Record to local persistence — skip the GPS "Current location" tap.
-    if (apiLocation != _locationService.gpsLocation) {
-      unawaited(LocationSelectionService.record(apiLocation));
-    }
+    // Submit selection signal to API and record locally for all explicit picks.
+    DebugUtils.logLazy(() => '_onLocationSelected: recording "$apiLocation"');
+    _recordLocationSelection(apiLocation);
 
     final currentPage = _pageIndexNotifier.value;
     final currentPeriod = _periodKeys[currentPage];

@@ -8,12 +8,14 @@ import '../services/location_selection_service.dart';
 import '../services/temperature_service.dart';
 
 class _SheetData {
-  final List<String> recentLocations;
+  final List<String> visitedLocations;
   final List<String> popularLocations;
+  final List<String> recentSelections;
 
   const _SheetData({
-    required this.recentLocations,
+    required this.visitedLocations,
     required this.popularLocations,
+    required this.recentSelections,
   });
 }
 
@@ -99,12 +101,13 @@ class LocationSelectorSheet extends StatefulWidget {
 
 class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
   late final Future<_SheetData> _dataFuture;
-  bool _showAllRecent = false;
+  bool _showAllVisited = false;
   bool _showAllPopular = false;
 
   // Search state
   final _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _searchFocused = false;
   List<String> _searchResults = [];
   bool _searchLoading = false;
   Timer? _debounceTimer;
@@ -217,17 +220,17 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     bool isExcluded(String loc) =>
         loc.isEmpty || excludedCities.contains(cityName(loc));
 
-    // Recent list: GPS history minus the GPS location itself, deduplicated by
+    // Visited list: GPS history minus the GPS location itself, deduplicated by
     // city name (keeps the newest visit per city, since history is newest-first).
     final seenCities = <String>{};
-    final recent = history
+    final visited = history
         .where((l) => !isExcluded(l) && seenCities.add(cityName(l)))
         .toList();
 
-    // Exclusion set for popular: GPS + recent cities.
-    final recentCities = {for (final h in history) cityName(h)};
+    // Exclusion set for popular: GPS + visited cities.
+    final visitedCities = {for (final h in history) cityName(h)};
     bool isExcludedFromPopular(String loc) =>
-        isExcluded(loc) || recentCities.contains(cityName(loc));
+        isExcluded(loc) || visitedCities.contains(cityName(loc));
 
     // User-selected popular — sorted by count desc from the service.
     final selections = await LocationSelectionService.getAll();
@@ -255,7 +258,23 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     // User-selected cities first (count-sorted), API popular as fill-in.
     final popular = [...userSelected, ...apiPopular];
 
-    return _SheetData(recentLocations: recent, popularLocations: popular);
+    // Recent selections: all selections within the last 30 days, excluding the
+    // currently active location, sorted by count desc, capped at 10.
+    final activeCity = cityName(widget.selectedLocation);
+    final now = DateTime.now();
+    final recentSelections = selections
+        .where((s) =>
+            now.difference(s.selectedAt).inDays <= 30 &&
+            cityName(s.location) != activeCity)
+        .take(10)
+        .map((s) => s.location)
+        .toList();
+
+    return _SheetData(
+      visitedLocations: visited,
+      popularLocations: popular,
+      recentSelections: recentSelections,
+    );
   }
 
   @override
@@ -336,8 +355,8 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                             Expanded(
                               child: Text(
                                 'You appear to be offline. Current location '
-                                'and recents may still work if they were loaded '
-                                'before.',
+                                'and visited locations may still work if they '
+                                'were loaded before.',
                                 style: TextStyle(
                                   color: kGreyLabelColour,
                                   fontSize: kFontSizeBody - 2,
@@ -356,10 +375,13 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                         onChanged: _onSearchChanged,
                         onSubmitted: _onSearchSubmitted,
                         onClear: _clearSearch,
+                        onFocusChanged: (focused) =>
+                            setState(() => _searchFocused = focused),
                         enabled: widget.connectivityOnline,
                       ),
                     ),
-                    // Scrollable content — search results or normal lists.
+                    // Scrollable content — search results, recent selections
+                    // overlay (search focused, empty query), or normal lists.
                     // Bottom padding accounts for the software keyboard so
                     // list items are never obscured by it.
                     Expanded(
@@ -367,7 +389,9 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                         padding: EdgeInsets.only(bottom: keyboardInset),
                         child: _searchQuery.isNotEmpty
                             ? _buildSearchContent()
-                            : FutureBuilder<_SheetData>(
+                            : _searchFocused
+                                ? _buildRecentSelectionsContent()
+                                : FutureBuilder<_SheetData>(
                               future: _dataFuture,
                               builder: (context, snapshot) {
                                 if (snapshot.connectionState !=
@@ -440,6 +464,44 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     );
   }
 
+  /// Shown when the search field is focused but the query is still empty.
+  /// Displays up to 10 recent selections from a 30-day rolling window.
+  Widget _buildRecentSelectionsContent() {
+    return FutureBuilder<_SheetData>(
+      future: _dataFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(
+            child: CircularProgressIndicator(color: kLocationPopularColour),
+          );
+        }
+        final selections = snapshot.data?.recentSelections ?? [];
+        if (selections.isEmpty) {
+          return Center(
+            child: Text(
+              'No recent selections.',
+              style:
+                  TextStyle(color: kGreyLabelColour, fontSize: kFontSizeBody),
+            ),
+          );
+        }
+        return ListView(
+          padding: const EdgeInsets.only(bottom: 24),
+          children: [
+            _SectionHeader('Recent Selections', color: kHeadingColour),
+            for (final loc in selections)
+              _LocationRow(
+                apiLocation: loc,
+                isSelected: _isSelected(loc),
+                selectedColor: kBarCurrentYearColour,
+                onTap: () => _select(loc),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   /// Returns [all] with the selected item moved to index 0 (if present).
   List<String> _withSelectedFirst(List<String> all) {
     final i = all.indexWhere(_isSelected);
@@ -448,22 +510,51 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
   }
 
   Widget _buildContent(_SheetData data, {bool isTablet = false}) {
-    final orderedRecent = _withSelectedFirst(data.recentLocations);
+    final orderedVisited = _withSelectedFirst(data.visitedLocations);
     final orderedPopular = _withSelectedFirst(data.popularLocations);
 
-    final visibleRecent = isTablet || _showAllRecent
-        ? orderedRecent
-        : orderedRecent.take(_initialCount).toList();
+    final visibleVisited = isTablet || _showAllVisited
+        ? orderedVisited
+        : orderedVisited.take(_initialCount).toList();
     final popularInitialCount =
-        (10 - data.recentLocations.length).clamp(_initialCount, 10);
+        (10 - data.visitedLocations.length).clamp(_initialCount, 10);
     final showAllPopular = isTablet || _showAllPopular;
     final visiblePopular = showAllPopular
         ? orderedPopular
         : orderedPopular.take(popularInitialCount).toList();
 
+    // Tip shown when GPS is unavailable so the user knows why Current is absent.
+    final hasVisited = data.visitedLocations.isNotEmpty;
+    final locationsTip = widget.gpsLocation.isEmpty
+        ? 'Location permissions are off. Type a location above, or select '
+            '${hasVisited ? 'a visited or ' : ''}a popular location below.'
+        : null;
+
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
+        if (locationsTip != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.lightbulb_outline,
+                    size: kIconSize + 2, color: kGreyLabelColour),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    locationsTip,
+                    style: TextStyle(
+                      color: kGreyLabelColour,
+                      fontSize: kFontSizeBody - 2,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         // "Current location" shows the physical GPS location, if known.
         if (widget.gpsLocation.isNotEmpty) ...[
           _SectionHeader('Current', color: kHeadingColour),
@@ -477,22 +568,22 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
               onTap: () => _select(widget.gpsLocation),
             ),
         ],
-        // Recent — two-column grid on tablets, single column on phones.
-        if (data.recentLocations.isNotEmpty) ...[
-          _SectionHeader('Recent', color: kHeadingColour),
+        // Visited — GPS-detected locations, two-column grid on tablets.
+        if (data.visitedLocations.isNotEmpty) ...[
+          _SectionHeader('Visited', color: kHeadingColour),
           if (isTablet)
-            _buildTwoColumnGrid(visibleRecent, kBarCurrentYearColour)
+            _buildTwoColumnGrid(visibleVisited, kBarCurrentYearColour)
           else ...[
-            for (final loc in visibleRecent)
+            for (final loc in visibleVisited)
               _LocationRow(
                 apiLocation: loc,
                 isSelected: _isSelected(loc),
                 selectedColor: kBarCurrentYearColour,
                 onTap: () => _select(loc),
               ),
-            if (data.recentLocations.length > _initialCount && !_showAllRecent)
+            if (data.visitedLocations.length > _initialCount && !_showAllVisited)
               _ShowMoreButton(
-                onTap: () => setState(() => _showAllRecent = true),
+                onTap: () => setState(() => _showAllVisited = true),
               ),
           ],
         ],
@@ -797,6 +888,7 @@ class _SearchField extends StatefulWidget {
   final void Function(String) onChanged;
   final void Function(String) onSubmitted;
   final VoidCallback onClear;
+  final void Function(bool)? onFocusChanged;
   final bool enabled;
 
   const _SearchField({
@@ -804,6 +896,7 @@ class _SearchField extends StatefulWidget {
     required this.onChanged,
     required this.onSubmitted,
     required this.onClear,
+    this.onFocusChanged,
     this.enabled = true,
   });
 
@@ -832,6 +925,7 @@ class _SearchFieldState extends State<_SearchField> {
   void _handleFocusChange() {
     if (mounted && _hasFocus != _focusNode.hasFocus) {
       setState(() => _hasFocus = _focusNode.hasFocus);
+      widget.onFocusChanged?.call(_focusNode.hasFocus);
     }
   }
 

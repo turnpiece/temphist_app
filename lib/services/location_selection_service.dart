@@ -32,6 +32,7 @@ class LocationSelectionService {
 
       final idx = entries.indexWhere((e) => e.location == apiLocation);
       if (idx >= 0) {
+        if (now.difference(entries[idx].selectedAt).inHours < 24) return;
         entries[idx] = entries[idx].increment(now);
       } else {
         entries.add(LocationSelection(
