@@ -25,8 +25,11 @@ class TemperatureService {
   // Keyed by display string → canonical API location id (e.g. "london").
   // Populated from fetchPopularLocations() and searchLocations() responses.
   static final Map<String, String> _locationIdCache = {};
-  // Session-level dedup: last successfully submitted canonical location id.
-  static String? _lastSubmittedLocationId;
+  // Keyed by display string → raw location fields {name, admin1?, country_code}.
+  // Populated from searchLocations() so we can submit without a canonical id.
+  static final Map<String, Map<String, String>> _locationRawDataCache = {};
+  // Session-level dedup: last submitted key (canonical id or display string).
+  static String? _lastSubmittedKey;
 
   /// Static fallback map of English country names → ISO 3166-1 alpha-2 codes.
   ///
@@ -357,12 +360,17 @@ class TemperatureService {
         _locationCountryCodeCache![loc] = countryCode.toUpperCase();
         _countryNameToCodeCache![countryName] = countryCode.toUpperCase();
       }
-      // Cache canonical id so submitLocationSelection() can look it up.
+      // Cache canonical id so submitLocationSelection() can use it when available.
       if (id.isNotEmpty) {
         _locationIdCache[loc] = id;
-      } else {
-        DebugUtils.logLazy(() => 'searchLocations: no id field in response for "$loc" — selection will not be submitted');
       }
+      // Always cache raw fields so we can submit without a canonical id.
+      final rawData = <String, String>{
+        'name': name,
+        'country_code': countryCode,
+      };
+      if (admin1.isNotEmpty) rawData['admin1'] = admin1;
+      _locationRawDataCache[loc] = rawData;
     }
 
     return results;
@@ -391,13 +399,14 @@ class TemperatureService {
 
   /// Seed [_locationIdCache] with [entries] for unit tests.
   ///
-  /// Also resets [_lastSubmittedLocationId] so session-dedup state is clean.
+  /// Also resets [_lastSubmittedKey] so session-dedup state is clean.
   @visibleForTesting
   static void seedLocationIdCacheForTesting(Map<String, String> entries) {
     _locationIdCache
       ..clear()
       ..addAll(entries);
-    _lastSubmittedLocationId = null;
+    _locationRawDataCache.clear();
+    _lastSubmittedKey = null;
   }
 
   /// Returns the ISO 3166-1 alpha-2 country code for [location], or null if
@@ -439,41 +448,40 @@ class TemperatureService {
 
   /// Submit a location selection signal to `POST /v1/locations/selections`.
   ///
-  /// Resolves [displayLocation] (e.g. "London, United Kingdom") to a canonical
-  /// API id (e.g. "london") using [canonicalIdFor]. If the id is not cached,
-  /// performs a one-time [searchLocations] call to populate the cache.
+  /// Prefers submitting a canonical [location_id] when cached. Falls back to
+  /// submitting raw fields (name, admin1, country_code) from [_locationRawDataCache]
+  /// for locations returned by search but without a canonical id.
   ///
-  /// Session-level dedup: skips if the same id was already submitted this
+  /// Session-level dedup: skips if the same location was already submitted this
   /// session. Failures are always swallowed — this must never degrade the
   /// core weather experience.
   Future<void> submitLocationSelection(String displayLocation) async {
     DebugUtils.logLazy(() => 'submitLocationSelection: called with "$displayLocation"');
     if (displayLocation.isEmpty) return;
 
-    String? locationId = canonicalIdFor(displayLocation);
-    DebugUtils.logLazy(() => 'submitLocationSelection: canonicalIdFor → ${locationId ?? "null (not in cache)"}');
+    final locationId = canonicalIdFor(displayLocation);
+    final submissionKey = locationId ?? displayLocation;
 
-    if (locationId == null) {
-      final city = displayLocation.split(',').first.trim();
-      DebugUtils.logLazy(() => 'submitLocationSelection: searching for "$city" to resolve id');
-      try {
-        await searchLocations(city);
-        locationId = canonicalIdFor(displayLocation);
-        DebugUtils.logLazy(() => 'submitLocationSelection: after search → ${locationId ?? "still null"}');
-      } catch (e) {
-        DebugUtils.logLazy(() => 'submitLocationSelection: search failed: $e');
+    if (submissionKey == _lastSubmittedKey) {
+      DebugUtils.logLazy(() => 'submitLocationSelection: skipping "$submissionKey" — already submitted this session');
+      return;
+    }
+
+    final Map<String, dynamic> payload;
+    if (locationId != null) {
+      DebugUtils.logLazy(() => 'submitLocationSelection: submitting by id "$locationId"');
+      payload = {'location_id': locationId};
+    } else {
+      final rawData = _locationRawDataCache[displayLocation];
+      if (rawData == null) {
+        DebugUtils.logLazy(() => 'submitLocationSelection: skipping "$displayLocation" — no id or raw data cached');
+        return;
       }
-    }
-    if (locationId == null) {
-      DebugUtils.logLazy(() => 'submitLocationSelection: skipping "$displayLocation" — could not resolve canonical id');
-      return;
+      DebugUtils.logLazy(() => 'submitLocationSelection: submitting raw fields for "$displayLocation"');
+      payload = rawData;
     }
 
-    if (locationId == _lastSubmittedLocationId) {
-      DebugUtils.logLazy(() => 'submitLocationSelection: skipping "$locationId" — already submitted this session');
-      return;
-    }
-    _lastSubmittedLocationId = locationId;
+    _lastSubmittedKey = submissionKey;
 
     try {
       final token = await getAuthToken();
@@ -484,9 +492,9 @@ class TemperatureService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: jsonEncode({'location_id': locationId}),
+        body: jsonEncode(payload),
       ).timeout(const Duration(seconds: kApiTimeoutSeconds));
-      DebugUtils.logLazy(() => 'submitLocationSelection: submitted "$locationId" → HTTP ${response.statusCode}');
+      DebugUtils.logLazy(() => 'submitLocationSelection: submitted "$submissionKey" → HTTP ${response.statusCode}');
     } catch (e) {
       DebugUtils.logLazy(() => 'submitLocationSelection: POST failed (swallowed): $e');
     }
