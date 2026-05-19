@@ -117,7 +117,7 @@ String kApiRecordsPeriodSegment(String period) {
 
 /// Font size constants - control text sizing throughout the app
 const double kFontSizeTitle = 26.0;
-const double kFontSizeLocation = 21.0;
+const double kFontSizeLocation = 20.0;
 const double kFontSizeBody =
     17.0; // Standard body text, summary, average, trend
 const double kFontSizeAxisLabel = 16.0; // Slightly smaller for chart labels
