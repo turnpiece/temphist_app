@@ -10,7 +10,8 @@ A Flutter app that visualises historical average temperatures using interactive 
 - **Stats bubble** — standard deviation and trend rate displayed below the chart
 - **Location search** — search any city in the world by name
 - **Automatic location detection** — uses GPS when permission is granted; falls back to a picker if not
-- **Recent & popular locations** — quick access to places you've been and an API-driven global list
+- **Visited & popular locations** — quick access to places you've been and an API-driven global list
+- **Recent selections** — quick access to locations you've recently selected
 - **°C / °F toggle** — US locations default to Fahrenheit
 - **Social sharing** — shareable snapshot links with Open Graph previews
 
