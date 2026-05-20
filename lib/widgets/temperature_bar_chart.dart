@@ -443,6 +443,8 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
         final displayTemp = presentation.shouldConvert
             ? celsiusToFahrenheit(d.temperature)
             : d.temperature;
+        final isFahrenheit = presentation.unitLabel == '°F';
+        final tempDecimals = isFahrenheit ? 1 : 2;
 
         Widget? anomalyWidget;
         if (d.anomaly != null) {
@@ -450,7 +452,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
               ? d.anomaly! * 9 / 5
               : d.anomaly!;
           final displayAnomaly =
-              double.parse(rawAnomaly.toStringAsFixed(1));
+              double.parse(rawAnomaly.toStringAsFixed(tempDecimals));
           final String direction;
           final String sign;
           if (displayAnomaly > 0) {
@@ -464,7 +466,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
             sign = '';
           }
           final anomalyText =
-              '$sign${displayAnomaly.abs().toStringAsFixed(1)}${presentation.unitLabel} $direction average';
+              '$sign${displayAnomaly.abs().toStringAsFixed(tempDecimals)}${presentation.unitLabel} $direction average';
           final baseColor = d.barFillColor ?? Colors.white;
           final hsl = HSLColor.fromColor(baseColor);
           final anomalyColor =
@@ -494,7 +496,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
                     color: Colors.white, fontSize: kFontSizeBody - 2),
               ),
               Text(
-                '${displayTemp.toStringAsFixed(1)}${presentation.unitLabel} (mean)',
+                '${displayTemp.toStringAsFixed(tempDecimals)}${presentation.unitLabel} (mean)',
                 style: const TextStyle(
                     color: Colors.white, fontSize: kFontSizeBody - 2),
               ),

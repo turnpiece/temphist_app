@@ -19,7 +19,7 @@ String formatTemperature(
 }) {
   final display = (isFahrenheit && convert) ? celsiusToFahrenheit(value) : value;
   final unit = isFahrenheit ? '°F' : '°C';
-  final decimals = isFahrenheit ? 0 : 1;
+  final decimals = isFahrenheit ? 1 : 2;
   return '${display.toStringAsFixed(decimals)}$unit';
 }
 
@@ -35,8 +35,9 @@ String formatTrendValue(
   final errorValue =
       (slopeError != null && isFahrenheit && convert) ? slopeError * 9 / 5 : slopeError;
   final unit = isFahrenheit ? '°F/decade' : '°C/decade';
-  final formatted = value.abs().toStringAsFixed(2);
-  final errorStr = errorValue != null ? ' ± ${errorValue.toStringAsFixed(2)}' : '';
+  final decimals = isFahrenheit ? 1 : 2;
+  final formatted = value.abs().toStringAsFixed(decimals);
+  final errorStr = errorValue != null ? ' ± ${errorValue.toStringAsFixed(decimals)}' : '';
   if (value.abs() < 0.05) return 'Steady at $formatted$errorStr$unit';
   return value > 0
       ? 'Rising at $formatted$errorStr$unit'
