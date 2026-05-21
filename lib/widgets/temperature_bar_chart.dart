@@ -5,6 +5,7 @@ import 'package:syncfusion_flutter_charts/charts.dart';
 
 import '../constants/app_constants.dart';
 import '../utils/temperature_utils.dart';
+import 'gradient_spinner.dart';
 
 // Re-export so existing code can import from here
 class TemperatureChartData {
@@ -528,14 +529,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
         child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                color: kGreyLabelColour,
-              ),
-            ),
+            GradientSpinner.data(),
             SizedBox(height: 16),
             Text(
               'Loading temperature data...',

@@ -6,6 +6,7 @@ import '../constants/app_constants.dart';
 import '../services/location_history_service.dart';
 import '../services/location_selection_service.dart';
 import '../services/temperature_service.dart';
+import 'gradient_spinner.dart';
 
 class _SheetData {
   final List<String> visitedLocations;
@@ -431,7 +432,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
   Widget _buildSearchContent() {
     if (_searchLoading) {
       return const Center(
-        child: CircularProgressIndicator(color: kLocationPopularColour),
+        child: GradientSpinner.location(),
       );
     }
 
@@ -472,7 +473,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Center(
-            child: CircularProgressIndicator(color: kLocationPopularColour),
+            child: GradientSpinner.location(),
           );
         }
         final selections = snapshot.data?.recentSelections ?? [];

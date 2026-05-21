@@ -10,6 +10,7 @@ import '../services/period_cache_service.dart';
 import '../utils/debug_utils.dart';
 import '../utils/temperature_utils.dart';
 import 'completeness_section.dart';
+import 'gradient_spinner.dart';
 import 'temperature_bar_chart.dart';
 
 /// A reusable page that fetches and displays period temperature data
@@ -701,14 +702,7 @@ class PeriodPageState extends State<PeriodPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(
-            width: 32,
-            height: 32,
-            child: CircularProgressIndicator(
-              strokeWidth: 3,
-              color: kGreyLabelColour,
-            ),
-          ),
+          const GradientSpinner.data(),
           const SizedBox(height: 16),
           Text(
             _loadingMessage.isNotEmpty

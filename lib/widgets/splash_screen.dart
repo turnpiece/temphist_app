@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../constants/app_constants.dart';
+import 'gradient_spinner.dart';
 
 /// Splash screen displayed during app initialization
 class SplashScreen extends StatelessWidget {
@@ -46,10 +47,7 @@ class SplashScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 // Loading indicator
-                const CircularProgressIndicator(
-                  color: kButtonColour,
-                  strokeWidth: 3,
-                ),
+                const GradientSpinner.data(size: 56),
                 const SizedBox(height: 16),
                 // Loading text
                 Text(
