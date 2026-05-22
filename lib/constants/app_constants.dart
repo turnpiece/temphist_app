@@ -118,12 +118,10 @@ String kApiRecordsPeriodSegment(String period) {
 /// Font size constants - control text sizing throughout the app
 const double kFontSizeTitle = 26.0;
 const double kFontSizeLocation = 20.0;
-const double kFontSizeBody =
-    17.0; // Standard body text, summary, average, trend
+const double kFontSizeBody = 17.0; // Standard body text, summary, average, trend
 const double kFontSizeAxisLabel = 16.0; // Slightly smaller for chart labels
 const double kIconSize = 20.0;
-const double kSummaryFontSize =
-    kFontSizeBody; // Changed from -2 for consistency
+const double kSummaryFontSize = kFontSizeBody; // Changed from -2 for consistency
 const double kSummaryLineHeight = 1.2;
 const double kSummaryMinLines = 4;
 const double kSummaryMinLinesTablet = 3;
@@ -140,8 +138,7 @@ const double kStatsFontSize = 15.0;
 
 /// Enable verbose logging in production builds via dart-define.
 /// Usage: flutter build ios --dart-define=VERBOSE_LOGS=true
-const bool verboseLogs =
-    bool.fromEnvironment('VERBOSE_LOGS', defaultValue: false);
+const bool verboseLogs = bool.fromEnvironment('VERBOSE_LOGS', defaultValue: false);
 
 /// Time constants
 const int kUseYesterdayHourThreshold = 3;
