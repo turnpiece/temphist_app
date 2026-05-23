@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 /// These colors define the visual theme of the TempHist application
 const kBackgroundColour = Color(0xFF242456);
 const kBackgroundColourDark = Color(0xFF343499);
+const kBackgroundWarmColour = Color(0xFFB31A0D); // darkened warm red for trend gradient (~5.5:1 contrast vs kTextPrimaryColour)
+const kBackgroundCoolColour = Color(0xFF1050B0); // darkened cool blue for trend gradient (~5.8:1 contrast vs kTextPrimaryColour)
 const kTextPrimaryColour = Color(0xFFECECEC);
 const kSummaryColour = Color(0xFF51CF66);
 const kButtonColour = kSummaryColour;

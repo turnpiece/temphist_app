@@ -48,6 +48,9 @@ class PeriodPage extends StatefulWidget {
   /// Optional widget inserted above the chart content inside the scroll view.
   final Widget? topContent;
 
+  /// Called once data loads with the trend slope (°C/decade, always Celsius).
+  final void Function(double slope)? onTrendLoaded;
+
   const PeriodPage({
     super.key,
     required this.periodKey,
@@ -60,6 +63,7 @@ class PeriodPage extends StatefulWidget {
     this.locationTimezone,
     this.scrollController,
     this.topContent,
+    this.onTrendLoaded,
   });
 
   @override
@@ -296,6 +300,10 @@ class PeriodPageState extends State<PeriodPage>
           _isLoading = false;
           _lastFetchKey = _fetchKey;
         });
+        // Always pass slope in °C/decade so the gradient is unit-independent.
+        final slopeCelsius =
+            data.isFahrenheit ? data.trend.slope * 5.0 / 9.0 : data.trend.slope;
+        widget.onTrendLoaded?.call(slopeCelsius);
       }
     } on RateLimitException {
       if (mounted && _fetchGeneration == generation) {

@@ -11,6 +11,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'package:flutter/services.dart';
 import 'dart:io' as io;
+import 'dart:math' as math;
 import 'dart:async'; // Added for StreamSubscription and StreamController
 import 'dart:convert'; // Added for jsonEncode/jsonDecode
 
@@ -322,6 +323,9 @@ class TemperatureScreenState extends State<TemperatureScreen>
   late final PageController _pageController;
   final ValueNotifier<int> _pageIndexNotifier = ValueNotifier<int>(0);
 
+  // Trend slope (°C/decade) per page index, populated as each period loads.
+  final _periodSlopes = <int, double?>{};
+
   // Tracks the active page's vertical scroll offset so the period nav can
   // collapse as the user scrolls (and re-expand when they scroll back up).
   final ValueNotifier<double> _activeScrollOffsetNotifier =
@@ -362,6 +366,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
   /// Called whenever [_locationService] notifies listeners.
   void _onLocationChanged() {
+    _periodSlopes.clear();
     _resetScrollPositions();
     if (mounted) setState(() {});
   }
@@ -859,20 +864,55 @@ class TemperatureScreenState extends State<TemperatureScreen>
     _prefetchPeriodData();
   }
 
-  Widget _buildGradientBackground() {
-    return SizedBox.expand(
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              kBackgroundColour, // Top color
-              kBackgroundColourDark, // Bottom color
-            ],
-          ),
-        ),
+  BoxDecoration _trendGradientFor(double? slope) {
+    final s = slope ?? 0.0;
+    final double t;
+    if (s.abs() < 0.05) {
+      t = 0.0;
+    } else {
+      // Square-root scaling: amplifies typical real-world slopes (0.2–1°C/decade)
+      // into a clearly visible range. Full colour reached at 0.65°C/decade.
+      t = math.sqrt((s.abs() / 0.65).clamp(0.0, 1.0));
+    }
+    final Color top, bottom;
+    if (s > 0.05) {
+      top = Color.lerp(kBackgroundColour, kBackgroundWarmColour, t)!;
+      bottom = Color.lerp(kBackgroundColourDark, kBackgroundCoolColour, t)!;
+    } else if (s < -0.05) {
+      top = Color.lerp(kBackgroundColour, kBackgroundCoolColour, t)!;
+      bottom = Color.lerp(kBackgroundColourDark, kBackgroundWarmColour, t)!;
+    } else {
+      top = kBackgroundColour;
+      bottom = kBackgroundColourDark;
+    }
+    return BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [top, bottom],
       ),
+    );
+  }
+
+  void _onTrendLoaded(int pageIndex, double slope) {
+    DebugUtils.logLazy(() => 'Trend gradient: page $pageIndex slope=$slope°C/decade');
+    setState(() {
+      _periodSlopes[pageIndex] = slope;
+    });
+  }
+
+  Widget _buildGradientBackground() {
+    return ValueListenableBuilder<int>(
+      valueListenable: _pageIndexNotifier,
+      builder: (_, pageIndex, __) {
+        return SizedBox.expand(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.easeInOut,
+            decoration: _trendGradientFor(_periodSlopes[pageIndex]),
+          ),
+        );
+      },
     );
   }
 
@@ -1337,6 +1377,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
           child: _buildLocationAndHeadingContent(pageIndex),
         ),
         isFahrenheit: _isFahrenheit,
+        onTrendLoaded: (slope) => _onTrendLoaded(pageIndex, slope),
       ),
     );
   }
