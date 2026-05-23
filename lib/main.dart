@@ -452,6 +452,9 @@ class TemperatureScreenState extends State<TemperatureScreen>
           () => 'App resumed - checking if location or date needs refresh');
       _checkAndRefreshLocationIfNeeded();
       _checkAndRefreshDataIfDateChanged();
+      // Silently refresh today's temperature on the daily page if stale.
+      unawaited(_dailyPageKey.currentState?.checkAndRefreshTodayIfStale() ??
+          Future.value());
       // Cleanup expired cache on resume
       _performMemoryCleanup();
     } else if (state == AppLifecycleState.paused) {

@@ -527,6 +527,40 @@ class TemperatureService {
     String? apiBaseUrl,
   }) : apiBaseUrl = apiBaseUrl ?? kApiBaseUrl;
 
+  /// Fetch today's forecast temperature for [location].
+  ///
+  /// Returns the temperature in the requested unit, or null on any error.
+  /// Used for the silent daily-period resume check — lightweight single value,
+  /// no AI summary generation.
+  Future<double?> fetchForecast(
+    String location, {
+    String? unitGroup,
+  }) async {
+    try {
+      final token = await getAuthToken();
+      final encodedLocation = Uri.encodeComponent(location);
+      final unit = unitGroup ?? 'celsius';
+      final params = unit != 'celsius' ? '?unit_group=$unit' : '';
+      final url = Uri.parse('$apiBaseUrl/forecast/$encodedLocation$params');
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: kApiTimeoutSeconds));
+
+      if (response.statusCode != 200) return null;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data.containsKey('error')) return null;
+      final temp = data['average_temperature'] as num?;
+      return temp?.toDouble();
+    } catch (e) {
+      DebugUtils.logLazy(() => 'fetchForecast failed: $e');
+      return null;
+    }
+  }
+
   /// Retrieve Firebase ID token for authentication with retry logic
   Future<String> getAuthToken() async {
     try {

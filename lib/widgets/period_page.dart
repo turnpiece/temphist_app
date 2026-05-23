@@ -93,6 +93,10 @@ class PeriodPageState extends State<PeriodPage>
   // Cache key to avoid re-fetching when swiping back
   String _lastFetchKey = '';
 
+  // Timestamp of the last successful data load — used to gate the silent
+  // forecast refresh check on resume (daily period only).
+  DateTime? _dataLoadedAt;
+
   // Generation counter — incremented whenever location/unit changes so that
   // any in-flight fetch from the previous configuration is discarded.
   int _fetchGeneration = 0;
@@ -299,6 +303,7 @@ class PeriodPageState extends State<PeriodPage>
           _data = data;
           _isLoading = false;
           _lastFetchKey = _fetchKey;
+          _dataLoadedAt = DateTime.now();
         });
         // Always pass slope in °C/decade so the gradient is unit-independent.
         final slopeCelsius =
@@ -503,6 +508,110 @@ class PeriodPageState extends State<PeriodPage>
     _lastFetchKey = '';
     _data = null;
     _fetchData(bypassCache: false);
+  }
+
+  /// Called on app resume (daily period only). Silently polls the forecast
+  /// endpoint to check whether today's temperature has changed since the data
+  /// was last loaded. If it has, fetches fresh daily data (for an updated
+  /// summary) and patches the displayed data without showing a loading state.
+  ///
+  /// No-ops if: not the daily period, data was loaded recently (within
+  /// [kForecastRefreshThreshold]), no data is present, or a load is in progress.
+  Future<void> checkAndRefreshTodayIfStale() async {
+    if (widget.periodKey != 'daily') return;
+    final data = _data;
+    if (data == null || _isLoading) return;
+    if (_dataLoadedAt == null ||
+        DateTime.now().difference(_dataLoadedAt!) < kForecastRefreshThreshold) {
+      return;
+    }
+
+    final currentYear = DateTime.now().year;
+    PeriodDataPoint? existing;
+    for (final v in data.values) {
+      if (v.year == currentYear) {
+        existing = v;
+        break;
+      }
+    }
+    if (existing == null) return; // No current-year entry to compare against
+    final existingTemp = existing.temperature; // pin before any await
+
+    DebugUtils.logLazy(() =>
+        'PeriodPage(daily): checking forecast for temperature update');
+
+    final unitGroup = widget.isFahrenheit ? 'fahrenheit' : null;
+    final service = TemperatureService();
+
+    final forecastTemp = await service.fetchForecast(
+      widget.location,
+      unitGroup: unitGroup,
+    );
+    if (forecastTemp == null || !mounted || _data != data) return;
+
+    // Reset the check timer regardless of whether data changed, so we don't
+    // hammer the endpoint on rapid app switches.
+    _dataLoadedAt = DateTime.now();
+
+    if ((forecastTemp - existingTemp).abs() < 0.1) {
+      DebugUtils.logLazy(() => 'PeriodPage(daily): forecast unchanged, no update needed');
+      return;
+    }
+
+    DebugUtils.logLazy(() =>
+        'PeriodPage(daily): forecast changed '
+        '$existingTemp → $forecastTemp, refreshing daily data');
+
+    // Evict in-memory cache so fetchPeriodData goes to the API.
+    TemperatureService.evictCacheEntry(
+      'daily',
+      widget.location,
+      _identifier,
+      unitGroup: unitGroup,
+    );
+
+    PeriodTemperatureData? freshData;
+    try {
+      freshData = await service.fetchPeriodData(
+        'daily',
+        widget.location,
+        _identifier,
+        unitGroup: unitGroup,
+        isCancelled: () => !mounted || _data != data,
+      );
+    } catch (e) {
+      DebugUtils.logLazy(() =>
+          'PeriodPage(daily): summary refresh failed ($e) — patching temperature only');
+    }
+
+    if (!mounted || _data != data) return;
+
+    final patched = freshData ??
+        data.withCurrentYearPatch(
+          year: currentYear,
+          temperature: forecastTemp,
+        );
+
+    // Update Hive cache with the patched data.
+    final lat = widget.latitude;
+    final lon = widget.longitude;
+    if (lat != null && lon != null) {
+      unawaited(PeriodCacheService.put(
+        'daily',
+        lat,
+        lon,
+        _identifier,
+        patched,
+        unitGroup: unitGroup,
+      ));
+    }
+
+    if (!mounted || _data != data) return;
+    setState(() {
+      _data = patched;
+      _dataLoadedAt = DateTime.now();
+      _lastFetchKey = _fetchKey;
+    });
   }
 
   @override

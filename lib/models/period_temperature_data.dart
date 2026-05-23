@@ -38,6 +38,39 @@ class PeriodTemperatureData {
   /// Whether the API returned data already converted to Fahrenheit.
   bool get isFahrenheit => unitGroup == 'fahrenheit';
 
+  /// Return a copy with the current year's temperature (and anomaly) patched,
+  /// and optionally a new [summary].  All other fields are unchanged.
+  PeriodTemperatureData withCurrentYearPatch({
+    required int year,
+    required double temperature,
+    String? summary,
+  }) {
+    final updatedValues = values.map((v) {
+      if (v.year != year) return v;
+      // Recalculate anomaly from the series mean so the chart colour stays correct.
+      final newAnomaly = temperature - average.mean;
+      return PeriodDataPoint(
+        date: v.date,
+        year: v.year,
+        temperature: temperature,
+        anomaly: newAnomaly,
+      );
+    }).toList();
+    return PeriodTemperatureData(
+      period: period,
+      location: location,
+      identifier: identifier,
+      range: range,
+      unitGroup: unitGroup,
+      values: updatedValues,
+      average: average,
+      trend: trend,
+      summary: summary ?? this.summary,
+      metadata: metadata,
+      standardDeviation: standardDeviation,
+    );
+  }
+
   factory PeriodTemperatureData.fromJson(Map<String, dynamic> json) {
     final avgJson = json['average'] ?? {};
     final stdDev = avgJson['standard_deviation'];
