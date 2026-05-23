@@ -38,6 +38,9 @@ dependencies:
   # For the chart
   intl: ^0.20.2
 
+  # IANA timezone-aware date calculations
+  timezone: ^0.9.4
+
   # Firebase
   firebase_core: ^4.1.0
   firebase_auth: ^6.0.2

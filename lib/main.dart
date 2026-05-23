@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -31,8 +32,14 @@ import 'utils/date_utils.dart' as date_utils;
 import 'services/location_selection_service.dart';
 
 // Delegate to shared utility functions
-Map<String, String> _getCurrentDateAndLocation(String determinedLocation) =>
-    date_utils.getCurrentDateAndLocation(determinedLocation);
+Map<String, String> _getCurrentDateAndLocation(
+  String determinedLocation, {
+  String? locationTimezone,
+}) =>
+    date_utils.getCurrentDateAndLocation(
+      determinedLocation,
+      locationTimezone: locationTimezone,
+    );
 
 /// Check available storage space and return true if sufficient space is available
 Future<bool> _checkStorageSpace() async {
@@ -185,6 +192,7 @@ void main() async {
   // Ensure user is signed in (anonymous)
   await _ensureSignedIn();
   await PeriodCacheService.init();
+  tz_data.initializeTimeZones();
   runApp(TempHist());
 }
 
@@ -683,7 +691,10 @@ class TemperatureScreenState extends State<TemperatureScreen>
   Future<void> _prefetchPeriodData() async {
     if (!_isLocationDetermined || _determinedLocation.isEmpty) return;
 
-    final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+    final dateInfo = _getCurrentDateAndLocation(
+      _determinedLocation,
+      locationTimezone: TemperatureService.timezoneFor(_determinedLocation),
+    );
     final identifier = dateInfo['mmdd']!;
     final location = _determinedLocation;
     final service = TemperatureService();
@@ -1134,7 +1145,10 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
     setState(() => _isSharing = true);
     try {
-      final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+      final dateInfo = _getCurrentDateAndLocation(
+        _determinedLocation,
+        locationTimezone: TemperatureService.timezoneFor(_determinedLocation),
+      );
       final dateToUse = DateTime.parse(dateInfo['date']!);
       final identifier = dateIdentifier(dateToUse);
       final refYear = dateToUse.year;
@@ -1268,7 +1282,10 @@ class TemperatureScreenState extends State<TemperatureScreen>
   }
 
   String _buildPeriodHeaderLabel(int pageIndex) {
-    final dateInfo = _getCurrentDateAndLocation(_determinedLocation);
+    final dateInfo = _getCurrentDateAndLocation(
+      _determinedLocation,
+      locationTimezone: TemperatureService.timezoneFor(_determinedLocation),
+    );
     final dateToUse = DateTime.parse(dateInfo['date']!);
     final displayDate = _formatDayMonth(dateToUse);
 
@@ -1309,6 +1326,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
         displayLocation: _displayLocation.isNotEmpty ? _displayLocation : null,
         latitude: lat,
         longitude: lon,
+        locationTimezone: TemperatureService.timezoneFor(_determinedLocation),
         scrollController: scrollController,
         topContent: Padding(
           padding: EdgeInsets.only(

@@ -28,6 +28,9 @@ class TemperatureService {
   // Keyed by display string → raw location fields {name, admin1?, country_code}.
   // Populated from searchLocations() so we can submit without a canonical id.
   static final Map<String, Map<String, String>> _locationRawDataCache = {};
+  // Keyed by display string → IANA timezone identifier (e.g. "America/Los_Angeles").
+  // Populated from fetchPopularLocations() and searchLocations() responses.
+  static final Map<String, String> _locationTimezoneCache = {};
   // Session-level dedup: last submitted key (canonical id or display string).
   static String? _lastSubmittedKey;
 
@@ -275,6 +278,8 @@ class TemperatureService {
           } else {
             DebugUtils.logLazy(() => 'fetchPopularLocations: no id field for "$loc" — selection will not be submitted');
           }
+          final tzStr = e['timezone']?.toString() ?? '';
+          if (tzStr.isNotEmpty) _locationTimezoneCache[loc] = tzStr;
           return loc;
         }
         // Fallback for unexpected shape
@@ -371,6 +376,9 @@ class TemperatureService {
       };
       if (admin1.isNotEmpty) rawData['admin1'] = admin1;
       _locationRawDataCache[loc] = rawData;
+      // Cache IANA timezone for location-aware date calculations.
+      final tzStr = item['timezone']?.toString() ?? '';
+      if (tzStr.isNotEmpty) _locationTimezoneCache[loc] = tzStr;
     }
 
     return results;
@@ -397,6 +405,13 @@ class TemperatureService {
     return null;
   }
 
+  /// Returns the IANA timezone identifier for [location], or null if unknown.
+  ///
+  /// Populated when [fetchPopularLocations] or [searchLocations] is called.
+  /// Returns null for GPS-detected locations (which fall back to device time).
+  static String? timezoneFor(String location) =>
+      _locationTimezoneCache[location];
+
   /// Seed [_locationIdCache] with [entries] for unit tests.
   ///
   /// Also resets [_lastSubmittedKey] so session-dedup state is clean.
@@ -407,6 +422,14 @@ class TemperatureService {
       ..addAll(entries);
     _locationRawDataCache.clear();
     _lastSubmittedKey = null;
+  }
+
+  /// Seed [_locationTimezoneCache] with [entries] for unit tests.
+  @visibleForTesting
+  static void seedLocationTimezoneCacheForTesting(Map<String, String> entries) {
+    _locationTimezoneCache
+      ..clear()
+      ..addAll(entries);
   }
 
   /// Returns the ISO 3166-1 alpha-2 country code for [location], or null if

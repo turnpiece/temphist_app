@@ -141,7 +141,7 @@ const double kStatsFontSize = 15.0;
 const bool verboseLogs = bool.fromEnvironment('VERBOSE_LOGS', defaultValue: false);
 
 /// Time constants
-const int kUseYesterdayHourThreshold = 3;
+const int kUseYesterdayHourThreshold = 6;
 const int kAverageTrendDisplayDelaySeconds = 35;
 const int kApiTimeoutSeconds = 35;
 const int kApiLongTimeoutSeconds = 60;

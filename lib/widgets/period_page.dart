@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import '../constants/app_constants.dart';
 import '../models/period_temperature_data.dart';
@@ -36,6 +37,11 @@ class PeriodPage extends StatefulWidget {
   /// Whether to display temperatures in Fahrenheit.
   final bool isFahrenheit;
 
+  /// IANA timezone identifier for the selected city (e.g. "America/Los_Angeles").
+  /// When provided, the "use yesterday" cutoff is evaluated against the city's
+  /// local hour rather than the device clock.
+  final String? locationTimezone;
+
   /// Optional scroll controller for the page's internal scroll view.
   final ScrollController? scrollController;
 
@@ -51,6 +57,7 @@ class PeriodPage extends StatefulWidget {
     this.latitude,
     this.longitude,
     this.isFahrenheit = false,
+    this.locationTimezone,
     this.scrollController,
     this.topContent,
   });
@@ -130,7 +137,8 @@ class PeriodPageState extends State<PeriodPage>
     super.didUpdateWidget(oldWidget);
     final locationChanged = oldWidget.location != widget.location;
     final unitChanged = oldWidget.isFahrenheit != widget.isFahrenheit;
-    if (locationChanged || unitChanged) {
+    final timezoneChanged = oldWidget.locationTimezone != widget.locationTimezone;
+    if (locationChanged || unitChanged || timezoneChanged) {
       DebugUtils.logLazy(() =>
           'PeriodPage(${widget.periodKey}): didUpdateWidget — '
           '${locationChanged ? "location: ${oldWidget.location} → ${widget.location}" : ""}'
@@ -155,10 +163,18 @@ class PeriodPageState extends State<PeriodPage>
   }
 
   String get _identifier {
-    final now = DateTime.now();
-    final useYesterday = now.hour < kUseYesterdayHourThreshold;
+    DateTime dateRef = DateTime.now();
+    if (widget.locationTimezone != null) {
+      try {
+        final location = tz.getLocation(widget.locationTimezone!);
+        dateRef = tz.TZDateTime.now(location);
+      } catch (_) {
+        // Unknown timezone — fall back to device clock.
+      }
+    }
+    final useYesterday = dateRef.hour < kUseYesterdayHourThreshold;
     final dateToUse =
-        useYesterday ? now.subtract(const Duration(days: 1)) : now;
+        useYesterday ? dateRef.subtract(const Duration(days: 1)) : dateRef;
     return dateIdentifier(dateToUse);
   }
 
