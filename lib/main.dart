@@ -1462,10 +1462,21 @@ class TemperatureScreenState extends State<TemperatureScreen>
     );
   }
 
-  /// Handle network restoration
+  /// Handle network restoration — only reload pages that have no data.
+  /// Pages with existing data are unaffected; reconnecting alone is not a
+  /// reason to discard valid cached content.
   void _handleNetworkRestored() {
-    DebugUtils.logLazy(() => '🔄 Network restored, reloading period data');
-    _reloadAllPeriodPages();
+    DebugUtils.logLazy(() => '🔄 Network restored, reloading pages without data');
+    for (final key in [
+      _dailyPageKey,
+      _weekPageKey,
+      _monthPageKey,
+      _yearPageKey,
+    ]) {
+      if (key.currentState?.hasData == false) {
+        key.currentState?.reload();
+      }
+    }
   }
 
   /// Perform memory cleanup and data optimization

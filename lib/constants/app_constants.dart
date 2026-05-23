@@ -165,6 +165,7 @@ const int kHistoricalDataWindowYears = 50;
 /// Location constants
 const int kLocationDistanceFilterMeters = 500;
 const int kLocationSignificantChangeMeters = 1000;
+const int kCityAreaRadiusMeters = 25000;
 const int kMaxChartDataRetries = 3;
 const int kLocationHistoryMaxEntries = 500;
 const int kLocationSelectionHistoryMaxEntries = 100;

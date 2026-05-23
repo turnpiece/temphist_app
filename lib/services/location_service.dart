@@ -62,6 +62,11 @@ class LocationService extends ChangeNotifier {
   geo.Position? get lastPosition => _lastPosition;
   geo.Position? _lastPosition;
 
+  /// GPS position recorded when data was last successfully loaded for the
+  /// current location. Used to detect whether a new GPS fix represents a
+  /// genuine city change or merely movement within the same metro area.
+  geo.Position? _dataLoadPosition;
+
   /// True while a location determination is in progress.
   bool get isLocating => _isLocating;
   bool _isLocating = false;
@@ -101,7 +106,7 @@ class LocationService extends ChangeNotifier {
 
   StreamSubscription<geo.Position>? _positionStreamSubscription;
 
-  static const Duration _locationCacheExpiration = Duration(minutes: 30);
+  static const Duration _locationCacheExpiration = Duration(hours: 4);
 
   /// SharedPreferences key for the GPS-detected location.
   /// Only written by [determineLocation] — never by [setManualLocation] —
@@ -206,6 +211,24 @@ class LocationService extends ChangeNotifier {
                   'LocationService: position ${position.latitude}, ${position.longitude}');
               _lastPosition = position;
 
+              // If the new position is still within the same city area as where
+              // we last loaded data, skip reverse-geocoding and keep the existing
+              // location string. Prevents a borough-name change (e.g. Lambeth →
+              // Southwark) from triggering a full data reload during within-city
+              // travel.
+              if (_determinedLocation.isNotEmpty &&
+                  _dataLoadPosition != null &&
+                  _distanceBetween(_dataLoadPosition!, position) <
+                      kCityAreaRadiusMeters) {
+                DebugUtils.logLazy(() =>
+                    'GPS within city area of data position — reusing $_determinedLocation');
+                _isLocationDetermined = true;
+                _locationDeterminedAt = DateTime.now();
+                _notify();
+                await _cacheLocation(_determinedLocation, _displayLocation);
+                return;
+              }
+
               final placemarks = await placemarkFromCoordinates(
                 position.latitude,
                 position.longitude,
@@ -257,6 +280,7 @@ class LocationService extends ChangeNotifier {
       if (gpsResolved) {
         _gpsLocation = city;
         _gpsCityNames.add(_cityName(city));
+        _dataLoadPosition = _lastPosition;
       }
       // Signal to callers that location permission was explicitly denied (or
       // location services are off) AND there is no GPS history from a previous
@@ -338,9 +362,10 @@ class LocationService extends ChangeNotifier {
             if (!location_utils.isLocationSuspicious(newCity)) {
               _gpsLocation = newCity;
               _gpsCityNames.add(_cityName(newCity));
-              // determineLocation() may short-circuit via the 30-min cache
-              // and never reach LocationHistoryService.add(), so persist here
-              // while we have the resolved position in hand.
+              _dataLoadPosition = position;
+              // determineLocation() may short-circuit via the cache and never
+              // reach LocationHistoryService.add(), so persist here while we
+              // have the resolved position in hand.
               await LocationHistoryService.add(LocationVisit(
                 location: newCity,
                 displayLocation: newCity.split(',').first.trim(),
@@ -348,13 +373,19 @@ class LocationService extends ChangeNotifier {
               ));
             }
 
-            if (newCity != _determinedLocation) {
+            // Use coordinate distance rather than string comparison — GPS can
+            // return different borough names for nearby points within the same
+            // metro area (e.g. Lambeth vs Southwark in London).
+            final nearDataLoad = _dataLoadPosition != null &&
+                _distanceBetween(_dataLoadPosition!, position) <
+                    kCityAreaRadiusMeters;
+            if (!nearDataLoad) {
               DebugUtils.logLazy(
-                  () => 'City changed: $_determinedLocation → $newCity');
+                  () => 'Moved outside city area, triggering location refresh');
               onSignificantLocationChange?.call();
             } else {
               DebugUtils.logLazy(
-                  () => 'Location moved but city unchanged, no refresh');
+                  () => 'Within city area of data position, no refresh needed');
             }
           }
         } catch (e) {
@@ -373,7 +404,7 @@ class LocationService extends ChangeNotifier {
   bool isLocationStale() {
     if (!_isLocationDetermined || _locationDeterminedAt == null) return false;
     final age = DateTime.now().difference(_locationDeterminedAt!);
-    if (age.inHours >= 1) {
+    if (age.inHours >= 6) {
       DebugUtils.logLazy(
           () => 'Location is ${age.inHours} hours old — stale');
       return true;

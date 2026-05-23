@@ -488,11 +488,21 @@ class PeriodPageState extends State<PeriodPage>
     return 'Failed to load $periodName data. Please check your connection and try again.';
   }
 
+  bool get hasData => _data != null;
+
   /// Called externally (e.g. on location change) to force a reload.
   void reload() {
     _lastFetchKey = '';
     _data = null;
     _fetchData(bypassCache: true);
+  }
+
+  /// Reload without bypassing the Hive cache. Use when the location has
+  /// changed but cached data for the new position may still be valid.
+  void softReload() {
+    _lastFetchKey = '';
+    _data = null;
+    _fetchData(bypassCache: false);
   }
 
   @override
