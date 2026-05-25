@@ -202,10 +202,12 @@ class TemperatureService {
     String location,
     String identifier, {
     String? unitGroup,
+    String? localToday,
   }) {
+    final todaySuffix = localToday != null ? '|$localToday' : '';
     final unitSuffix =
         (unitGroup != null && unitGroup != 'celsius') ? '|$unitGroup' : '';
-    final cacheKey = '${_apiPeriodPath(period)}|$location|$identifier$unitSuffix';
+    final cacheKey = '${_apiPeriodPath(period)}|$location|$identifier$todaySuffix$unitSuffix';
     _periodCache.remove(cacheKey);
   }
 
@@ -588,22 +590,24 @@ class TemperatureService {
     }
   }
 
-  /// Build a v1 records URL, optionally appending `?unit_group=...`.
+  /// Build a v1 records URL, optionally appending query parameters.
   Uri _buildV1Url(
     String apiPeriod,
     String encodedLocation,
     String identifier, {
     String? suffix,
     String? unitGroup,
+    String? localToday,
   }) {
     final path = suffix != null
         ? '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier/$suffix'
         : '$apiBaseUrl/v1/records/$apiPeriod/$encodedLocation/$identifier';
     final base = Uri.parse(path);
-    if (unitGroup != null && unitGroup != 'celsius') {
-      return base.replace(queryParameters: {'unit_group': unitGroup});
-    }
-    return base;
+    final params = <String, String>{};
+    if (unitGroup != null && unitGroup != 'celsius') params['unit_group'] = unitGroup;
+    if (localToday != null) params['local_today'] = localToday;
+    if (params.isEmpty) return base;
+    return base.replace(queryParameters: params);
   }
 
   // ---------------------------------------------------------------------------
@@ -628,12 +632,14 @@ class TemperatureService {
     String location,
     String identifier, {
     String? unitGroup,
+    String? localToday,
     void Function(AsyncJobStatus)? onProgress,
     void Function()? onFallbackToSync,
     bool Function()? isCancelled,
   }) async {
+    final todaySuffix = localToday != null ? '|$localToday' : '';
     final unitSuffix = (unitGroup != null && unitGroup != 'celsius') ? '|$unitGroup' : '';
-    final cacheKey = '${_apiPeriodPath(period)}|$location|$identifier$unitSuffix';
+    final cacheKey = '${_apiPeriodPath(period)}|$location|$identifier$todaySuffix$unitSuffix';
     final cached = _periodCache[cacheKey];
     if (cached != null) {
       return cached;
@@ -642,7 +648,7 @@ class TemperatureService {
     try {
       DebugUtils.logLazy(() => 'Attempting async fetch for $period data...');
       final jobId = await _createAsyncJob(period, location, identifier,
-          unitGroup: unitGroup);
+          unitGroup: unitGroup, localToday: localToday);
       final result = await _pollJobStatus(
         jobId,
         onProgress: onProgress,
@@ -669,7 +675,7 @@ class TemperatureService {
         try {
           final fallback =
               await _fetchPeriodDataSync(period, location, identifier,
-                  unitGroup: unitGroup);
+                  unitGroup: unitGroup, localToday: localToday);
           DebugUtils.logLazy(() => 'Synchronous fallback successful for $period data');
           _writeCache(cacheKey, fallback);
           return fallback;
@@ -687,12 +693,13 @@ class TemperatureService {
     String location,
     String identifier, {
     String? unitGroup,
+    String? localToday,
   }) async {
     final token = await getAuthToken();
     final apiPeriod = _apiPeriodPath(period);
     final encodedLocation = Uri.encodeComponent(location);
     final url = _buildV1Url(apiPeriod, encodedLocation, identifier,
-        suffix: 'async', unitGroup: unitGroup);
+        suffix: 'async', unitGroup: unitGroup, localToday: localToday);
 
     DebugUtils.logLazy(() => 'Creating async job: $url');
 
@@ -792,12 +799,13 @@ class TemperatureService {
     String location,
     String identifier, {
     String? unitGroup,
+    String? localToday,
   }) async {
     final token = await getAuthToken();
     final apiPeriod = _apiPeriodPath(period);
     final encodedLocation = Uri.encodeComponent(location);
     final url = _buildV1Url(apiPeriod, encodedLocation, identifier,
-        unitGroup: unitGroup);
+        unitGroup: unitGroup, localToday: localToday);
 
     DebugUtils.logLazy(() => 'Sync fallback: $url');
 

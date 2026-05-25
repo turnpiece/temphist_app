@@ -8,6 +8,7 @@ import '../constants/app_constants.dart';
 import '../models/period_temperature_data.dart';
 import '../services/temperature_service.dart';
 import '../services/period_cache_service.dart';
+import '../utils/date_utils.dart';
 import '../utils/debug_utils.dart';
 import '../utils/temperature_utils.dart';
 import 'completeness_section.dart';
@@ -220,6 +221,8 @@ class PeriodPageState extends State<PeriodPage>
       // Cache-first: serve from Hive when available, fall through on miss.
       // bypassCache is set when retrying to ensure fresh data from the API.
       final unitGroup = widget.isFahrenheit ? 'fahrenheit' : null;
+      final locationTz = widget.locationTimezone;
+      final localToday = locationTz != null ? localTodayIn(locationTz) : null;
       if (bypassCache) {
         // Evict only this period's entry from the in-memory service cache so
         // the retry goes to the network without disturbing other periods.
@@ -228,6 +231,7 @@ class PeriodPageState extends State<PeriodPage>
           widget.location,
           _identifier,
           unitGroup: unitGroup,
+          localToday: localToday,
         );
       }
       PeriodTemperatureData? data;
@@ -238,6 +242,7 @@ class PeriodPageState extends State<PeriodPage>
           lon,
           _identifier,
           unitGroup: unitGroup,
+          localToday: localToday,
         );
         if (data != null) {
           DebugUtils.logLazy(
@@ -255,6 +260,7 @@ class PeriodPageState extends State<PeriodPage>
           widget.location,
           _identifier,
           unitGroup: unitGroup,
+          localToday: localToday,
           onFallbackToSync: () {
             if (!mounted || _fetchGeneration != generation || !_isLoading) {
               return;
@@ -284,6 +290,10 @@ class PeriodPageState extends State<PeriodPage>
         );
 
         if (lat != null && lon != null) {
+          DateTime? expiresAt;
+          if (widget.periodKey == 'daily' && locationTz != null && localToday != null) {
+            expiresAt = DateTime.now().add(timeUntilNextLocalMidnight(locationTz));
+          }
           await PeriodCacheService.put(
             widget.periodKey,
             lat,
@@ -291,6 +301,8 @@ class PeriodPageState extends State<PeriodPage>
             _identifier,
             data,
             unitGroup: unitGroup,
+            localToday: localToday,
+            expiresAt: expiresAt,
           );
         }
       }
@@ -541,6 +553,8 @@ class PeriodPageState extends State<PeriodPage>
         'PeriodPage(daily): checking forecast for temperature update');
 
     final unitGroup = widget.isFahrenheit ? 'fahrenheit' : null;
+    final locationTz = widget.locationTimezone;
+    final localToday = locationTz != null ? localTodayIn(locationTz) : null;
     final service = TemperatureService();
 
     final forecastTemp = await service.fetchForecast(
@@ -568,6 +582,7 @@ class PeriodPageState extends State<PeriodPage>
       widget.location,
       _identifier,
       unitGroup: unitGroup,
+      localToday: localToday,
     );
 
     PeriodTemperatureData? freshData;
@@ -577,6 +592,7 @@ class PeriodPageState extends State<PeriodPage>
         widget.location,
         _identifier,
         unitGroup: unitGroup,
+        localToday: localToday,
         isCancelled: () => !mounted || _data != data,
       );
     } catch (e) {
@@ -596,6 +612,10 @@ class PeriodPageState extends State<PeriodPage>
     final lat = widget.latitude;
     final lon = widget.longitude;
     if (lat != null && lon != null) {
+      DateTime? expiresAt;
+      if (locationTz != null && localToday != null) {
+        expiresAt = DateTime.now().add(timeUntilNextLocalMidnight(locationTz));
+      }
       unawaited(PeriodCacheService.put(
         'daily',
         lat,
@@ -603,6 +623,8 @@ class PeriodPageState extends State<PeriodPage>
         _identifier,
         patched,
         unitGroup: unitGroup,
+        localToday: localToday,
+        expiresAt: expiresAt,
       ));
     }
 

@@ -36,6 +36,33 @@ Map<String, String> getCurrentDateAndLocation(
   };
 }
 
+/// Returns the current date string (YYYY-MM-DD) in [tzName]'s local time.
+/// Falls back to device clock on unknown timezone.
+String localTodayIn(String tzName) {
+  try {
+    final loc = tz.getLocation(tzName);
+    return DateFormat('yyyy-MM-dd').format(tz.TZDateTime.now(loc));
+  } catch (_) {
+    return DateFormat('yyyy-MM-dd').format(DateTime.now());
+  }
+}
+
+/// Duration from now until midnight in [tzName]'s local time.
+/// Used to cap Hive TTL for summaries that reference the current local day.
+Duration timeUntilNextLocalMidnight(String tzName) {
+  try {
+    final loc = tz.getLocation(tzName);
+    final now = tz.TZDateTime.now(loc);
+    final midnight = tz.TZDateTime(loc, now.year, now.month, now.day + 1);
+    final delta = midnight.difference(now);
+    return delta.isNegative ? Duration.zero : delta;
+  } catch (_) {
+    final now = DateTime.now();
+    final midnight = DateTime(now.year, now.month, now.day + 1);
+    return midnight.difference(now);
+  }
+}
+
 /// Format a date with ordinal suffix (1st, 2nd, 3rd, etc.)
 String formatDateWithOrdinal(DateTime date) {
   final day = date.day;

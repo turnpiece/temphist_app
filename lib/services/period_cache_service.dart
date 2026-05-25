@@ -50,15 +50,14 @@ class PeriodCacheService {
     double lon,
     String identifier, {
     String? unitGroup,
+    String? localToday,
   }) {
     try {
-      final raw = _box?.get(_key(period, lat, lon, identifier, unitGroup: unitGroup));
+      final raw = _box?.get(_key(period, lat, lon, identifier,
+          unitGroup: unitGroup, localToday: localToday));
       if (raw == null || raw is! Map) return false;
       final map = Map<String, dynamic>.from(raw);
-      final cachedAtValue = map['_cachedAt'];
-      if (cachedAtValue is! int) return false;
-      final cachedAt = DateTime.fromMillisecondsSinceEpoch(cachedAtValue);
-      return DateTime.now().difference(cachedAt) <= _ttl;
+      return !_isExpired(map);
     } catch (_) {
       return false;
     }
@@ -72,11 +71,13 @@ class PeriodCacheService {
     double lon,
     String identifier, {
     String? unitGroup,
+    String? localToday,
   }) async {
     final box = _box;
     if (box == null) return null;
 
-    final key = _key(period, lat, lon, identifier, unitGroup: unitGroup);
+    final key = _key(period, lat, lon, identifier,
+        unitGroup: unitGroup, localToday: localToday);
     try {
       final raw = box.get(key);
       if (raw == null || raw is! Map) return null;
@@ -87,9 +88,8 @@ class PeriodCacheService {
         await box.delete(key);
         return null;
       }
-      final cachedAt = DateTime.fromMillisecondsSinceEpoch(cachedAtValue);
 
-      if (DateTime.now().difference(cachedAt) > _ttl) {
+      if (_isExpired(map)) {
         await box.delete(key);
         DebugUtils.logLazy(() => 'PeriodCacheService: expired → deleted ($key)');
         return null;
@@ -117,6 +117,9 @@ class PeriodCacheService {
   ///
   /// [cachedAt] defaults to now; supply a different value in tests to
   /// simulate expired entries.
+  ///
+  /// [expiresAt] overrides the default 7-day TTL. Pass the location's next
+  /// local midnight to cap daily summaries that reference "today".
   static Future<void> put(
     String period,
     double lat,
@@ -124,16 +127,24 @@ class PeriodCacheService {
     String identifier,
     PeriodTemperatureData data, {
     String? unitGroup,
+    String? localToday,
     DateTime? cachedAt,
+    DateTime? expiresAt,
   }) async {
     final box = _box;
     if (box == null) return;
 
-    final key = _key(period, lat, lon, identifier, unitGroup: unitGroup);
-    await box.put(key, {
-      '_cachedAt': (cachedAt ?? DateTime.now()).millisecondsSinceEpoch,
+    final key = _key(period, lat, lon, identifier,
+        unitGroup: unitGroup, localToday: localToday);
+    final now = cachedAt ?? DateTime.now();
+    final entry = <String, dynamic>{
+      '_cachedAt': now.millisecondsSinceEpoch,
       'data': jsonEncode(_toJson(data)),
-    });
+    };
+    if (expiresAt != null) {
+      entry['_expiresAt'] = expiresAt.millisecondsSinceEpoch;
+    }
+    await box.put(key, entry);
     DebugUtils.logLazy(() => 'PeriodCacheService: stored ($key)');
   }
 
@@ -141,14 +152,30 @@ class PeriodCacheService {
   // Private helpers
   // ---------------------------------------------------------------------------
 
+  /// Returns true if the stored entry has expired.
+  /// Prefers the explicit `_expiresAt` timestamp when present; falls back to
+  /// `_cachedAt + _ttl` for entries written before this field was added.
+  static bool _isExpired(Map<String, dynamic> map) {
+    final expiresAtValue = map['_expiresAt'];
+    if (expiresAtValue is int) {
+      return DateTime.now().millisecondsSinceEpoch >= expiresAtValue;
+    }
+    final cachedAtValue = map['_cachedAt'];
+    if (cachedAtValue is! int) return true;
+    final cachedAt = DateTime.fromMillisecondsSinceEpoch(cachedAtValue);
+    return DateTime.now().difference(cachedAt) > _ttl;
+  }
+
   static String _key(
     String period,
     double lat,
     double lon,
     String identifier, {
     String? unitGroup,
+    String? localToday,
   }) {
-    final base = '$period:${lat.toStringAsFixed(3)}:${lon.toStringAsFixed(3)}:$identifier';
+    final todaySegment = localToday ?? '';
+    final base = '$period:${lat.toStringAsFixed(3)}:${lon.toStringAsFixed(3)}:$identifier:$todaySegment';
     if (unitGroup != null && unitGroup != 'celsius') {
       return '$base:$unitGroup';
     }
