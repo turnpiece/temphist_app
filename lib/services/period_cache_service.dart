@@ -209,6 +209,7 @@ class PeriodCacheService {
           'slope': d.trend.slope,
           'unit': d.trend.unit,
           if (d.trend.slopeError != null) 'slope_error': d.trend.slopeError,
+          if (d.trend.gradientFactor != null) 'gradient_factor': d.trend.gradientFactor,
         },
         'summary': d.summary,
         if (d.metadata != null)

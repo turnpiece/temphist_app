@@ -11,7 +11,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'package:flutter/services.dart';
 import 'dart:io' as io;
-import 'dart:math' as math;
 import 'dart:async'; // Added for StreamSubscription and StreamController
 import 'dart:convert'; // Added for jsonEncode/jsonDecode
 
@@ -867,21 +866,14 @@ class TemperatureScreenState extends State<TemperatureScreen>
     _prefetchPeriodData();
   }
 
-  BoxDecoration _trendGradientFor(double? slope) {
-    final s = slope ?? 0.0;
-    final double t;
-    if (s.abs() < 0.05) {
-      t = 0.0;
-    } else {
-      // Square-root scaling: amplifies typical real-world slopes (0.2–1°C/decade)
-      // into a clearly visible range. Full colour reached at 0.65°C/decade.
-      t = math.sqrt((s.abs() / 0.65).clamp(0.0, 1.0));
-    }
+  BoxDecoration _trendGradientFor(double? gradientFactor) {
+    final f = gradientFactor ?? 0.0;
+    final double t = f.abs().clamp(0.0, 1.0);
     final Color top, bottom;
-    if (s > 0.05) {
+    if (f > 0) {
       top = Color.lerp(kBackgroundColour, kBackgroundWarmColour, t)!;
       bottom = Color.lerp(kBackgroundColourDark, kBackgroundCoolColour, t)!;
-    } else if (s < -0.05) {
+    } else if (f < 0) {
       top = Color.lerp(kBackgroundColour, kBackgroundCoolColour, t)!;
       bottom = Color.lerp(kBackgroundColourDark, kBackgroundWarmColour, t)!;
     } else {
@@ -897,10 +889,10 @@ class TemperatureScreenState extends State<TemperatureScreen>
     );
   }
 
-  void _onTrendLoaded(int pageIndex, double slope) {
-    DebugUtils.logLazy(() => 'Trend gradient: page $pageIndex slope=$slope°C/decade');
+  void _onTrendLoaded(int pageIndex, double gradientFactor) {
+    DebugUtils.logLazy(() => 'Trend gradient: page $pageIndex factor=$gradientFactor');
     setState(() {
-      _periodSlopes[pageIndex] = slope;
+      _periodSlopes[pageIndex] = gradientFactor;
     });
   }
 

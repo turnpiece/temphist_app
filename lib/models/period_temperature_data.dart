@@ -163,15 +163,22 @@ class PeriodTrend {
   /// Used to display an error margin, e.g. "Rising at 1.1±0.1°C/decade".
   final double? slopeError;
 
-  PeriodTrend({required this.slope, required this.unit, this.slopeError});
+  /// Normalised trend intensity in [-1.0, 1.0] computed by the API.
+  /// Uses tanh compression and penalises by slope uncertainty — intended
+  /// directly for colour gradient calculations.
+  final double? gradientFactor;
+
+  PeriodTrend({required this.slope, required this.unit, this.slopeError, this.gradientFactor});
 
   factory PeriodTrend.fromJson(Map<String, dynamic> json) {
     final s = json['slope'];
     final e = json['slope_error'];
+    final g = json['gradient_factor'];
     return PeriodTrend(
       slope: s != null ? (s as num).toDouble() : 0.0,
       unit: json['unit'] ?? '',
       slopeError: e is num ? e.toDouble() : null,
+      gradientFactor: g is num ? g.toDouble() : null,
     );
   }
 }
