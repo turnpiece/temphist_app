@@ -29,7 +29,14 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
+        // flutter.versionCode reads the build number from pubspec.yaml. This project
+        // uses a YYYYMMDDHHMM timestamp format (e.g. 202605232043) which exceeds
+        // Android's Int32 versionCode ceiling (~2.1B). Derive a code from the version
+        // name components instead: major * 10000 + minor * 100 + patch (e.g. 10210).
+        val versionParts = flutter.versionName.split(".")
+        versionCode = (versionParts.getOrNull(0)?.toIntOrNull() ?: 1) * 10000 +
+                      (versionParts.getOrNull(1)?.toIntOrNull() ?: 0) * 100 +
+                      (versionParts.getOrNull(2)?.toIntOrNull() ?: 0)
         versionName = flutter.versionName
     }
 
