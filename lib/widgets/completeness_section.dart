@@ -74,7 +74,7 @@ class CompletenessSection extends StatelessWidget {
 
     final note = noteText ??
         (allMissing.isNotEmpty
-            ? 'Note: Data for ${formatMissingYearsList(allMissing)} could not be loaded.'
+            ? 'Data for ${formatMissingYearsList(allMissing)} could not be loaded.'
             : null);
 
     return Column(
