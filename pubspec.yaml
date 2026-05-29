@@ -39,7 +39,7 @@ dependencies:
   intl: ^0.20.2
 
   # IANA timezone-aware date calculations
-  timezone: ^0.9.4
+  timezone: ^0.11.0
 
   # Firebase
   firebase_core: ^4.1.0
