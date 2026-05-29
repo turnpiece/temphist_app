@@ -732,7 +732,7 @@ class PeriodPageState extends State<PeriodPage>
                 vertical: kSummaryBubbleVerticalPadding,
               ),
               decoration: BoxDecoration(
-                color: kSummaryBubbleColour.withValues(alpha: 0.5),
+                color: kSummaryBubbleColour.withValues(alpha: 0.3),
                 borderRadius: isSmallPhone
                     ? BorderRadius.zero
                     : BorderRadius.circular(kBubbleBorderRadius),
