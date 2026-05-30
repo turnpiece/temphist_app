@@ -62,8 +62,8 @@ ios/build/
 ios/DerivedData/
 ios/.dart_tool/
 ios/.flutter-plugins-dependencies
-# Xcode scheme files (auto-generated when changing simulator location)
-ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme
+# Xcode user-specific data (not scheme files — Flutter SPM needs Runner.xcscheme)
+ios/Runner.xcodeproj/xcuserdata/
 
 # Generated files
 *.lock
