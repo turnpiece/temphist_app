@@ -42,7 +42,10 @@ platform :ios do
     )
 
     # Build with Flutter
-    sh("cd .. && bundle exec flutter build ios --release --no-codesign")
+    # Clean ephemeral first — flutter pub get (run earlier in CI) creates symlinks in
+    # Flutter/ephemeral/Packages/.packages, and flutter build would fail trying to
+    # recreate them (PathExistsException). Safe to remove; flutter build regenerates it.
+    sh("cd .. && rm -rf ios/Flutter/ephemeral && bundle exec flutter build ios --release --no-codesign")
 
     profile_specifier =
     lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING][ENV['APP_IDENTIFIER']]
