@@ -9,20 +9,12 @@ const double _rowHeight = _barHeight + _barGap;
 const double _yearLabelWidth = 32.0;
 const double _labelBarGap = 8.0;
 const int _startYear = 2026;
-const int _barCount = 10; // 2026 → 2017
-const int _tappedIndex = 7; // 2019 — near the bottom, not a multiple of 5
+const int _barCount = 15; // 2026 → 2012
+const int _tappedIndex = 7; // 2019 — mid-chart, not a multiple of 5
 
 const List<double> _barWidths = [
-  0.88,
-  0.72,
-  0.61,
-  0.79,
-  0.53,
-  0.68,
-  0.75,
-  0.48,
-  0.63,
-  0.57,
+  0.88, 0.72, 0.61, 0.79, 0.53, 0.68, 0.75, 0.48, 0.63, 0.57,
+  0.70, 0.55, 0.65, 0.45, 0.72,
 ];
 
 /// Bar chart illustration for the "tap a bar" onboarding page.

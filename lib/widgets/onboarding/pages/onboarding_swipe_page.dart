@@ -64,7 +64,7 @@ class OnboardingSwipePage extends StatelessWidget {
       );
 
   List<Widget> _rowWidgets(String date, {required double rowPadding}) => [
-        _buildRow(Icons.today_outlined, 'Day', '$date in each year',
+        _buildRow(Icons.today_outlined, 'Today', '$date in each year',
             rowPadding: rowPadding),
         _buildRow(Icons.date_range_outlined, 'Week',
             'The week ending $date in each year',

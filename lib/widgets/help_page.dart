@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
+import 'onboarding/visuals/average_trend_illustration.dart';
+import 'onboarding/visuals/day_chart_illustration.dart';
 
 /// A full-screen scrollable help page explaining how the app works.
 ///
@@ -122,27 +124,22 @@ class _Body extends StatelessWidget {
         _Section(
           title: 'Reading the chart',
           body:
-              'Each bar represents the mean temperature recorded on the same date, or the same week or month or year, in a different year. Bar colours show how warm or cool that year was compared with the 50-year average.',
+              'Each bar represents the mean temperature for the same date, week, month or year in a different year. Bar colours show how warm or cool that year was compared with the 50-year average.',
+          visual: DayChartIllustration(height: 180),
           bullets: [
-            _Bullet(
-                color: kHeadingColour,
-                label:
-                    'Latest year — same red, grey or blue scale as every other year, from its temperature anomaly'),
             _Bullet(
                 color: kBarCoolColour,
                 label: 'Blue bars — cooler than average years'),
             _Bullet(
-                color: kBarNeutralColour,
-                label: 'Grey bars — years close to the average'),
-            _Bullet(
                 color: kBarWarmColour,
                 label: 'Red bars — warmer than average years'),
           ],
-          footer: 'Tap any bar to see the exact temperature for that year.',
+          footer: 'Tap any bar to see the temperature for that period in that year, and how far it was above or below the historical average.',
         ),
         _Section(
           title: 'Average and trend',
           body: 'The chart also shows two reference lines:',
+          visual: AverageTrendIllustration(height: 220),
           bullets: [
             _Bullet(
                 color: kAverageColour,
@@ -160,7 +157,7 @@ class _Body extends StatelessWidget {
           title: 'Time periods',
           body: 'Swipe left and right to view different time periods:',
           items: [
-            'Day — a single date across each year',
+            'Today — today\'s date in each year',
             'Week — the past week\'s average in each year',
             'Month — the past month\'s average in each year',
             'Year — the past year\'s average in each year',
@@ -169,14 +166,14 @@ class _Body extends StatelessWidget {
         _Section(
           title: 'Location',
           body:
-              'You can view the temperature history of wherever you are now, all the places you\'ve been, or any city in the world by searching for it.',
+              'Tap the location name at the top of the screen to switch location. The selector shows:',
           items: [
-            'Current location — your actual location, detected automatically.',
-            'Recent locations — places where you have opened the app. The list grows as you use it in new places.',
-            'Other cities — use the search box to find any city by name.',
+            'Current — your actual location, detected automatically.',
+            'Visited — places where you have opened the app. The list grows as you travel.',
+            'Popular — frequently selected cities across all users, updated monthly.',
           ],
           footer:
-              'Use the search box to find any city by name. The selected location is shown at the top of the screen. To change location: tap the location name or go to Settings → Location.',
+              'Use the search box to find any city by name. It also shows locations you\'ve previously searched for or selected.',
         ),
         _Section(
           title: 'Settings',
@@ -198,6 +195,7 @@ class _Body extends StatelessWidget {
 class _Section extends StatelessWidget {
   final String title;
   final String body;
+  final Widget? visual;
   final List<_Bullet>? bullets;
   final List<String>? items;
   final String? footer;
@@ -205,6 +203,7 @@ class _Section extends StatelessWidget {
   const _Section({
     required this.title,
     required this.body,
+    this.visual,
     this.bullets,
     this.items,
     this.footer,
@@ -234,6 +233,10 @@ class _Section extends StatelessWidget {
               height: 1.45,
             ),
           ),
+          if (visual != null) ...[
+            const SizedBox(height: 16),
+            visual!,
+          ],
           if (bullets != null) ...[
             const SizedBox(height: 10),
             ...bullets!.map((b) => _BulletRow(bullet: b)),
