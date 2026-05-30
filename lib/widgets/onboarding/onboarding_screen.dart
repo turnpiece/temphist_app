@@ -38,9 +38,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _pages = [
       const OnboardingWelcomePage(),
       const OnboardingDayPage(),
+      const OnboardingSwipePage(),
       const OnboardingTapPage(),
       const OnboardingAverageTrendPage(),
-      const OnboardingSwipePage(),
       const OnboardingLocationPage(),
       OnboardingTemperatureUnitPage(unitService: widget.unitService),
     ];

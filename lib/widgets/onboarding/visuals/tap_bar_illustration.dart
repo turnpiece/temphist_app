@@ -173,8 +173,12 @@ Color _barColourForWidth(
 class _TooltipMockup extends StatelessWidget {
   const _TooltipMockup();
 
+  // A light blue matching a cool bar's anomaly colour.
+  static const _anomalyColor = Color(0xFF93C5FD);
+
   @override
   Widget build(BuildContext context) {
+    const style = TextStyle(color: Colors.white, fontSize: kFontSizeBody - 4);
     return IntrinsicWidth(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -186,12 +190,20 @@ class _TooltipMockup extends StatelessWidget {
               color: Colors.black87,
               borderRadius: BorderRadius.circular(4),
             ),
-            child: const Text(
-              '2019: 5.8°C',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: kFontSizeBody - 4,
-              ),
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('2019', style: style),
+                Text('5.8°C', style: style),
+                Text(
+                  '−1.8°C below average',
+                  style: TextStyle(
+                    color: _anomalyColor,
+                    fontSize: kFontSizeBody - 4,
+                  ),
+                ),
+              ],
             ),
           ),
           CustomPaint(

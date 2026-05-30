@@ -51,7 +51,7 @@ class OnboardingTapPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          'Tap any bar to see the exact temperature recorded for that year.',
+          'Tap any bar to see the temperature for that period in that year, and how far it was above or below the historical average.',
           style: TextStyle(
             color: kTextPrimaryColour,
             fontSize: bodySize,
