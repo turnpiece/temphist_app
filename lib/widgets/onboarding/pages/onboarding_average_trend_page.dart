@@ -64,7 +64,7 @@ class OnboardingAverageTrendPage extends StatelessWidget {
         const SizedBox(height: 12),
         Text(
           'Trend: shows whether temperatures are rising or falling, '
-          'with the rate of change per decade and an error margin shown below each chart.',
+          'with the rate of change per decade shown below each chart.',
           style: TextStyle(
             color: kTrendLineColour,
             fontSize: bodySize,

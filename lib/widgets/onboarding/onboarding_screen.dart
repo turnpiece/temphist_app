@@ -160,17 +160,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       SizedBox(
                           height: isLandscape
                               ? 16
-                              : (constraints.maxHeight < 700 ? 12 : 48)),
+                              : (constraints.maxHeight < 700 ? 8 : 24)),
                       _buildDots(),
                       SizedBox(
                           height: isLandscape
                               ? 12
-                              : (constraints.maxHeight < 700 ? 10 : 28)),
+                              : (constraints.maxHeight < 700 ? 8 : 16)),
                       _buildNextButton(),
                       SizedBox(
                           height: isLandscape
                               ? 6
-                              : (constraints.maxHeight < 700 ? 10 : 20)),
+                              : (constraints.maxHeight < 700 ? 8 : 12)),
                     ],
                   ],
                 ),
