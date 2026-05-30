@@ -105,12 +105,6 @@ jobs:
         working-directory: ios
         run: bundle install
 
-      - name: 📦 Install CocoaPods dependencies
-        working-directory: ios
-        run: |
-          bundle exec pod install
-          ! grep -q "PROVISIONING_PROFILE" ios/Pods/Pods.xcodeproj/project.pbxproj
-
       - name: 🔍 List available iOS simulators
         run: xcrun simctl list devices available
 
