@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../constants/app_constants.dart';
+import '../onboarding_page.dart';
 import '../visuals/average_trend_illustration.dart';
 
 class OnboardingAverageTrendPage extends StatelessWidget {
@@ -8,8 +9,6 @@ class OnboardingAverageTrendPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Always use the stacked portrait layout — gives the illustration full
-    // content width and uses vertical space effectively even in landscape.
     return _buildPortrait();
   }
 
@@ -19,22 +18,23 @@ class OnboardingAverageTrendPage extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isSmall = constraints.maxHeight < 500;
-          return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _titleWidget(fontSize: isSmall ? 20.0 : 24.0),
-                    SizedBox(height: isSmall ? 16 : 24),
-                    AverageTrendIllustration(height: isSmall ? 160.0 : 240.0),
-                    SizedBox(height: isSmall ? 16 : 24),
-                    ..._legendWidgets(),
-                  ],
-                ),
-              ),
+          final isMedium = constraints.maxHeight < 700;
+          final titleSize = isSmall ? 20.0 : (isMedium ? 22.0 : 24.0);
+          final illustrationHeight = isSmall ? 160.0 : (isMedium ? 200.0 : 240.0);
+          final gap = isSmall ? 16.0 : (isMedium ? 20.0 : 24.0);
+          final bodySize = isSmall ? 15.0 : kFontSizeBody;
+          return OnboardingScrollBody(
+            constraints: constraints,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _titleWidget(fontSize: titleSize),
+                SizedBox(height: gap),
+                AverageTrendIllustration(height: illustrationHeight),
+                SizedBox(height: gap),
+                ..._legendWidgets(bodySize: bodySize),
+              ],
             ),
           );
         },
@@ -52,22 +52,22 @@ class OnboardingAverageTrendPage extends StatelessWidget {
         ),
       );
 
-  List<Widget> _legendWidgets() => [
-        const Text(
+  List<Widget> _legendWidgets({double bodySize = kFontSizeBody}) => [
+        Text(
           'Average: the historical mean temperature for this period.',
           style: TextStyle(
             color: kAverageColour,
-            fontSize: kFontSizeBody,
+            fontSize: bodySize,
             height: 1.5,
           ),
         ),
         const SizedBox(height: 12),
-        const Text(
-          'Trend: shows whether temperatures are rising or falling. '
-          'Below each chart you can see the numerical rate of warming or cooling per decade along with the error margin, indicating how reliable the trend is.',
+        Text(
+          'Trend: shows whether temperatures are rising or falling, '
+          'with the rate of change per decade and an error margin shown below each chart.',
           style: TextStyle(
             color: kTrendLineColour,
-            fontSize: kFontSizeBody,
+            fontSize: bodySize,
             height: 1.5,
           ),
         ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../constants/app_constants.dart';
 import '../../../services/temperature_unit_service.dart';
+import '../onboarding_page.dart';
 import '../visuals/unit_toggle_illustration.dart';
 
 /// Onboarding page that explains temperature units and lets the user
@@ -53,29 +54,31 @@ class _OnboardingTemperatureUnitPageState
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isSmall = constraints.maxHeight < 500;
-          return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: UnitToggleIllustration(
-                        isFahrenheit: _isFahrenheit,
-                        height: isSmall ? 110 : 160,
-                      ),
-                    ),
-                    SizedBox(height: isSmall ? 16 : 40),
-                    _titleWidget(fontSize: isSmall ? 20.0 : 24.0),
-                    SizedBox(height: isSmall ? 10 : 16),
-                    _bodyWidget(),
-                    SizedBox(height: isSmall ? 16 : 28),
-                    Center(child: _unitToggle()),
-                  ],
+          final isMedium = constraints.maxHeight < 700;
+          final titleSize = isSmall ? 20.0 : (isMedium ? 22.0 : 24.0);
+          final illustrationHeight = isSmall ? 110.0 : (isMedium ? 130.0 : 160.0);
+          final topGap = isSmall ? 16.0 : (isMedium ? 28.0 : 40.0);
+          final titleBodyGap = isSmall ? 10.0 : (isMedium ? 14.0 : 16.0);
+          final toggleGap = isSmall ? 16.0 : (isMedium ? 20.0 : 28.0);
+          return OnboardingScrollBody(
+            constraints: constraints,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: UnitToggleIllustration(
+                    isFahrenheit: _isFahrenheit,
+                    height: illustrationHeight,
+                  ),
                 ),
-              ),
+                SizedBox(height: topGap),
+                _titleWidget(fontSize: titleSize),
+                SizedBox(height: titleBodyGap),
+                _bodyWidget(),
+                SizedBox(height: toggleGap),
+                Center(child: _unitToggle()),
+              ],
             ),
           );
         },

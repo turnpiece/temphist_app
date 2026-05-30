@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../constants/app_constants.dart';
 import '../../../utils/date_utils.dart' as date_utils;
+import '../onboarding_page.dart';
 import '../visuals/day_chart_illustration.dart';
 
 class OnboardingDayPage extends StatelessWidget {
@@ -27,16 +28,20 @@ class OnboardingDayPage extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isSmall = constraints.maxHeight < 500;
-          return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _content(date, year, isSmall: isSmall),
-                ),
-              ),
+          final isMedium = constraints.maxHeight < 700;
+          final illustrationHeight = isSmall ? 110.0 : (isMedium ? 150.0 : 180.0);
+          final illustrationGap = isSmall ? 16.0 : (isMedium ? 20.0 : 24.0);
+          final titleGap = isSmall ? 8.0 : (isMedium ? 10.0 : 12.0);
+          return OnboardingScrollBody(
+            constraints: constraints,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _content(date, year,
+                  illustrationHeight: illustrationHeight,
+                  illustrationGap: illustrationGap,
+                  titleGap: titleGap,
+                  isSmall: isSmall),
             ),
           );
         },
@@ -44,37 +49,28 @@ class OnboardingDayPage extends StatelessWidget {
     );
   }
 
-  List<Widget> _content(String date, int year, {required bool isSmall}) => [
-        DayChartIllustration(height: isSmall ? 100.0 : 120.0),
-        SizedBox(height: isSmall ? 16 : 24),
-        ..._textContent(date, year, isSmall: isSmall),
+  List<Widget> _content(
+    String date,
+    int year, {
+    required double illustrationHeight,
+    required double illustrationGap,
+    required double titleGap,
+    required bool isSmall,
+  }) =>
+      [
+        DayChartIllustration(height: illustrationHeight),
+        SizedBox(height: illustrationGap),
+        ..._textContent(date, year, isSmall: isSmall, titleGap: titleGap),
       ];
 
-  Widget _colourItem(Color colour, double fraction, String text, double barHeight, double bodySize) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FractionallySizedBox(
-          widthFactor: fraction,
-          child: Container(
-            height: barHeight,
-            decoration: BoxDecoration(
-              color: colour,
-              borderRadius: BorderRadius.circular(barHeight / 2),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(text, style: TextStyle(color: kTextPrimaryColour, fontSize: bodySize, height: 1.4)),
-      ],
-    );
-  }
-
-  List<Widget> _textContent(String date, int year, {required bool isSmall}) {
-    final titleSize = isSmall ? 20.0 : 24.0;
+  List<Widget> _textContent(
+    String date,
+    int year, {
+    required bool isSmall,
+    required double titleGap,
+  }) {
+    final titleSize = isSmall ? 20.0 : 22.0;
     final bodySize = isSmall ? 15.0 : kFontSizeBody;
-    final gap = isSmall ? 8.0 : 12.0;
-    final barHeight = isSmall ? 6.0 : 8.0;
     return [
       Text(
         'Today in history',
@@ -85,9 +81,9 @@ class OnboardingDayPage extends StatelessWidget {
           letterSpacing: 0.3,
         ),
       ),
-      SizedBox(height: gap),
+      SizedBox(height: titleGap),
       Text(
-        'The main screen shows today\'s date across multiple years — '
+        'The first screen shows today\'s date across multiple years — '
         'so on $date you\'ll see $date $year, $date ${year - 1}, '
         '$date ${year - 2} and so on. Each bar represents the mean temperature for that date.',
         style: TextStyle(
@@ -96,12 +92,6 @@ class OnboardingDayPage extends StatelessWidget {
           height: 1.5,
         ),
       ),
-      SizedBox(height: gap),
-      _colourItem(kBarWarmColour, 0.90, 'Longer bars represent warmer years.', barHeight, bodySize),
-      SizedBox(height: gap),
-      _colourItem(kBarNeutralColour, 0.60, 'Mid-length bars are around average.', barHeight, bodySize),
-      SizedBox(height: gap),
-      _colourItem(kBarCoolColour, 0.35, 'Shorter bars represent cooler years.', barHeight, bodySize),
     ];
   }
 }

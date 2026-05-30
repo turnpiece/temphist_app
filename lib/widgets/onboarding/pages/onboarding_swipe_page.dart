@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../constants/app_constants.dart';
 import '../../../utils/date_utils.dart' as date_utils;
+import '../onboarding_page.dart';
 import '../visuals/swipe_gesture_indicator.dart';
 
 class OnboardingSwipePage extends StatelessWidget {
@@ -29,22 +30,22 @@ class OnboardingSwipePage extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isSmall = constraints.maxHeight < 500;
-          return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _titleWidget(fontSize: isSmall ? 20.0 : 24.0),
-                    SizedBox(height: isSmall ? 20 : 32),
-                    const SwipeGestureIndicator(),
-                    SizedBox(height: isSmall ? 20 : 32),
-                    ..._rowWidgets(date, isSmall: isSmall),
-                  ],
-                ),
-              ),
+          final isMedium = constraints.maxHeight < 700;
+          final titleSize = isSmall ? 20.0 : (isMedium ? 22.0 : 24.0);
+          final outerGap = isSmall ? 20.0 : (isMedium ? 24.0 : 32.0);
+          final rowPadding = isSmall ? 6.0 : (isMedium ? 8.0 : 10.0);
+          return OnboardingScrollBody(
+            constraints: constraints,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _titleWidget(fontSize: titleSize),
+                SizedBox(height: outerGap),
+                const SwipeGestureIndicator(),
+                SizedBox(height: outerGap),
+                ..._rowWidgets(date, rowPadding: rowPadding),
+              ],
             ),
           );
         },
@@ -62,23 +63,22 @@ class OnboardingSwipePage extends StatelessWidget {
         ),
       );
 
-  List<Widget> _rowWidgets(String date, {required bool isSmall}) => [
+  List<Widget> _rowWidgets(String date, {required double rowPadding}) => [
         _buildRow(Icons.today_outlined, 'Day', '$date in each year',
-            isSmall: isSmall),
+            rowPadding: rowPadding),
         _buildRow(Icons.date_range_outlined, 'Week',
             'The week ending $date in each year',
-            isSmall: isSmall),
+            rowPadding: rowPadding),
         _buildRow(Icons.calendar_month_outlined, 'Month',
             'The month ending $date in each year',
-            isSmall: isSmall),
+            rowPadding: rowPadding),
         _buildRow(Icons.calendar_today_outlined, 'Year',
             'The year ending $date in each year',
-            isSmall: isSmall),
+            rowPadding: rowPadding),
       ];
 
   Widget _buildRow(IconData icon, String label, String description,
-      {required bool isSmall}) {
-    final rowPadding = isSmall ? 6.0 : 10.0;
+      {required double rowPadding}) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: rowPadding),
       child: Row(
