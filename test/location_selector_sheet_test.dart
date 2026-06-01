@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:temphist_app/models/selection_method.dart';
 import 'package:temphist_app/widgets/location_selector_sheet.dart';
 
 // ---------------------------------------------------------------------------
@@ -11,14 +12,14 @@ import 'package:temphist_app/widgets/location_selector_sheet.dart';
 Widget _sheet({
   String gpsLocation = '',
   String selectedLocation = '',
-  void Function(String)? onLocationSelected,
+  void Function(String, SelectionMethod)? onLocationSelected,
   bool connectivityOnline = true,
 }) {
   return MaterialApp(
     home: LocationSelectorSheet(
       gpsLocation: gpsLocation,
       selectedLocation: selectedLocation,
-      onLocationSelected: onLocationSelected ?? (_) {},
+      onLocationSelected: onLocationSelected ?? (_, __) {},
       connectivityOnline: connectivityOnline,
     ),
   );

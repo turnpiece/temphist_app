@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
+import '../models/selection_method.dart';
 import '../services/location_history_service.dart';
 import '../services/location_selection_service.dart';
 import '../services/temperature_service.dart';
@@ -34,9 +35,9 @@ class LocationSelectorSheet extends StatefulWidget {
   /// [gpsLocation] when the user has manually chosen a city.
   final String selectedLocation;
 
-  /// Called with the chosen API location string when the user picks one.
-  /// The screen dismisses itself before invoking this.
-  final void Function(String apiLocation) onLocationSelected;
+  /// Called with the chosen API location string and selection method when the
+  /// user picks one. The screen dismisses itself before invoking this.
+  final void Function(String apiLocation, SelectionMethod method) onLocationSelected;
 
   /// When false the close button is hidden and the barrier is non-dismissible,
   /// forcing the user to pick a city. Used on first launch when no location
@@ -68,7 +69,7 @@ class LocationSelectorSheet extends StatefulWidget {
     BuildContext context, {
     required String gpsLocation,
     required String selectedLocation,
-    required void Function(String) onLocationSelected,
+    required void Function(String, SelectionMethod) onLocationSelected,
     bool canDismiss = true,
     bool connectivityOnline = true,
   }) {
@@ -192,7 +193,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     _debounceTimer?.cancel();
     // Select the top result on Enter/Go — only if there are verified results.
     if (_searchResults.isNotEmpty) {
-      _select(_searchResults.first);
+      _select(_searchResults.first, SelectionMethod.search);
     }
     // No results → do nothing; the user can refine their query.
   }
@@ -459,7 +460,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
             selectedColor: kBarCurrentYearColour,
             showDetails: true,
             // Always tappable in search — tapping a selected result just dismisses.
-            onTap: () => _select(loc),
+            onTap: () => _select(loc, SelectionMethod.search),
           ),
       ],
     );
@@ -495,7 +496,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                 apiLocation: loc,
                 isSelected: _isSelected(loc),
                 selectedColor: kBarCurrentYearColour,
-                onTap: () => _select(loc),
+                onTap: () => _select(loc, SelectionMethod.recent),
               ),
           ],
         );
@@ -560,27 +561,29 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
         if (widget.gpsLocation.isNotEmpty) ...[
           _SectionHeader('Current', color: kHeadingColour),
           if (isTablet)
-            _buildTwoColumnGrid([widget.gpsLocation], kBarCurrentYearColour)
+            _buildTwoColumnGrid(
+                [widget.gpsLocation], kBarCurrentYearColour, SelectionMethod.ownLocation)
           else
             _LocationRow(
               apiLocation: widget.gpsLocation,
               isSelected: widget.selectedLocation == widget.gpsLocation,
               selectedColor: kBarCurrentYearColour,
-              onTap: () => _select(widget.gpsLocation),
+              onTap: () => _select(widget.gpsLocation, SelectionMethod.ownLocation),
             ),
         ],
         // Visited — GPS-detected locations, two-column grid on tablets.
         if (data.visitedLocations.isNotEmpty) ...[
           _SectionHeader('Visited', color: kHeadingColour),
           if (isTablet)
-            _buildTwoColumnGrid(visibleVisited, kBarCurrentYearColour)
+            _buildTwoColumnGrid(
+                visibleVisited, kBarCurrentYearColour, SelectionMethod.carousel)
           else ...[
             for (final loc in visibleVisited)
               _LocationRow(
                 apiLocation: loc,
                 isSelected: _isSelected(loc),
                 selectedColor: kBarCurrentYearColour,
-                onTap: () => _select(loc),
+                onTap: () => _select(loc, SelectionMethod.carousel),
               ),
             if (data.visitedLocations.length > _initialCount && !_showAllVisited)
               _ShowMoreButton(
@@ -592,14 +595,15 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
         if (data.popularLocations.isNotEmpty) ...[
           _SectionHeader('Popular', color: kHeadingColour),
           if (isTablet)
-            _buildTwoColumnGrid(visiblePopular, kBarCurrentYearColour)
+            _buildTwoColumnGrid(
+                visiblePopular, kBarCurrentYearColour, SelectionMethod.popular)
           else ...[
             for (final loc in visiblePopular)
               _LocationRow(
                 apiLocation: loc,
                 isSelected: _isSelected(loc),
                 selectedColor: kBarCurrentYearColour,
-                onTap: () => _select(loc),
+                onTap: () => _select(loc, SelectionMethod.popular),
               ),
             if (data.popularLocations.length > popularInitialCount &&
                 !showAllPopular)
@@ -613,7 +617,8 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
   }
 
   /// Renders [locations] as pairs of side-by-side [_LocationRow]s.
-  Widget _buildTwoColumnGrid(List<String> locations, Color selectedColor) {
+  Widget _buildTwoColumnGrid(
+      List<String> locations, Color selectedColor, SelectionMethod method) {
     final rows = <Widget>[];
     for (int i = 0; i < locations.length; i += 2) {
       final left = locations[i];
@@ -630,7 +635,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                     apiLocation: left,
                     isSelected: _isSelected(left),
                     selectedColor: selectedColor,
-                    onTap: () => _select(left),
+                    onTap: () => _select(left, method),
                     margin: EdgeInsets.zero,
                   ),
                 ),
@@ -641,7 +646,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
                           apiLocation: right,
                           isSelected: _isSelected(right),
                           selectedColor: selectedColor,
-                          onTap: () => _select(right),
+                          onTap: () => _select(right, method),
                           margin: EdgeInsets.zero,
                         )
                       : const SizedBox(),
@@ -661,10 +666,10 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
     return city(loc) == city(widget.selectedLocation);
   }
 
-  void _select(String apiLocation) {
+  void _select(String apiLocation, SelectionMethod method) {
     // Clear the main screen's data before popping so the loading state is
     // already showing when the dismiss animation plays — not the old chart.
-    widget.onLocationSelected(apiLocation);
+    widget.onLocationSelected(apiLocation, method);
     Navigator.of(context).pop();
   }
 }

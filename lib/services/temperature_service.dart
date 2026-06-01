@@ -627,6 +627,9 @@ class TemperatureService {
   /// [onProgress] optional callback invoked while the job is processing.
   /// [onFallbackToSync] optional callback invoked when async polling fails and
   /// the service switches to the synchronous fallback endpoint.
+  /// [onFetchComplete] optional callback fired after a network fetch completes,
+  /// with wall-clock duration in ms and the API cache-hit status. Not fired
+  /// when data is served from the in-memory cache.
   Future<PeriodTemperatureData> fetchPeriodData(
     String period,
     String location,
@@ -636,6 +639,7 @@ class TemperatureService {
     void Function(AsyncJobStatus)? onProgress,
     void Function()? onFallbackToSync,
     bool Function()? isCancelled,
+    void Function(int responseTimeMs, bool? cacheHit)? onFetchComplete,
   }) async {
     final todaySuffix = localToday != null ? '|$localToday' : '';
     final unitSuffix = (unitGroup != null && unitGroup != 'celsius') ? '|$unitGroup' : '';
@@ -644,6 +648,8 @@ class TemperatureService {
     if (cached != null) {
       return cached;
     }
+
+    final stopwatch = Stopwatch()..start();
 
     try {
       DebugUtils.logLazy(() => 'Attempting async fetch for $period data...');
@@ -654,8 +660,10 @@ class TemperatureService {
         onProgress: onProgress,
         isCancelled: isCancelled,
       );
+      stopwatch.stop();
       DebugUtils.logLazy(() => 'Async fetch successful for $period data');
       _writeCache(cacheKey, result.data);
+      onFetchComplete?.call(stopwatch.elapsedMilliseconds, result.cacheHit);
       return result.data;
     } catch (e) {
       // Propagate cancellation without falling back to sync
@@ -673,11 +681,13 @@ class TemperatureService {
         onFallbackToSync?.call();
         DebugUtils.logLazy(() => 'Async job failed ($e), falling back to sync API...');
         try {
-          final fallback =
+          final (fallback, fallbackCacheHit) =
               await _fetchPeriodDataSync(period, location, identifier,
                   unitGroup: unitGroup, localToday: localToday);
+          stopwatch.stop();
           DebugUtils.logLazy(() => 'Synchronous fallback successful for $period data');
           _writeCache(cacheKey, fallback);
+          onFetchComplete?.call(stopwatch.elapsedMilliseconds, fallbackCacheHit);
           return fallback;
         } catch (fallbackError) {
           throw ApiException(0, '$period (async + sync fallback both failed)', fallbackError);
@@ -794,7 +804,11 @@ class TemperatureService {
   }
 
   /// Synchronous fallback: GET the period data directly.
-  Future<PeriodTemperatureData> _fetchPeriodDataSync(
+  ///
+  /// Returns the parsed data alongside the `X-Cache` header value — true when
+  /// the API served a cached result (`X-Cache: HIT`), false for a MISS, null
+  /// when the header is absent.
+  Future<(PeriodTemperatureData, bool?)> _fetchPeriodDataSync(
     String period,
     String location,
     String identifier, {
@@ -825,7 +839,11 @@ class TemperatureService {
       throw ApiException(response.statusCode, 'v1/records sync fallback');
     }
 
+    final xCache = response.headers['x-cache'];
+    final bool? cacheHit =
+        xCache == null ? null : xCache.toLowerCase() == 'hit';
+
     final json = jsonDecode(response.body);
-    return PeriodTemperatureData.fromJson(json);
+    return (PeriodTemperatureData.fromJson(json), cacheHit);
   }
 }

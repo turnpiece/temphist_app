@@ -236,11 +236,18 @@ class JobResult {
   final PeriodTemperatureData data;
   final String computedAt;
 
+  /// Whether the API served this result from its cache.
+  ///
+  /// Populated from the `cache_hit` field in the job result JSON once the API
+  /// exposes it (see TempHist-API#50). Null until the API is updated.
+  final bool? cacheHit;
+
   JobResult({
     required this.cacheKey,
     required this.etag,
     required this.data,
     required this.computedAt,
+    this.cacheHit,
   });
 
   factory JobResult.fromJson(Map<String, dynamic> json) {
@@ -249,6 +256,7 @@ class JobResult {
       etag: json['etag'] ?? '',
       data: PeriodTemperatureData.fromJson(json['data'] ?? {}),
       computedAt: json['computed_at'] ?? '',
+      cacheHit: json['cache_hit'] as bool?,
     );
   }
 }
