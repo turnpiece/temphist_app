@@ -14,6 +14,8 @@ import 'dart:io' as io;
 import 'dart:async'; // Added for StreamSubscription and StreamController
 import 'dart:convert'; // Added for jsonEncode/jsonDecode
 
+import 'models/selection_method.dart';
+import 'services/analytics_service.dart';
 import 'services/auth_service.dart';
 import 'services/temperature_service.dart';
 import 'services/share_service.dart';
@@ -317,6 +319,11 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
   // Memory management
   int _memoryCleanupCount = 0;
+
+  // Carries the selection method from the most recent user-initiated location
+  // pick into _prefetchPeriodData so it can be included in the analytics event.
+  // Cleared after being consumed by the first prefetch call.
+  SelectionMethod? _pendingSelectionMethod;
 
   // Page view for period switching (daily / weekly / monthly / yearly)
   late final PageController _pageController;
@@ -679,6 +686,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
     if (_locationService.locationSource == LocationSource.gps &&
         _locationService.determinedLocation.isNotEmpty) {
       _recordLocationSelection(_locationService.determinedLocation);
+      _pendingSelectionMethod = SelectionMethod.ownLocation;
     }
   }
 
@@ -695,8 +703,16 @@ class TemperatureScreenState extends State<TemperatureScreen>
   /// Pre-warm the in-memory and Hive caches for all four periods in parallel.
   /// PeriodPage widgets that have already loaded will hit the in-memory cache
   /// instead of making a duplicate network call.
+  ///
+  /// When [_pendingSelectionMethod] is set it is consumed here and an analytics
+  /// event is fired after the daily period fetch completes.
   Future<void> _prefetchPeriodData() async {
     if (!_isLocationDetermined || _determinedLocation.isEmpty) return;
+
+    // Consume the pending selection method before any await so it is not
+    // accidentally re-used by a concurrent call.
+    final selectionMethod = _pendingSelectionMethod;
+    _pendingSelectionMethod = null;
 
     final dateInfo = _getCurrentDateAndLocation(
       _determinedLocation,
@@ -729,6 +745,14 @@ class TemperatureScreenState extends State<TemperatureScreen>
             identifier,
             unitGroup: unitGroup,
             isCancelled: isCancelled,
+            onFetchComplete: (period == 'daily' && selectionMethod != null)
+                ? (ms, cacheHit) => _fireAnalytics(
+                      location: location,
+                      selectionMethod: selectionMethod,
+                      responseTimeMs: ms,
+                      cacheHit: cacheHit,
+                    )
+                : null,
           );
           if (!isCancelled() && lat != null && lon != null) {
             await PeriodCacheService.put(period, lat, lon, identifier, data,
@@ -739,6 +763,22 @@ class TemperatureScreenState extends State<TemperatureScreen>
         }
       }),
     );
+  }
+
+  void _fireAnalytics({
+    required String location,
+    required SelectionMethod selectionMethod,
+    required int responseTimeMs,
+    bool? cacheHit,
+  }) {
+    final canonicalId = TemperatureService.canonicalIdFor(location);
+    unawaited(AnalyticsService.submit(
+      requestedLocation: location,
+      canonicalLocation: canonicalId,
+      selectionMethod: selectionMethod,
+      responseTimeMs: responseTimeMs,
+      cacheHit: cacheHit,
+    ));
   }
 
   void _startSplashScreenTimer() {
@@ -840,7 +880,8 @@ class TemperatureScreenState extends State<TemperatureScreen>
   }
 
   /// Called when the user picks a location from the selector sheet.
-  Future<void> _onLocationSelected(String apiLocation) async {
+  Future<void> _onLocationSelected(
+      String apiLocation, SelectionMethod selectionMethod) async {
     if (apiLocation == _determinedLocation) return;
 
     // Submit selection signal to API and record locally for all explicit picks.
@@ -857,6 +898,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
     // is never served to the new fetch.
     TemperatureService.clearCache();
     _prefetchGeneration++;
+    _pendingSelectionMethod = selectionMethod;
 
     await _locationService.setManualLocation(apiLocation);
 
