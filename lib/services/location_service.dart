@@ -113,6 +113,11 @@ class LocationService extends ChangeNotifier {
   /// so it always reflects the device's physical location, not a manual pick.
   static const String _kGpsLocationKey = 'gpsLocationPersisted';
 
+  /// No-expiry key that always holds the last used location string (GPS or
+  /// manual).  Unlike 'cachedLocation' (4-hour TTL) this key survives long
+  /// background gaps and is used to seed resume-prefetches on cold restarts.
+  static const String _kLastUsedLocationKey = 'lastUsedLocation';
+
   /// Optional callback invoked when continuous monitoring detects a
   /// significant city change (>1 km moved AND city name differs).
   /// The widget should hook this up to trigger data reloading.
@@ -305,6 +310,7 @@ class LocationService extends ChangeNotifier {
         await prefs.setString(_kGpsLocationKey, city);
       }
       await _cacheLocation(city, _displayLocation);
+      await _persistLastUsedLocation(city);
     } catch (e) {
       DebugUtils.logLazy(() => 'LocationService.determineLocation failed: $e');
       _determinedLocation = kDefaultLocation;
@@ -444,6 +450,7 @@ class LocationService extends ChangeNotifier {
     _locationPermissionDenied = false;
     _notify();
     await _cacheLocation(apiLocation, _displayLocation);
+    await _persistLastUsedLocation(apiLocation);
   }
 
   /// Stop continuous GPS monitoring and release resources.
@@ -542,6 +549,30 @@ class LocationService extends ChangeNotifier {
       };
     } catch (e) {
       DebugUtils.logLazy(() => '❌ Failed to load cached location: $e');
+      return null;
+    }
+  }
+
+  /// Persist [location] to the no-expiry 'lastUsedLocation' key so that
+  /// resume-prefetches can seed the correct city even after a cold restart
+  /// where the 4-hour 'cachedLocation' TTL has elapsed.
+  Future<void> _persistLastUsedLocation(String location) async {
+    if (location.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kLastUsedLocationKey, location);
+    } catch (e) {
+      DebugUtils.logLazy(() => '❌ Failed to persist lastUsedLocation: $e');
+    }
+  }
+
+  /// Returns the last used location (GPS or manual) from persistent storage,
+  /// or null if none has been recorded yet.
+  static Future<String?> getLastUsedLocation() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_kLastUsedLocationKey);
+    } catch (_) {
       return null;
     }
   }

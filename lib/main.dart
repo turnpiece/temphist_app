@@ -456,6 +456,12 @@ class TemperatureScreenState extends State<TemperatureScreen>
           Future.value());
       // Cleanup expired cache on resume
       _performMemoryCleanup();
+      // Warm caches for the current location so data is ready immediately on
+      // return.  The stale branch above triggers its own prefetch via
+      // _refreshLocationAndData; only run here when the location is fresh.
+      if (_isLocationDetermined && !_locationService.isLocationStale()) {
+        unawaited(_prefetchPeriodData());
+      }
     } else if (state == AppLifecycleState.paused) {
       DebugUtils.logLazy(() => 'App paused - performing memory cleanup');
       _performAggressiveMemoryCleanup();
