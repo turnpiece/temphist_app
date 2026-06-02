@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../constants/app_constants.dart';
+import '../models/cache_state.dart';
 import '../models/period_temperature_data.dart';
 import '../services/temperature_service.dart';
 import '../services/period_cache_service.dart';
@@ -52,6 +53,10 @@ class PeriodPage extends StatefulWidget {
   /// Called once data loads with the trend gradient factor ([-1.0, 1.0]).
   final void Function(double gradientFactor)? onTrendLoaded;
 
+  /// Called whenever the cache state changes so the parent can show/hide
+  /// the "Cached" badge next to the period heading.
+  final void Function(CacheState cacheState, DateTime? cachedAt)? onCacheStateChanged;
+
   const PeriodPage({
     super.key,
     required this.periodKey,
@@ -65,6 +70,7 @@ class PeriodPage extends StatefulWidget {
     this.scrollController,
     this.topContent,
     this.onTrendLoaded,
+    this.onCacheStateChanged,
   });
 
   @override
@@ -82,6 +88,7 @@ class PeriodPageState extends State<PeriodPage>
   static const Duration _fallbackMessageMinDuration = Duration(seconds: 2);
 
   PeriodTemperatureData? _data;
+  CacheState _cacheState = CacheState.none;
   bool _isLoading = false;
   String? _error;
   String _loadingMessage = '';
@@ -157,6 +164,7 @@ class PeriodPageState extends State<PeriodPage>
       _fetchGeneration++;
       _lastFetchKey = '';
       _data = null;
+      _cacheState = CacheState.none;
       _error = null;
       _isLoading = false;
       _stopLoadingMessageCycle();
@@ -189,6 +197,22 @@ class PeriodPageState extends State<PeriodPage>
 
   String get _unitGroup => widget.isFahrenheit ? 'fahrenheit' : 'celsius';
 
+  /// Maximum age before Hive-cached data is considered stale and triggers a
+  /// background re-fetch. Mirrors the API's Redis TTLs so we don't fetch when
+  /// the API would just return the same cached response anyway.
+  Duration get _freshnessThreshold {
+    switch (widget.periodKey) {
+      case 'week':
+        return kFreshnessThresholdWeekly;
+      case 'month':
+        return kFreshnessThresholdMonthly;
+      case 'year':
+        return kFreshnessThresholdYearly;
+      default:
+        return kFreshnessThresholdDaily;
+    }
+  }
+
   String get _fetchKey =>
       '${widget.periodKey}|${widget.location}|$_identifier|$_unitGroup';
 
@@ -202,7 +226,85 @@ class PeriodPageState extends State<PeriodPage>
     if (_isLoading) return;
 
     final generation = _fetchGeneration;
+    final unitGroup = widget.isFahrenheit ? 'fahrenheit' : null;
+    final locationTz = widget.locationTimezone;
+    final localToday = locationTz != null ? localTodayIn(locationTz) : null;
+    final lat = widget.latitude;
+    final lon = widget.longitude;
 
+    DebugUtils.logLazy(() =>
+        'PeriodPage(${widget.periodKey}): fetching for ${widget.location}'
+        ' (coords: ${lat != null ? "${lat.toStringAsFixed(3)},${lon?.toStringAsFixed(3)}" : "none — Hive cache skipped"})');
+
+    if (bypassCache) {
+      TemperatureService.evictCacheEntry(
+        widget.periodKey,
+        widget.location,
+        _identifier,
+        unitGroup: unitGroup,
+        localToday: localToday,
+      );
+    }
+
+    // --- Stale-while-revalidate: serve from Hive immediately if available ---
+    PeriodTemperatureData? cachedData;
+    if (!bypassCache && lat != null && lon != null) {
+      cachedData = await PeriodCacheService.get(
+        widget.periodKey,
+        lat,
+        lon,
+        _identifier,
+        unitGroup: unitGroup,
+        localToday: localToday,
+      );
+    }
+
+    if (cachedData != null) {
+      // Check whether the cached data is still within the API's own TTL window.
+      // If it is, the API would return the same data anyway, so skip the
+      // background fetch and treat the entry as fresh.
+      final cachedAt = lat != null && lon != null
+          ? PeriodCacheService.cachedAt(
+              widget.periodKey, lat, lon, _identifier,
+              unitGroup: unitGroup, localToday: localToday)
+          : null;
+      final age = cachedAt != null ? DateTime.now().difference(cachedAt) : null;
+      final isWithinApiTtl = age != null && age < _freshnessThreshold;
+
+      if (isWithinApiTtl) {
+        DebugUtils.logLazy(
+          () => 'PeriodPage(${widget.periodKey}): cache hit within API TTL (${age.inMinutes}m < ${_freshnessThreshold.inMinutes}m) — serving as fresh',
+        );
+      } else {
+        DebugUtils.logLazy(
+          () => 'PeriodPage(${widget.periodKey}): cache hit but beyond API TTL — serving stale, background-fetching',
+        );
+      }
+
+      if (!mounted || _fetchGeneration != generation) return;
+      setState(() {
+        _data = cachedData;
+        _cacheState = isWithinApiTtl ? CacheState.fresh : CacheState.stale;
+        _isLoading = false;
+        _lastFetchKey = _fetchKey;
+        _dataLoadedAt = DateTime.now();
+      });
+      if (cachedData.trend.gradientFactor != null) {
+        widget.onTrendLoaded?.call(cachedData.trend.gradientFactor!);
+      }
+      widget.onCacheStateChanged?.call(
+        isWithinApiTtl ? CacheState.fresh : CacheState.stale,
+        isWithinApiTtl ? null : cachedAt,
+      );
+
+      if (!isWithinApiTtl) {
+        // Background-fetch fresh data without showing a spinner.
+        _fetchFreshInBackground(generation, unitGroup, localToday, lat, lon);
+      }
+      return;
+    }
+
+    // --- No cache: normal loading flow with spinner ---
     setState(() {
       _isLoading = true;
       _error = null;
@@ -210,109 +312,174 @@ class PeriodPageState extends State<PeriodPage>
     });
     _startLoadingMessageCycle(generation);
 
+    await _fetchFromApi(
+      generation: generation,
+      unitGroup: unitGroup,
+      locationTz: locationTz,
+      localToday: localToday,
+      lat: lat,
+      lon: lon,
+      isForeground: true,
+    );
+  }
+
+  /// Silently fetches fresh data from the API while stale data is displayed.
+  /// On success updates the displayed data and clears the "Cached" badge.
+  /// Errors are swallowed so the stale data remains visible.
+  Future<void> _fetchFreshInBackground(
+    int generation,
+    String? unitGroup,
+    String? localToday,
+    double? lat,
+    double? lon,
+  ) async {
+    DebugUtils.logLazy(
+      () => 'PeriodPage(${widget.periodKey}): background-fetching fresh data',
+    );
+
     try {
-      final lat = widget.latitude;
-      final lon = widget.longitude;
+      final service = TemperatureService();
+      // Evict in-memory cache so we always hit the network here.
+      TemperatureService.evictCacheEntry(
+        widget.periodKey,
+        widget.location,
+        _identifier,
+        unitGroup: unitGroup,
+        localToday: localToday,
+      );
+      final fresh = await service.fetchPeriodData(
+        widget.periodKey,
+        widget.location,
+        _identifier,
+        unitGroup: unitGroup,
+        localToday: localToday,
+        isCancelled: () => !mounted || _fetchGeneration != generation,
+      );
 
-      DebugUtils.logLazy(() =>
-          'PeriodPage(${widget.periodKey}): fetching for ${widget.location}'
-          ' (coords: ${lat != null ? "${lat.toStringAsFixed(3)},${lon?.toStringAsFixed(3)}" : "none — Hive cache skipped"})');
+      if (!mounted || _fetchGeneration != generation) return;
 
-      // Cache-first: serve from Hive when available, fall through on miss.
-      // bypassCache is set when retrying to ensure fresh data from the API.
-      final unitGroup = widget.isFahrenheit ? 'fahrenheit' : null;
-      final locationTz = widget.locationTimezone;
-      final localToday = locationTz != null ? localTodayIn(locationTz) : null;
-      if (bypassCache) {
-        // Evict only this period's entry from the in-memory service cache so
-        // the retry goes to the network without disturbing other periods.
-        TemperatureService.evictCacheEntry(
-          widget.periodKey,
-          widget.location,
-          _identifier,
-          unitGroup: unitGroup,
-          localToday: localToday,
-        );
-      }
-      PeriodTemperatureData? data;
-      if (!bypassCache && lat != null && lon != null) {
-        data = await PeriodCacheService.get(
+      // Persist to Hive.
+      if (lat != null && lon != null) {
+        final locationTz = widget.locationTimezone;
+        DateTime? expiresAt;
+        if (widget.periodKey == 'daily' &&
+            locationTz != null &&
+            localToday != null) {
+          expiresAt = DateTime.now().add(timeUntilNextLocalMidnight(locationTz));
+        }
+        await PeriodCacheService.put(
           widget.periodKey,
           lat,
           lon,
           _identifier,
+          fresh,
           unitGroup: unitGroup,
           localToday: localToday,
+          expiresAt: expiresAt,
         );
-        if (data != null) {
-          DebugUtils.logLazy(
-            () => 'PeriodPage(${widget.periodKey}): served from Hive cache',
-          );
-        }
       }
 
-      if (data == null) {
-        DebugUtils.logLazy(() =>
-            'PeriodPage(${widget.periodKey}): fetching from API for ${widget.location}');
-        final service = TemperatureService();
-        data = await service.fetchPeriodData(
+      if (!mounted || _fetchGeneration != generation) return;
+      setState(() {
+        _data = fresh;
+        _cacheState = CacheState.fresh;
+        _dataLoadedAt = DateTime.now();
+      });
+      if (fresh.trend.gradientFactor != null) {
+        widget.onTrendLoaded?.call(fresh.trend.gradientFactor!);
+      }
+      widget.onCacheStateChanged?.call(CacheState.fresh, null);
+      DebugUtils.logLazy(
+        () => 'PeriodPage(${widget.periodKey}): background fetch complete',
+      );
+    } catch (e) {
+      // Background failures are silent — stale data stays on screen.
+      DebugUtils.logLazy(
+        () => 'PeriodPage(${widget.periodKey}): background fetch failed ($e) — keeping stale data',
+      );
+    }
+  }
+
+  /// Fetches data from the API and updates state. Used for both foreground
+  /// (spinner) loads and direct retry paths.
+  Future<void> _fetchFromApi({
+    required int generation,
+    required String? unitGroup,
+    required String? locationTz,
+    required String? localToday,
+    required double? lat,
+    required double? lon,
+    required bool isForeground,
+  }) async {
+    try {
+      DebugUtils.logLazy(() =>
+          'PeriodPage(${widget.periodKey}): fetching from API for ${widget.location}');
+      final service = TemperatureService();
+      final data = await service.fetchPeriodData(
+        widget.periodKey,
+        widget.location,
+        _identifier,
+        unitGroup: unitGroup,
+        localToday: localToday,
+        onFallbackToSync: isForeground
+            ? () {
+                if (!mounted || _fetchGeneration != generation || !_isLoading) {
+                  return;
+                }
+                _fallbackMessageShownAt = DateTime.now();
+                _isShowingFallbackMessage = true;
+                setState(() {
+                  _loadingMessage = 'Trying a different way to fetch the data...';
+                });
+              }
+            : null,
+        onProgress: isForeground
+            ? (status) {
+                if (mounted && _fetchGeneration == generation) {
+                  final start = _loadingStartTime;
+                  final elapsedSeconds = start == null
+                      ? 0
+                      : DateTime.now().difference(start).inSeconds;
+                  if (elapsedSeconds < _questionPhaseEndSeconds) return;
+                  final floor = status.isPending ? 2 : 3;
+                  if (floor > _minLoadingPhaseFromProgress) {
+                    _minLoadingPhaseFromProgress = floor;
+                    _updateLoadingMessage(generation);
+                  }
+                }
+              }
+            : null,
+        isCancelled: () => !mounted || _fetchGeneration != generation,
+      );
+
+      if (lat != null && lon != null) {
+        DateTime? expiresAt;
+        if (widget.periodKey == 'daily' &&
+            locationTz != null &&
+            localToday != null) {
+          expiresAt = DateTime.now().add(timeUntilNextLocalMidnight(locationTz));
+        }
+        await PeriodCacheService.put(
           widget.periodKey,
-          widget.location,
+          lat,
+          lon,
           _identifier,
+          data,
           unitGroup: unitGroup,
           localToday: localToday,
-          onFallbackToSync: () {
-            if (!mounted || _fetchGeneration != generation || !_isLoading) {
-              return;
-            }
-            _fallbackMessageShownAt = DateTime.now();
-            _isShowingFallbackMessage = true;
-            setState(() {
-              _loadingMessage = 'Trying a different way to fetch the data...';
-            });
-          },
-          onProgress: (status) {
-            if (mounted && _fetchGeneration == generation) {
-              final start = _loadingStartTime;
-              final elapsedSeconds = start == null
-                  ? 0
-                  : DateTime.now().difference(start).inSeconds;
-              // Preserve the early web-style narrative phases (connecting +
-              // question) before allowing backend progress to accelerate copy.
-              if (elapsedSeconds < _questionPhaseEndSeconds) return;
-              final floor = status.isPending ? 2 : 3;
-              if (floor > _minLoadingPhaseFromProgress) {
-                _minLoadingPhaseFromProgress = floor;
-                _updateLoadingMessage(generation);
-              }
-            }
-          },
+          expiresAt: expiresAt,
         );
-
-        if (lat != null && lon != null) {
-          DateTime? expiresAt;
-          if (widget.periodKey == 'daily' && locationTz != null && localToday != null) {
-            expiresAt = DateTime.now().add(timeUntilNextLocalMidnight(locationTz));
-          }
-          await PeriodCacheService.put(
-            widget.periodKey,
-            lat,
-            lon,
-            _identifier,
-            data,
-            unitGroup: unitGroup,
-            localToday: localToday,
-            expiresAt: expiresAt,
-          );
-        }
       }
 
       if (mounted && _fetchGeneration == generation) {
-        await _ensureFallbackMessageVisibility(generation);
-        if (!mounted || _fetchGeneration != generation) return;
-        _stopLoadingMessageCycle();
+        if (isForeground) {
+          await _ensureFallbackMessageVisibility(generation);
+          if (!mounted || _fetchGeneration != generation) return;
+          _stopLoadingMessageCycle();
+        }
         setState(() {
           _data = data;
+          _cacheState = CacheState.fresh;
           _isLoading = false;
           _lastFetchKey = _fetchKey;
           _dataLoadedAt = DateTime.now();
@@ -320,12 +487,15 @@ class PeriodPageState extends State<PeriodPage>
         if (data.trend.gradientFactor != null) {
           widget.onTrendLoaded?.call(data.trend.gradientFactor!);
         }
+        widget.onCacheStateChanged?.call(CacheState.fresh, null);
       }
     } on RateLimitException {
       if (mounted && _fetchGeneration == generation) {
-        await _ensureFallbackMessageVisibility(generation);
-        if (!mounted || _fetchGeneration != generation) return;
-        _stopLoadingMessageCycle();
+        if (isForeground) {
+          await _ensureFallbackMessageVisibility(generation);
+          if (!mounted || _fetchGeneration != generation) return;
+          _stopLoadingMessageCycle();
+        }
         setState(() {
           _isLoading = false;
           _error = 'Rate limit exceeded. Please wait a moment and try again.';
@@ -334,9 +504,11 @@ class PeriodPageState extends State<PeriodPage>
     } catch (e) {
       DebugUtils.logLazy(() => 'PeriodPage error (${widget.periodKey}): $e');
       if (mounted && _fetchGeneration == generation) {
-        await _ensureFallbackMessageVisibility(generation);
-        if (!mounted || _fetchGeneration != generation) return;
-        _stopLoadingMessageCycle();
+        if (isForeground) {
+          await _ensureFallbackMessageVisibility(generation);
+          if (!mounted || _fetchGeneration != generation) return;
+          _stopLoadingMessageCycle();
+        }
         setState(() {
           _isLoading = false;
           _error = _buildErrorMessage(e);
@@ -506,10 +678,13 @@ class PeriodPageState extends State<PeriodPage>
 
   bool get hasData => _data != null;
 
+  CacheState get cacheState => _cacheState;
+
   /// Called externally (e.g. on location change) to force a reload.
   void reload() {
     _lastFetchKey = '';
     _data = null;
+    _cacheState = CacheState.none;
     _fetchData(bypassCache: true);
   }
 
@@ -518,6 +693,7 @@ class PeriodPageState extends State<PeriodPage>
   void softReload() {
     _lastFetchKey = '';
     _data = null;
+    _cacheState = CacheState.none;
     _fetchData(bypassCache: false);
   }
 

@@ -133,6 +133,7 @@ const double kBubbleBorderRadius = 10.0;
 const Color kSummaryBubbleColour = kSummaryColour;
 const Color kSummaryTextColour = Colors.white;
 
+const Color kWarningColour = Color(0xFFFF8C00); // amber — matches web --warning
 const Color kErrorColour = Color(0xFFFFAA33);
 const Color kStatsBubbleColour = Color(0xFF607090);
 const Color kStdDevColour = Color(0xFF8AAFD0);
@@ -167,6 +168,15 @@ const int kLocationDistanceFilterMeters = 500;
 const int kLocationSignificantChangeMeters = 1000;
 const int kCityAreaRadiusMeters = 25000;
 const Duration kForecastRefreshThreshold = Duration(hours: 2);
+
+/// Per-period freshness thresholds that mirror the API's Redis TTLs.
+/// Data served from the Hive cache is treated as "fresh" (no background
+/// re-fetch triggered) if it was written within these windows. Beyond the
+/// window the data is shown immediately but a background fetch is fired.
+const Duration kFreshnessThresholdDaily   = Duration(hours: 2);   // API: 7 200s
+const Duration kFreshnessThresholdWeekly  = Duration(hours: 4);   // API: 14 400s
+const Duration kFreshnessThresholdMonthly = Duration(hours: 12);  // API: 43 200s
+const Duration kFreshnessThresholdYearly  = Duration(hours: 24);  // API: 86 400s
 const int kMaxChartDataRetries = 3;
 const int kLocationHistoryMaxEntries = 500;
 const int kLocationSelectionHistoryMaxEntries = 100;

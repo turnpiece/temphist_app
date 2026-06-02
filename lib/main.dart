@@ -14,6 +14,7 @@ import 'dart:io' as io;
 import 'dart:async'; // Added for StreamSubscription and StreamController
 import 'dart:convert'; // Added for jsonEncode/jsonDecode
 
+import 'models/cache_state.dart';
 import 'models/selection_method.dart';
 import 'services/analytics_service.dart';
 import 'services/auth_service.dart';
@@ -332,6 +333,10 @@ class TemperatureScreenState extends State<TemperatureScreen>
   // Trend slope (°C/decade) per page index, populated as each period loads.
   final _periodSlopes = <int, double?>{};
 
+  // Cache state per page index — drives the refreshing spinner in the period heading.
+  final _cacheStates = <int, CacheState>{};
+
+
   // Tracks the active page's vertical scroll offset so the period nav can
   // collapse as the user scrolls (and re-expand when they scroll back up).
   final ValueNotifier<double> _activeScrollOffsetNotifier =
@@ -373,6 +378,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
   /// Called whenever [_locationService] notifies listeners.
   void _onLocationChanged() {
     _periodSlopes.clear();
+    _cacheStates.clear();
     _resetScrollPositions();
     if (mounted) setState(() {});
   }
@@ -944,6 +950,13 @@ class TemperatureScreenState extends State<TemperatureScreen>
     });
   }
 
+  void _onCacheStateChanged(int pageIndex, CacheState state, DateTime? cachedAt) {
+    DebugUtils.logLazy(() => 'Cache state: page $pageIndex → $state');
+    setState(() {
+      _cacheStates[pageIndex] = state;
+    });
+  }
+
   Widget _buildGradientBackground() {
     return ValueListenableBuilder<int>(
       valueListenable: _pageIndexNotifier,
@@ -1338,14 +1351,27 @@ class TemperatureScreenState extends State<TemperatureScreen>
   }
 
   Widget _buildLocationAndHeadingContent(int pageIndex) {
-    return Text(
-      _buildPeriodHeaderLabel(pageIndex),
-      style: const TextStyle(
-        color: kTextPrimaryColour,
-        fontSize: kFontSizeBody,
-        fontWeight: FontWeight.w600,
-      ),
-      overflow: TextOverflow.ellipsis,
+    final isStale = _cacheStates[pageIndex] == CacheState.stale;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Flexible(
+          child: Text(
+            _buildPeriodHeaderLabel(pageIndex),
+            style: const TextStyle(
+              color: kTextPrimaryColour,
+              fontSize: kFontSizeBody,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (isStale) ...[
+          const SizedBox(width: 8),
+          const _RefreshingIndicator(),
+        ],
+      ],
     );
   }
 
@@ -1421,6 +1447,8 @@ class TemperatureScreenState extends State<TemperatureScreen>
         ),
         isFahrenheit: _isFahrenheit,
         onTrendLoaded: (slope) => _onTrendLoaded(pageIndex, slope),
+        onCacheStateChanged: (state, cachedAt) =>
+            _onCacheStateChanged(pageIndex, state, cachedAt),
       ),
     );
   }
@@ -1607,3 +1635,23 @@ class TemperatureScreenState extends State<TemperatureScreen>
 }
 
 String _formatDayMonth(DateTime date) => date_utils.formatDateWithOrdinal(date);
+
+/// Small spinner shown inline next to the period heading while a background
+/// re-fetch is in progress for stale cached data. Disappears once fresh data
+/// arrives. Sized to sit comfortably next to body text without causing layout
+/// shift — occupies a fixed 14×14 box.
+class _RefreshingIndicator extends StatelessWidget {
+  const _RefreshingIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 14,
+      height: 14,
+      child: CircularProgressIndicator(
+        strokeWidth: 1.5,
+        color: kGreyLabelColour.withValues(alpha: 0.6),
+      ),
+    );
+  }
+}

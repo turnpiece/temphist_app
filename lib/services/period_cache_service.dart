@@ -16,7 +16,7 @@ import '../utils/debug_utils.dart';
 /// All methods are no-ops (return null/false) if [init] has not been called.
 class PeriodCacheService {
   static const _boxName = 'period_cache';
-  static const _ttl = Duration(days: 7);
+  static const _ttl = Duration(hours: 24);
 
   static Box? _box;
 
@@ -60,6 +60,30 @@ class PeriodCacheService {
       return !_isExpired(map);
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Returns the timestamp when [period]/[lat]/[lon]/[identifier] was cached,
+  /// or `null` if there is no valid (non-expired) entry.
+  static DateTime? cachedAt(
+    String period,
+    double lat,
+    double lon,
+    String identifier, {
+    String? unitGroup,
+    String? localToday,
+  }) {
+    try {
+      final raw = _box?.get(_key(period, lat, lon, identifier,
+          unitGroup: unitGroup, localToday: localToday));
+      if (raw == null || raw is! Map) return null;
+      final map = Map<String, dynamic>.from(raw);
+      if (_isExpired(map)) return null;
+      final ts = map['_cachedAt'];
+      if (ts is! int) return null;
+      return DateTime.fromMillisecondsSinceEpoch(ts);
+    } catch (_) {
+      return null;
     }
   }
 
