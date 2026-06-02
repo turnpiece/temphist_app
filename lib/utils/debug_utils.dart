@@ -33,5 +33,5 @@ class DebugUtils {
   }
 
   static bool get isEnabled => kDebugMode;
-  static bool get isVerboseEnabled => kDebugMode || verboseLogs;
+  static bool get isVerboseEnabled => verboseLogs;
 }

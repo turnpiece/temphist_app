@@ -393,9 +393,16 @@ class PeriodPageState extends State<PeriodPage>
         () => 'PeriodPage(${widget.periodKey}): background fetch complete',
       );
     } catch (e) {
-      // Background failures are silent — stale data stays on screen.
+      if (e is CancelledOperationException) {
+        // Expected: location changed or widget disposed while fetching.
+        DebugUtils.logLazy(
+          () => 'PeriodPage(${widget.periodKey}): background fetch cancelled',
+        );
+        return;
+      }
+      // Other failures are silent — stale data stays on screen.
       DebugUtils.logLazy(
-        () => 'PeriodPage(${widget.periodKey}): background fetch failed ($e) — keeping stale data',
+        () => 'PeriodPage(${widget.periodKey}): background fetch failed [${e.runtimeType}]: $e — keeping stale data',
       );
     }
   }
@@ -502,7 +509,16 @@ class PeriodPageState extends State<PeriodPage>
         });
       }
     } catch (e) {
-      DebugUtils.logLazy(() => 'PeriodPage error (${widget.periodKey}): $e');
+      if (e is CancelledOperationException) {
+        // Expected: location changed or widget disposed while fetching.
+        DebugUtils.logLazy(
+          () => 'PeriodPage(${widget.periodKey}): fetch cancelled (generation changed or unmounted)',
+        );
+        return;
+      }
+      DebugUtils.logLazy(
+        () => 'PeriodPage(${widget.periodKey}): fetch error [${e.runtimeType}]: $e',
+      );
       if (mounted && _fetchGeneration == generation) {
         if (isForeground) {
           await _ensureFallbackMessageVisibility(generation);
@@ -771,8 +787,10 @@ class PeriodPageState extends State<PeriodPage>
         isCancelled: () => !mounted || _data != data,
       );
     } catch (e) {
-      DebugUtils.logLazy(() =>
-          'PeriodPage(daily): summary refresh failed ($e) — patching temperature only');
+      if (e is! CancelledOperationException) {
+        DebugUtils.logLazy(() =>
+            'PeriodPage(daily): summary refresh failed [${e.runtimeType}]: $e — patching temperature only');
+      }
     }
 
     if (!mounted || _data != data) return;

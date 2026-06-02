@@ -750,7 +750,7 @@ class TemperatureService {
 
     while (pollCount < maxPolls) {
       if (isCancelled != null && isCancelled()) {
-        DebugUtils.logLazy(() => 'Job $jobId cancelled at poll #$pollCount');
+        DebugUtils.verboseLazy(() => 'Job $jobId cancelled at poll #$pollCount');
         throw const CancelledOperationException();
       }
       try {

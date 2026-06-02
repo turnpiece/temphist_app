@@ -125,7 +125,7 @@ class PeriodCacheService {
         return null;
       }
 
-      DebugUtils.logLazy(() => 'PeriodCacheService: hit ($key)');
+      DebugUtils.verboseLazy(() => 'PeriodCacheService: hit ($key)');
       return PeriodTemperatureData.fromJson(
         jsonDecode(dataStr) as Map<String, dynamic>,
       );
@@ -169,7 +169,7 @@ class PeriodCacheService {
       entry['_expiresAt'] = expiresAt.millisecondsSinceEpoch;
     }
     await box.put(key, entry);
-    DebugUtils.logLazy(() => 'PeriodCacheService: stored ($key)');
+    DebugUtils.verboseLazy(() => 'PeriodCacheService: stored ($key)');
   }
 
   // ---------------------------------------------------------------------------

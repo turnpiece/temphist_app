@@ -43,7 +43,7 @@ class LocationHistoryService {
       }
       await prefs.setString(
           _kHistoryKey, jsonEncode(current.map((v) => v.toJson()).toList()));
-      DebugUtils.logLazy(
+      DebugUtils.verboseLazy(
           () => 'Location history updated: ${current.length} entries');
     } catch (e) {
       DebugUtils.logLazy(() => 'LocationHistoryService.add failed: $e');
