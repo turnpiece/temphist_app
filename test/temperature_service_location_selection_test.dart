@@ -100,6 +100,37 @@ void main() {
     });
   });
 
+  group('rawLocationSelectionPayload', () {
+    test('parses 2-part display strings', () {
+      expect(
+        TemperatureService.rawLocationSelectionPayload('Mogadishu, Somalia'),
+        equals({
+          'name': 'Mogadishu',
+          'country_name': 'Somalia',
+          'country_code': 'SO',
+        }),
+      );
+    });
+
+    test('parses 3-part display strings with admin1', () {
+      expect(
+        TemperatureService.rawLocationSelectionPayload(
+            'Mogadishu, Banaadir, Somalia'),
+        equals({
+          'name': 'Mogadishu',
+          'admin1': 'Banaadir',
+          'country_name': 'Somalia',
+          'country_code': 'SO',
+        }),
+      );
+    });
+
+    test('returns null for invalid display strings', () {
+      expect(TemperatureService.rawLocationSelectionPayload(''), isNull);
+      expect(TemperatureService.rawLocationSelectionPayload('Nowhere'), isNull);
+    });
+  });
+
   group('seedLocationIdCacheForTesting', () {
     test('replaces existing cache contents', () {
       TemperatureService.seedLocationIdCacheForTesting({

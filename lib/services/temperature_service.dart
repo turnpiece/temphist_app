@@ -459,6 +459,44 @@ class TemperatureService {
     return _countryNameToCodeCache?[lastSegment] ?? _kCountryNameToCode[lastSegment];
   }
 
+  /// Builds a payload from a display location string when raw data is not cached.
+  ///
+  /// The locations selections endpoint accepts a location name plus optional
+  /// country_name and country_code, so this lets us submit selections for
+  /// older display strings that were never cached by searchLocations().
+  @visibleForTesting
+  static Map<String, String>? rawLocationSelectionPayload(String displayLocation) {
+    final parts = displayLocation
+        .split(',')
+        .map((segment) => segment.trim())
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    if (parts.length < 2) return null;
+
+    final name = parts.first;
+    final countryName = parts.last;
+    if (name.isEmpty || countryName.isEmpty) return null;
+
+    final payload = <String, String>{
+      'name': name,
+      'country_name': countryName,
+    };
+
+    if (parts.length > 2) {
+      final admin1 = parts.sublist(1, parts.length - 1).join(', ');
+      if (admin1.isNotEmpty) {
+        payload['admin1'] = admin1;
+      }
+    }
+
+    final countryCode = countryCodeFor(displayLocation);
+    if (countryCode != null) {
+      payload['country_code'] = countryCode;
+    }
+
+    return payload;
+  }
+
   /// Converts a 2-letter ISO 3166-1 alpha-2 country code to a Unicode flag
   /// emoji using Regional Indicator Symbol letters (U+1F1E6–U+1F1FF).
   /// Returns an empty string for invalid or unsupported codes.
@@ -497,7 +535,14 @@ class TemperatureService {
       DebugUtils.logLazy(() => 'submitLocationSelection: submitting by id "$locationId"');
       payload = {'location_id': locationId};
     } else {
-      final rawData = _locationRawDataCache[displayLocation];
+      var rawData = _locationRawDataCache[displayLocation];
+      if (rawData == null) {
+        rawData = rawLocationSelectionPayload(displayLocation);
+        if (rawData != null) {
+          _locationRawDataCache[displayLocation] = rawData;
+          DebugUtils.logLazy(() => 'submitLocationSelection: built fallback raw fields for "$displayLocation"');
+        }
+      }
       if (rawData == null) {
         DebugUtils.logLazy(() => 'submitLocationSelection: skipping "$displayLocation" — no id or raw data cached');
         return;
