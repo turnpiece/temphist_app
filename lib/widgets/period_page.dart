@@ -977,6 +977,7 @@ class PeriodPageState extends State<PeriodPage>
           needsConversion: needsConversion,
           showTemperatureAxis: false,
           presentation: presentation,
+          isDailyPeriod: widget.periodKey == 'daily',
         ),
       ),
     );

@@ -402,6 +402,11 @@ class TemperatureBarChart extends StatefulWidget {
   /// only runs once per build.
   final TemperatureChartPresentation? presentation;
 
+  /// When true, tooltip temperatures and anomalies render at one decimal place
+  /// instead of two. Daily records come from 1dp source data, so the second
+  /// digit is noise; weekly/monthly/yearly are averages where it's meaningful.
+  final bool isDailyPeriod;
+
   const TemperatureBarChart({
     super.key,
     required this.chartData,
@@ -414,6 +419,7 @@ class TemperatureBarChart extends StatefulWidget {
     this.showTemperatureAxis = true,
     this.standardDeviation,
     this.presentation,
+    this.isDailyPeriod = false,
   });
 
   @override
@@ -445,7 +451,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
             ? celsiusToFahrenheit(d.temperature)
             : d.temperature;
         final isFahrenheit = presentation.unitLabel == '°F';
-        final tempDecimals = isFahrenheit ? 1 : 2;
+        final tempDecimals = (isFahrenheit || widget.isDailyPeriod) ? 1 : 2;
 
         Widget? anomalyWidget;
         if (d.anomaly != null) {
