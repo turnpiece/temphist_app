@@ -33,8 +33,8 @@ class _DayChartPainter extends CustomPainter {
   // Bar widths as a fraction of chart area — natural year-to-year variation,
   // no directional trend.
   static const List<double> _widths = [
-    0.70, 0.55, 0.80, 0.60, 0.75, 0.45, 0.65,
-    0.70, 0.50, 0.60, 0.78, 0.55, 0.68, 0.48,
+    0.7, 0.55, 0.8, 0.6, 0.75, 0.45, 0.65,
+    0.7, 0.5, 0.6, 0.78, 0.55, 0.68, 0.48,
   ];
 
   static const _labelStyle = TextStyle(

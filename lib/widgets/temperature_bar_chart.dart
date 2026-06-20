@@ -477,7 +477,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
           final baseColor = d.barFillColor ?? Colors.white;
           final hsl = HSLColor.fromColor(baseColor);
           final anomalyColor =
-              hsl.withLightness(hsl.lightness.clamp(0.80, 1.0)).toColor();
+              hsl.withLightness(hsl.lightness.clamp(0.8, 1.0)).toColor();
           anomalyWidget = Text(
             anomalyText,
             style: TextStyle(
@@ -491,7 +491,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: Colors.black87,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: const BorderRadius.all(Radius.circular(4)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

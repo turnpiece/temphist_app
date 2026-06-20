@@ -283,7 +283,7 @@ class _UnitToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
         color: kSegmentedControlBackgroundColour,
       ),
       child: Row(
@@ -312,7 +312,7 @@ class _UnitToggle extends StatelessWidget {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: const BorderRadius.all(Radius.circular(8)),
             color: isActive
                 ? kSegmentedControlSelectedBackgroundColour
                 : Colors.transparent,

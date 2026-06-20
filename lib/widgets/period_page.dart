@@ -928,7 +928,7 @@ class PeriodPageState extends State<PeriodPage>
                 color: kSummaryBubbleColour.withValues(alpha: 0.3),
                 borderRadius: isSmallPhone
                     ? BorderRadius.zero
-                    : BorderRadius.circular(kBubbleBorderRadius),
+                    : const BorderRadius.all(Radius.circular(kBubbleBorderRadius)),
               ),
               child: Center(
                 child: Text(
@@ -1000,7 +1000,7 @@ class PeriodPageState extends State<PeriodPage>
             decoration: BoxDecoration(
               color: kStatsBubbleColour.withValues(alpha: 0.4),
               borderRadius:
-                  isSmallPhone ? BorderRadius.zero : BorderRadius.circular(kBubbleBorderRadius),
+                  isSmallPhone ? BorderRadius.zero : const BorderRadius.all(Radius.circular(kBubbleBorderRadius)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1127,7 +1127,7 @@ class PeriodPageState extends State<PeriodPage>
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: kErrorColour.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: const BorderRadius.all(Radius.circular(4)),
                   ),
                   child: const Text(
                     'Retry',

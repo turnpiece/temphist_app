@@ -94,7 +94,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             // without scrolling on all current iPad sizes.
             final double tabletPageViewHeight = isLandscape
                 ? ((constraints.maxHeight - 48) * 0.72).clamp(200.0, 560.0)
-                : ((constraints.maxHeight - 48) * 0.70).clamp(300.0, 660.0);
+                : ((constraints.maxHeight - 48) * 0.7).clamp(300.0, 660.0);
 
             final skipButton = Align(
               alignment: Alignment.centerRight,
@@ -194,7 +194,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: const BorderRadius.all(Radius.circular(12)),
             ),
           ),
           child: Text(

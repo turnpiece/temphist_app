@@ -109,7 +109,7 @@ class _OnboardingTemperatureUnitPageState
   Widget _unitToggle() {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: const BorderRadius.all(Radius.circular(10)),
         color: kSegmentedControlBackgroundColour,
       ),
       child: Row(
@@ -134,7 +134,7 @@ class _OnboardingTemperatureUnitPageState
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: const BorderRadius.all(Radius.circular(10)),
           color: isActive
               ? kSegmentedControlSelectedBackgroundColour
               : Colors.transparent,

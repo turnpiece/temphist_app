@@ -116,7 +116,7 @@ class CompletenessSection extends StatelessWidget {
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: kErrorColour.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: const BorderRadius.all(Radius.circular(4)),
                       ),
                       child: Text(
                         'Retry',

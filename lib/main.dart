@@ -1302,7 +1302,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
         child: Container(
           decoration: BoxDecoration(
             color: kSegmentedControlBackgroundColour,
-            borderRadius: BorderRadius.circular(pillRadius),
+            borderRadius: const BorderRadius.all(Radius.circular(pillRadius)),
           ),
           padding: const EdgeInsets.all(innerPadding),
           child: Row(

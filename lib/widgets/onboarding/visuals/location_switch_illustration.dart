@@ -21,7 +21,7 @@ class LocationSwitchIllustration extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               color: kBackgroundColourDark.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: const BorderRadius.all(Radius.circular(10)),
               border: Border.all(
                 color: kLocationRecentColour.withValues(alpha: 0.25),
                 width: 1,
@@ -67,7 +67,7 @@ class LocationSwitchIllustration extends StatelessWidget {
             width: 220,
             decoration: BoxDecoration(
               color: kTextPrimaryColour.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: const BorderRadius.all(Radius.circular(10)),
               border: Border.all(
                 color: kGreyLabelColour.withValues(alpha: 0.15),
                 width: 1,

@@ -50,7 +50,7 @@ class _AverageTrendPainter extends CustomPainter {
   static const List<double> _widths = [
     0.74,
     0.65,
-    0.70,
+    0.7,
     0.56,
     0.68,
     0.61,
@@ -60,11 +60,11 @@ class _AverageTrendPainter extends CustomPainter {
     0.58,
     0.63,
     0.55,
-    0.60,
+    0.6,
     0.53,
     0.52,
     0.65,
-    0.50,
+    0.5,
     0.54,
     0.48,
     0.46,
@@ -88,7 +88,7 @@ class _AverageTrendPainter extends CustomPainter {
     final double chartWidth = size.width - chartStart;
 
     final barPaint = Paint()
-      ..color = kBarNeutralColour.withValues(alpha: 0.20)
+      ..color = kBarNeutralColour.withValues(alpha: 0.2)
       ..style = PaintingStyle.fill;
 
     // --- Bars + year labels (every 5 years) ---

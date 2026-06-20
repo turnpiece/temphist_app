@@ -751,7 +751,7 @@ class _LocationRow extends StatelessWidget {
             decoration: BoxDecoration(
               color:
                   kTextPrimaryColour.withValues(alpha: isSelected ? 0.16 : 0.1),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: const BorderRadius.all(Radius.circular(18)),
             ),
             child: Padding(
               padding:
@@ -971,15 +971,15 @@ class _SearchFieldState extends State<_SearchField> {
         contentPadding:
             const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: const BorderRadius.all(Radius.circular(10)),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: const BorderRadius.all(Radius.circular(10)),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: const BorderRadius.all(Radius.circular(10)),
           borderSide: BorderSide.none,
         ),
       ),

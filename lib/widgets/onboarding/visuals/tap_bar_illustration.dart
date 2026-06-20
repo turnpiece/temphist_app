@@ -14,7 +14,7 @@ const int _tappedIndex = 7; // 2019 — mid-chart, not a multiple of 5
 
 const List<double> _barWidths = [
   0.88, 0.72, 0.61, 0.79, 0.53, 0.68, 0.75, 0.48, 0.63, 0.57,
-  0.70, 0.55, 0.65, 0.45, 0.72,
+  0.7, 0.55, 0.65, 0.45, 0.72,
 ];
 
 /// Bar chart illustration for the "tap a bar" onboarding page.
@@ -180,7 +180,7 @@ class _TooltipMockup extends StatelessWidget {
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Colors.black87,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: const BorderRadius.all(Radius.circular(4)),
             ),
             child: const Column(
               mainAxisSize: MainAxisSize.min,
