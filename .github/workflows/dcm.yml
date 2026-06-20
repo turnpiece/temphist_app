@@ -27,7 +27,12 @@ jobs:
         run: flutter analyze
 
       - name: 📊 Install DCM
-        run: dart pub global activate dcm
+        run: |
+          sudo apt-get update
+          wget -qO- https://dcm.dev/pgp-key.public | sudo gpg --dearmor -o /usr/share/keyrings/dcm.gpg
+          echo 'deb [signed-by=/usr/share/keyrings/dcm.gpg arch=amd64] https://dcm.dev/debian stable main' | sudo tee /etc/apt/sources.list.d/dcm_stable.list
+          sudo apt-get update
+          sudo apt-get install -y dcm
 
       - name: 📊 Run DCM
-        run: dart pub global run dcm analyze lib --ci-key="${{ secrets.DCM_CI_KEY }}" --email="${{ secrets.DCM_EMAIL }}"
+        run: dcm analyze lib --ci-key="${{ secrets.DCM_CI_KEY }}" --email="${{ secrets.DCM_EMAIL }}"
