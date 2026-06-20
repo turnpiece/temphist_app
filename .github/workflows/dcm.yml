@@ -1,0 +1,33 @@
+name: DCM (Dart Code Metrics)
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  dcm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🚀 Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.0"
+          channel: "stable"
+
+      - name: 📦 Install dependencies
+        run: flutter pub get
+
+      - name: 🔍 Flutter analyze
+        run: flutter analyze
+
+      - name: 📊 Install DCM
+        run: dart pub global activate dcm
+
+      - name: 📊 Run DCM
+        run: dart pub global run dcm analyze lib --ci-key="${{ secrets.DCM_CI_KEY }}" --email="${{ secrets.DCM_EMAIL }}"
