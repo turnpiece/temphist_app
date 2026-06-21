@@ -34,8 +34,3 @@ dcm:
   rules:
     - double-literal-format
     - prefer-const-border-radius
-    - avoid-unsafe-collection-methods
-    - avoid-type-casts
-    - avoid-nullable-interpolation
-    - avoid-shadowing
-    - prefer-dedicated-media-query-methods
