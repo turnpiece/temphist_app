@@ -2,9 +2,7 @@ name: DCM (Dart Code Metrics)
 
 on:
   push:
-    branches: ["**"]
-  pull_request:
-    branches: ["**"]
+    branches: ["main"]
 
 jobs:
   dcm:
