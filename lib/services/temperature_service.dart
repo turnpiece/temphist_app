@@ -518,7 +518,12 @@ class TemperatureService {
   /// Session-level dedup: skips if the same location was already submitted this
   /// session. Failures are always swallowed — this must never degrade the
   /// core weather experience.
-  Future<void> submitLocationSelection(String displayLocation) async {
+  Future<void> submitLocationSelection(
+    String displayLocation, {
+    double? latitude,
+    double? longitude,
+    String? timezone,
+  }) async {
     DebugUtils.logLazy(() => 'submitLocationSelection: called with "$displayLocation"');
     if (displayLocation.isEmpty) return;
 
@@ -548,8 +553,12 @@ class TemperatureService {
         return;
       }
       DebugUtils.logLazy(() => 'submitLocationSelection: submitting raw fields for "$displayLocation"');
-      payload = rawData;
+      payload = Map<String, dynamic>.from(rawData);
     }
+
+    if (latitude != null) payload['latitude'] = latitude;
+    if (longitude != null) payload['longitude'] = longitude;
+    if (timezone != null) payload['timezone'] = timezone;
 
     _lastSubmittedKey = submissionKey;
 

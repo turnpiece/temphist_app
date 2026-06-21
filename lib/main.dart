@@ -697,7 +697,11 @@ class TemperatureScreenState extends State<TemperatureScreen>
     // a real position.
     if (_locationService.locationSource == LocationSource.gps &&
         _locationService.determinedLocation.isNotEmpty) {
-      _recordLocationSelection(_locationService.determinedLocation);
+      _recordLocationSelection(
+        _locationService.determinedLocation,
+        latitude: _lastPosition?.latitude,
+        longitude: _lastPosition?.longitude,
+      );
       _pendingSelectionMethod = SelectionMethod.ownLocation;
     }
   }
@@ -707,8 +711,18 @@ class TemperatureScreenState extends State<TemperatureScreen>
   /// Called for all explicit location choices — GPS auto-detect, manual search
   /// picks, popular taps, and visited taps. Never called for background or
   /// programmatic loads.
-  void _recordLocationSelection(String apiLocation) {
-    unawaited(TemperatureService().submitLocationSelection(apiLocation));
+  void _recordLocationSelection(
+    String apiLocation, {
+    double? latitude,
+    double? longitude,
+  }) {
+    final timezone = TemperatureService.timezoneFor(apiLocation);
+    unawaited(TemperatureService().submitLocationSelection(
+      apiLocation,
+      latitude: latitude,
+      longitude: longitude,
+      timezone: timezone,
+    ));
     unawaited(LocationSelectionService.record(apiLocation));
   }
 
@@ -898,7 +912,15 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
     // Submit selection signal to API and record locally for all explicit picks.
     DebugUtils.logLazy(() => '_onLocationSelected: recording "$apiLocation"');
-    _recordLocationSelection(apiLocation);
+    _recordLocationSelection(
+      apiLocation,
+      latitude: selectionMethod == SelectionMethod.ownLocation
+          ? _lastPosition?.latitude
+          : null,
+      longitude: selectionMethod == SelectionMethod.ownLocation
+          ? _lastPosition?.longitude
+          : null,
+    );
 
     final currentPage = _pageIndexNotifier.value;
     final currentPeriod = _periodKeys[currentPage];
