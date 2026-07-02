@@ -85,7 +85,6 @@ class PeriodPageState extends State<PeriodPage>
   static const int _generatingPhaseEndSeconds = 45;
   static const int _longWaitPhaseEndSeconds = 60;
   static const int _veryLongWaitPhaseEndSeconds = 90;
-  static const Duration _fallbackMessageMinDuration = Duration(seconds: 2);
 
   PeriodTemperatureData? _data;
   CacheState _cacheState = CacheState.none;
@@ -94,8 +93,6 @@ class PeriodPageState extends State<PeriodPage>
   String _loadingMessage = '';
   Timer? _loadingMessageTimer;
   DateTime? _loadingStartTime;
-  DateTime? _fallbackMessageShownAt;
-  bool _isShowingFallbackMessage = false;
   int _minLoadingPhaseFromProgress = 0;
 
   // Cache key to avoid re-fetching when swiping back
@@ -433,11 +430,9 @@ class PeriodPageState extends State<PeriodPage>
                 if (!mounted || _fetchGeneration != generation || !_isLoading) {
                   return;
                 }
-                _fallbackMessageShownAt = DateTime.now();
-                _isShowingFallbackMessage = true;
-                setState(() {
-                  _loadingMessage = 'Trying a different way to fetch the data...';
-                });
+                DebugUtils.logLazy(
+                  () => 'PeriodPage(${widget.periodKey}): falling back to sync fetch for ${widget.location}',
+                );
               }
             : null,
         onProgress: isForeground
@@ -480,8 +475,6 @@ class PeriodPageState extends State<PeriodPage>
 
       if (mounted && _fetchGeneration == generation) {
         if (isForeground) {
-          await _ensureFallbackMessageVisibility(generation);
-          if (!mounted || _fetchGeneration != generation) return;
           _stopLoadingMessageCycle();
         }
         setState(() {
@@ -499,8 +492,6 @@ class PeriodPageState extends State<PeriodPage>
     } on RateLimitException {
       if (mounted && _fetchGeneration == generation) {
         if (isForeground) {
-          await _ensureFallbackMessageVisibility(generation);
-          if (!mounted || _fetchGeneration != generation) return;
           _stopLoadingMessageCycle();
         }
         setState(() {
@@ -521,8 +512,6 @@ class PeriodPageState extends State<PeriodPage>
       );
       if (mounted && _fetchGeneration == generation) {
         if (isForeground) {
-          await _ensureFallbackMessageVisibility(generation);
-          if (!mounted || _fetchGeneration != generation) return;
           _stopLoadingMessageCycle();
         }
         setState(() {
@@ -547,16 +536,11 @@ class PeriodPageState extends State<PeriodPage>
     _loadingMessageTimer?.cancel();
     _loadingMessageTimer = null;
     _loadingStartTime = null;
-    _fallbackMessageShownAt = null;
-    _isShowingFallbackMessage = false;
     _minLoadingPhaseFromProgress = 0;
   }
 
   void _updateLoadingMessage(int generation) {
-    if (!mounted ||
-        !_isLoading ||
-        _fetchGeneration != generation ||
-        _isShowingFallbackMessage) {
+    if (!mounted || !_isLoading || _fetchGeneration != generation) {
       return;
     }
     final start = _loadingStartTime;
@@ -644,20 +628,6 @@ class PeriodPageState extends State<PeriodPage>
     final parts = raw.split(',');
     if (parts.isEmpty) return raw;
     return parts.first.trim().isEmpty ? raw : parts.first.trim();
-  }
-
-  Future<void> _ensureFallbackMessageVisibility(int generation) async {
-    if (!_isShowingFallbackMessage) return;
-    final shownAt = _fallbackMessageShownAt;
-    if (shownAt == null) return;
-    final elapsed = DateTime.now().difference(shownAt);
-    final remaining = _fallbackMessageMinDuration - elapsed;
-    if (remaining > Duration.zero) {
-      await Future.delayed(remaining);
-    }
-    if (mounted && _fetchGeneration == generation) {
-      _isShowingFallbackMessage = false;
-    }
   }
 
   String _buildErrorMessage(Object error) {
