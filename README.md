@@ -56,6 +56,12 @@ The actual config files are gitignored.
 flutter run
 ```
 
+To run with a specific API, such as the local one, use:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://localhost:8000
+```
+
 ## Debug Logging
 
 Use `DebugUtils` for logging — calls are no-ops in release builds:
