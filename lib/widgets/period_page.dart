@@ -11,6 +11,7 @@ import '../services/temperature_service.dart';
 import '../services/period_cache_service.dart';
 import '../utils/date_utils.dart';
 import '../utils/debug_utils.dart';
+import '../utils/remote_logger.dart';
 import '../utils/temperature_utils.dart';
 import 'completeness_section.dart';
 import 'gradient_spinner.dart';
@@ -499,7 +500,7 @@ class PeriodPageState extends State<PeriodPage>
           _error = 'Rate limit exceeded. Please wait a moment and try again.';
         });
       }
-    } catch (e) {
+    } catch (e, st) {
       if (e is CancelledOperationException) {
         // Expected: location changed or widget disposed while fetching.
         DebugUtils.logLazy(
@@ -509,6 +510,12 @@ class PeriodPageState extends State<PeriodPage>
       }
       DebugUtils.logLazy(
         () => 'PeriodPage(${widget.periodKey}): fetch error [${e.runtimeType}]: $e',
+      );
+      RemoteLogger.logApiError(
+        period: widget.periodKey,
+        location: widget.location,
+        exception: e,
+        stackTrace: st,
       );
       if (mounted && _fetchGeneration == generation) {
         if (isForeground) {

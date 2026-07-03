@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/period_temperature_data.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../utils/debug_utils.dart';
+import '../utils/remote_logger.dart';
 import '../constants/app_constants.dart';
 import '../models/app_exceptions.dart';
 import 'auth_service.dart';
@@ -719,7 +720,7 @@ class TemperatureService {
       _writeCache(cacheKey, result.data);
       onFetchComplete?.call(stopwatch.elapsedMilliseconds, result.cacheHit);
       return result.data;
-    } catch (e) {
+    } catch (e, st) {
       // Propagate cancellation without falling back to sync
       if (e is CancelledOperationException) rethrow;
 
@@ -734,6 +735,12 @@ class TemperatureService {
         }
         onFallbackToSync?.call();
         DebugUtils.logLazy(() => 'Async job failed ($e), falling back to sync API...');
+        RemoteLogger.logAsyncFallback(
+          period: period,
+          location: location,
+          exception: e,
+          stackTrace: st,
+        );
         try {
           final (fallback, fallbackCacheHit) =
               await _fetchPeriodDataSync(period, location, identifier,
@@ -743,7 +750,13 @@ class TemperatureService {
           _writeCache(cacheKey, fallback);
           onFetchComplete?.call(stopwatch.elapsedMilliseconds, fallbackCacheHit);
           return fallback;
-        } catch (fallbackError) {
+        } catch (fallbackError, fallbackSt) {
+          RemoteLogger.logApiError(
+            period: period,
+            location: location,
+            exception: fallbackError,
+            stackTrace: fallbackSt,
+          );
           throw ApiException(0, '$period (async + sync fallback both failed)', fallbackError);
         }
       }
