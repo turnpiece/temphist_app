@@ -78,4 +78,43 @@ void main() {
       expect(service.determinedLocation, 'Belfast, United Kingdom');
     });
   });
+
+  group('LocationService — timezone persistence across cold starts', () {
+    test('setManualLocation records the given timezone', () async {
+      final service = LocationService();
+      await service.setManualLocation('London, United Kingdom',
+          timezone: 'Europe/London');
+      expect(service.determinedLocationTimezone, 'Europe/London');
+    });
+
+    test('setManualLocation with no timezone leaves it null', () async {
+      final service = LocationService();
+      await service.setManualLocation('London, United Kingdom');
+      expect(service.determinedLocationTimezone, isNull);
+    });
+
+    test('reset clears determinedLocationTimezone', () async {
+      final service = LocationService();
+      await service.setManualLocation('London, United Kingdom',
+          timezone: 'Europe/London');
+      service.reset();
+      expect(service.determinedLocationTimezone, isNull);
+    });
+
+    test(
+        'a fresh LocationService instance restores the persisted timezone '
+        'from a manual selection made in a previous session', () async {
+      final first = LocationService();
+      await first.setManualLocation('London, United Kingdom',
+          timezone: 'Europe/London');
+
+      // Simulate a cold restart: a brand-new instance reads the same
+      // SharedPreferences-backed cache the first instance wrote to.
+      final second = LocationService();
+      await second.determineLocation();
+
+      expect(second.determinedLocation, 'London, United Kingdom');
+      expect(second.determinedLocationTimezone, 'Europe/London');
+    });
+  });
 }
