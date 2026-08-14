@@ -50,6 +50,14 @@ class LocationService extends ChangeNotifier {
   String get displayLocation => _displayLocation;
   String _displayLocation = '';
 
+  /// IANA timezone identifier for [determinedLocation], restored from
+  /// persisted storage on cold start (e.g. a city picked from Popular/Search
+  /// in a previous session). Null when unknown — callers should not assume
+  /// this is populated for GPS-resolved locations, which are never persisted
+  /// with a timezone.
+  String? get determinedLocationTimezone => _determinedLocationTimezone;
+  String? _determinedLocationTimezone;
+
   /// Whether a valid location has been determined at least once.
   bool get isLocationDetermined => _isLocationDetermined;
   bool _isLocationDetermined = false;
@@ -181,6 +189,7 @@ class LocationService extends ChangeNotifier {
         DebugUtils.logLazy(() => 'Using cached location: ${cached['location']}');
         _determinedLocation = cached['location']!;
         _displayLocation = cached['displayLocation']!;
+        _determinedLocationTimezone = cached['timezone'];
         _isLocationDetermined = true;
         _locationDeterminedAt = DateTime.now();
         _notify();
@@ -230,7 +239,8 @@ class LocationService extends ChangeNotifier {
                 _isLocationDetermined = true;
                 _locationDeterminedAt = DateTime.now();
                 _notify();
-                await _cacheLocation(_determinedLocation, _displayLocation);
+                await _cacheLocation(
+                    _determinedLocation, _displayLocation, _determinedLocationTimezone);
                 return;
               }
 
@@ -277,6 +287,10 @@ class LocationService extends ChangeNotifier {
       );
 
       _determinedLocation = city;
+      // GPS-resolved cities have no known IANA timezone (reverse-geocoding
+      // returns no timezone data) — clear any stale value left over from a
+      // previously cached manual selection.
+      _determinedLocationTimezone = null;
       // Only record a GPS location when the device actually resolved one.
       // If permission was denied or GPS failed we use the default fallback but
       // must not pretend it is a real device location — that would cause the
@@ -309,7 +323,7 @@ class LocationService extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_kGpsLocationKey, city);
       }
-      await _cacheLocation(city, _displayLocation);
+      await _cacheLocation(city, _displayLocation, _determinedLocationTimezone);
       await _persistLastUsedLocation(city);
     } catch (e) {
       DebugUtils.logLazy(() => 'LocationService.determineLocation failed: $e');
@@ -434,22 +448,30 @@ class LocationService extends ChangeNotifier {
     _determinedLocation = '';
     _gpsLocation = '';
     _displayLocation = '';
+    _determinedLocationTimezone = null;
     _locationDeterminedAt = null;
     _notify();
   }
 
   /// Override the current location with a manually chosen value.
   ///
+  /// [timezone] is the location's IANA timezone identifier, when known (e.g.
+  /// from [TemperatureService.timezoneFor]) — it is persisted alongside the
+  /// location so date-cutoff calculations still use the correct local time
+  /// after a cold restart, before the location selector has been reopened
+  /// this session.
+  ///
   /// Caches the selection with the standard 30-min TTL so it survives a
   /// foreground/background cycle. Does NOT add to GPS location history.
-  Future<void> setManualLocation(String apiLocation) async {
+  Future<void> setManualLocation(String apiLocation, {String? timezone}) async {
     _determinedLocation = apiLocation;
     _displayLocation = _extractDisplayLocation(apiLocation);
+    _determinedLocationTimezone = timezone;
     _isLocationDetermined = true;
     _locationDeterminedAt = DateTime.now();
     _locationPermissionDenied = false;
     _notify();
-    await _cacheLocation(apiLocation, _displayLocation);
+    await _cacheLocation(apiLocation, _displayLocation, timezone);
     await _persistLastUsedLocation(apiLocation);
   }
 
@@ -508,12 +530,14 @@ class LocationService extends ChangeNotifier {
   // SharedPreferences cache
   // ---------------------------------------------------------------------------
 
-  Future<void> _cacheLocation(String location, String displayLoc) async {
+  Future<void> _cacheLocation(
+      String location, String displayLoc, String? timezone) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final data = {
         'location': location,
         'displayLocation': displayLoc,
+        if (timezone != null) 'timezone': timezone,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
       await prefs.setString('cachedLocation', jsonEncode(data));
@@ -546,6 +570,7 @@ class LocationService extends ChangeNotifier {
       return {
         'location': data['location'] as String,
         'displayLocation': data['displayLocation'] as String,
+        if (data['timezone'] is String) 'timezone': data['timezone'] as String,
       };
     } catch (e) {
       DebugUtils.logLazy(() => '❌ Failed to load cached location: $e');

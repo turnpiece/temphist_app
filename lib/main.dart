@@ -704,6 +704,16 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
   Future<void> _determineLocation() async {
     await _locationService.determineLocation();
+    // Restore a persisted timezone (e.g. a Popular/Search selection from a
+    // previous session) into TemperatureService's in-memory cache so the
+    // "use yesterday" cutoff uses the location's local time immediately,
+    // rather than falling back to the device clock until the location
+    // selector is reopened this session.
+    final restoredTimezone = _locationService.determinedLocationTimezone;
+    if (restoredTimezone != null && _locationService.determinedLocation.isNotEmpty) {
+      TemperatureService.restoreLocationTimezone(
+          _locationService.determinedLocation, restoredTimezone);
+    }
     // Record GPS auto-detect to API and local history when the device resolved
     // a real position.
     if (_locationService.locationSource == LocationSource.gps &&
@@ -945,7 +955,10 @@ class TemperatureScreenState extends State<TemperatureScreen>
     _prefetchGeneration++;
     _pendingSelectionMethod = selectionMethod;
 
-    await _locationService.setManualLocation(apiLocation);
+    await _locationService.setManualLocation(
+      apiLocation,
+      timezone: TemperatureService.timezoneFor(apiLocation),
+    );
 
     // PeriodPage widgets detect the location prop change via didUpdateWidget
     // and re-fetch automatically.  Pre-warm caches for other periods.

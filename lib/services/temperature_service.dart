@@ -435,6 +435,22 @@ class TemperatureService {
       ..addAll(entries);
   }
 
+  /// Restores a previously known IANA timezone for [location] into the
+  /// in-memory cache without waiting for [fetchPopularLocations] or
+  /// [searchLocations] to run this session.
+  ///
+  /// [_locationTimezoneCache] only lives for the app process — on a cold
+  /// start with a location restored from persisted storage (e.g. a city
+  /// picked from Popular/Search in a previous session), [timezoneFor] would
+  /// otherwise return null until the user reopens the location selector,
+  /// causing date cutoff calculations to silently fall back to the device
+  /// clock instead of the selected city's local time. Callers should invoke
+  /// this as soon as a persisted location + timezone pair is restored.
+  static void restoreLocationTimezone(String location, String? timezone) {
+    if (location.isEmpty || timezone == null || timezone.isEmpty) return;
+    _locationTimezoneCache.putIfAbsent(location, () => timezone);
+  }
+
   /// Returns the ISO 3166-1 alpha-2 country code for [location], or null if
   /// unknown.
   ///
