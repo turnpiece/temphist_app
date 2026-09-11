@@ -138,6 +138,10 @@ flutter_launcher_icons:
   image_path: "assets/icon/app_icon.png"
   remove_alpha_ios: true
   min_sdk_android: 21 # android min sdk min:16, default 21
+  # Adaptive icon (Android 8+): also used by the Android 12+ system splash screen,
+  # which otherwise draws the legacy square icon inside a white circle.
+  adaptive_icon_background: "#242456"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
   web:
     generate: true
     image_path: "assets/icon/app_icon.png"
