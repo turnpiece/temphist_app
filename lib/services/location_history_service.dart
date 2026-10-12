@@ -54,7 +54,7 @@ class LocationHistoryService {
   static Future<List<LocationVisit>> getAll() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return _decode(prefs.getString(_kHistoryKey));
+      return await _decode(prefs.getString(_kHistoryKey));
     } catch (e) {
       DebugUtils.logLazy(() => 'LocationHistoryService.getAll failed: $e');
       return [];
