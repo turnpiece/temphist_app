@@ -73,7 +73,8 @@ DebugUtils.logLazy(() => 'message');
 ## Scripts
 
 ```bash
-./scripts/create_release.sh patch    # Bump version, tag, and push (see Releasing below)
+./scripts/create_release.sh bump patch   # Bump the version on a branch (see Releasing below)
+./scripts/create_release.sh tag          # Tag the merged release on main (see Releasing below)
 ./scripts/simulator_screenshots.sh   # Set simulator status bar to clean screenshot state
 ./scripts/record_preview.sh          # Record an App Store–ready App Preview from the Simulator
 ./scripts/regenerate_certificates.sh # Nuke and regenerate iOS certificates via fastlane match
@@ -81,28 +82,36 @@ DebugUtils.logLazy(() => 'message');
 
 ## Releasing
 
-### 1. Merge to main
+A release is two steps, so the version bump can go through a pull request.
+
+### 1. Bump the version on a branch
 
 ```bash
-git checkout main
-git merge develop
-git push origin main
+git switch -c release/1.4.0
+./scripts/create_release.sh bump patch    # 1.0.0 → 1.0.1
+./scripts/create_release.sh bump minor    # 1.0.0 → 1.1.0
+./scripts/create_release.sh bump major    # 1.0.0 → 2.0.0
+./scripts/create_release.sh bump custom 1.2.3
 ```
 
-### 2. Create a release
+`bump` refuses to run on `main` or with uncommitted changes. It runs the tests and analyzer, sets the new version and a timestamp build number in `pubspec.yaml`, and commits. It does not push or tag.
+
+### 2. Merge to main
+
+Push the branch, open a pull request into `main` and merge it.
+
+### 3. Tag the release
 
 ```bash
-./scripts/create_release.sh patch    # 1.0.0 → 1.0.1
-./scripts/create_release.sh minor    # 1.0.0 → 1.1.0
-./scripts/create_release.sh major    # 1.0.0 → 2.0.0
-./scripts/create_release.sh custom 1.2.3
+git switch main && git pull
+./scripts/create_release.sh tag
 ```
 
-The script bumps the version in `pubspec.yaml`, increments the build number, creates a git tag, and pushes.
+`tag` must run on `main`, in sync with `origin/main`. It reads the version from `pubspec.yaml`, asks for confirmation, then creates an annotated `v<version>` tag on the merged commit and pushes the tag. It refuses if the tag already exists, and warns if `develop` has commits that are not on `main`.
 
-### 3. iOS TestFlight
+### 4. iOS TestFlight
 
-Push to `main` triggers the GitHub Actions workflow (`.github/workflows/ios.yml`), which builds and uploads to TestFlight via Fastlane.
+Every push to `main` (including merging a pull request) triggers the GitHub Actions workflow (`.github/workflows/ios.yml`), which builds and uploads to TestFlight via Fastlane. Fastlane sets the iOS build number from a UTC timestamp at build time. The tag does not trigger the workflow.
 
 ### Version numbering
 
