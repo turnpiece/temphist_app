@@ -36,9 +36,12 @@ class DataAttribution extends StatelessWidget {
           padding: EdgeInsets.symmetric(vertical: 8),
           child: Text(
             kOpenMeteoCreditText,
+            // The stats rows are RichText, which ignores the system text scale,
+            // so match that to keep the two the same size on screen.
+            textScaler: TextScaler.noScaling,
             style: TextStyle(
               color: kGreyLabelColour,
-              fontSize: kFontSizeBody - 3,
+              fontSize: kStatsFontSize,
               height: 1.4,
               decoration: TextDecoration.underline,
               decorationColor: kGreyLabelColour,
