@@ -1143,7 +1143,12 @@ class PeriodPageState extends State<PeriodPage>
   }
 
   Widget _buildStatRow(String label, String value, Color colour) {
+    // RichText ignores the system text size unless given the scaler, so pass
+    // it to make the stats follow Dynamic Type like the rest of the page.
+    // (Text.rich would also inherit the theme's body style, making the rows
+    // taller.)
     return RichText(
+      textScaler: MediaQuery.textScalerOf(context),
       text: TextSpan(
         style: TextStyle(fontSize: kStatsFontSize, color: colour),
         children: [
