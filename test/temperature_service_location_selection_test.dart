@@ -146,4 +146,49 @@ void main() {
           equals('tokyo'));
     });
   });
+
+  group('restoreLocationTimezone', () {
+    setUp(() {
+      // Each test gets a clean timezone cache.
+      TemperatureService.seedLocationTimezoneCacheForTesting({});
+    });
+
+    test('populates timezoneFor() for a location with an unknown timezone', () {
+      expect(TemperatureService.timezoneFor('London, United Kingdom'), isNull);
+
+      TemperatureService.restoreLocationTimezone(
+          'London, United Kingdom', 'Europe/London');
+
+      expect(TemperatureService.timezoneFor('London, United Kingdom'),
+          equals('Europe/London'));
+    });
+
+    test('does not overwrite a timezone already fetched this session', () {
+      // Simulates fetchPopularLocations()/searchLocations() already having
+      // populated the cache with the authoritative value this session —
+      // a stale restore from persisted storage must not clobber it.
+      TemperatureService.seedLocationTimezoneCacheForTesting({
+        'London, United Kingdom': 'Europe/London',
+      });
+
+      TemperatureService.restoreLocationTimezone(
+          'London, United Kingdom', 'Etc/UTC');
+
+      expect(TemperatureService.timezoneFor('London, United Kingdom'),
+          equals('Europe/London'));
+    });
+
+    test('is a no-op for a null or empty timezone', () {
+      TemperatureService.restoreLocationTimezone('London, United Kingdom', null);
+      TemperatureService.restoreLocationTimezone('London, United Kingdom', '');
+
+      expect(TemperatureService.timezoneFor('London, United Kingdom'), isNull);
+    });
+
+    test('is a no-op for an empty location', () {
+      TemperatureService.restoreLocationTimezone('', 'Europe/London');
+
+      expect(TemperatureService.timezoneFor(''), isNull);
+    });
+  });
 }
