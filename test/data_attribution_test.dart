@@ -27,7 +27,29 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('wraps rather than overflows at large text on a narrow screen',
+    testWidgets('ignores the system text size so it never outgrows the stats',
+        (tester) async {
+      Future<Size> creditSizeAt(double scale) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            ),
+            home: const Scaffold(body: DataAttribution()),
+          ),
+        );
+        return tester.getSize(find.text('Weather data by Open-Meteo.com'));
+      }
+
+      final normal = await creditSizeAt(1.0);
+      final large = await creditSizeAt(2.5);
+
+      expect(large, normal);
+    });
+
+    testWidgets('does not overflow on a narrow screen at large text',
         (tester) async {
       tester.view.physicalSize = const Size(200 * 2, 400 * 2);
       tester.view.devicePixelRatio = 2.0;

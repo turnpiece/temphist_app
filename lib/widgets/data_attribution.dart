@@ -34,8 +34,11 @@ class DataAttribution extends StatelessWidget {
           // Vertical padding gives a comfortable tap target without changing
           // how the small credit text looks.
           padding: EdgeInsets.symmetric(vertical: 8),
+          // Deliberately ignores the system text size: the credit is
+          // secondary, and scaling it would let it outgrow the stats above it.
           child: Text(
             kOpenMeteoCreditText,
+            textScaler: TextScaler.noScaling,
             style: TextStyle(
               color: kGreyLabelColour,
               fontSize: kFontSizeBody - 3,
