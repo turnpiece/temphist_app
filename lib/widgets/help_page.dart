@@ -175,7 +175,7 @@ class _Body extends StatelessWidget {
           ],
           richFooter: [
             _TextPart('Weather data by '),
-            _TextPart('Open-Meteo.com', url: 'https://open-meteo.com'),
+            _TextPart('Open-Meteo.com', url: kOpenMeteoUrl),
             _TextPart(', licensed under '),
             _TextPart('CC BY 4.0',
                 url: 'https://creativecommons.org/licenses/by/4.0/'),

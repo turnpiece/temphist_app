@@ -186,3 +186,8 @@ const String kDefaultLocation = 'London, UK';
 
 /// Privacy policy URL
 const String kPrivacyPolicyUrl = 'https://temphist.com/privacy/app';
+
+/// Open-Meteo credit. Its licence asks for this link next to the data it
+/// provides (see `DataAttribution`).
+const String kOpenMeteoUrl = 'https://open-meteo.com/';
+const String kOpenMeteoCreditText = 'Weather data by Open-Meteo.com';
