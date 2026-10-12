@@ -217,7 +217,6 @@ void _setSystemUIOverlayStyle() {
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarBrightness: Brightness.dark, // Light text on dark background
-        systemNavigationBarColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
@@ -227,7 +226,6 @@ void _setSystemUIOverlayStyle() {
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light, // Light icons/text
-        systemNavigationBarColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
@@ -236,7 +234,6 @@ void _setSystemUIOverlayStyle() {
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        systemNavigationBarColor: Colors.transparent,
       ),
     );
   }
@@ -1669,7 +1666,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        systemNavigationBarColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
         // iOS uses statusBarBrightness, Android uses statusBarIconBrightness
         statusBarBrightness: io.Platform.isIOS ? Brightness.dark : null,
