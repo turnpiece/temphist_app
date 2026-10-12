@@ -19,6 +19,11 @@ Widget _scaled(double scale, Widget child) => MaterialApp(
       home: Scaffold(body: SingleChildScrollView(child: child)),
     );
 
+/// The stats row whose text starts with [label] (they are RichText widgets).
+Finder _statRow(String label) => find.byWidgetPredicate(
+      (w) => w is RichText && w.text.toPlainText().startsWith(label),
+    );
+
 void main() {
   group('CompletenessSection text scaling', () {
     Future<double> noteHeightAt(WidgetTester tester, double scale) async {
@@ -147,7 +152,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
         return {
           for (final label in ['Average', 'Standard deviation', 'Trend'])
-            label: tester.getSize(find.textContaining(label).first).height,
+            label: tester.getSize(_statRow(label).first).height,
         };
       }
 
@@ -158,6 +163,62 @@ void main() {
         expect(large[label], greaterThan(normal[label]! * 1.2),
             reason: '$label row did not grow with the system text size');
       }
+    });
+
+    testWidgets('rows are the same size as a plain RichText at the default '
+        'text size (no theme line height or letter spacing leaks in)',
+        (tester) async {
+      tester.view.physicalSize = const Size(390 * 3, 2400 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(page(1.0));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      const label = 'Standard deviation  ';
+      final rowFinder = _statRow('Standard deviation').first;
+      final rowSize = tester.getSize(rowFinder);
+      final value = tester
+          .widget<RichText>(rowFinder)
+          .text
+          .toPlainText()
+          .substring(label.length);
+
+      // Built only from constants (not from the widget under test, whose
+      // style tree would carry any inherited theme style with it): a plain,
+      // unscaled RichText at the same width.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: rowSize.width,
+                child: RichText(
+                  key: const Key('reference'),
+                  text: TextSpan(
+                    style: const TextStyle(fontSize: kStatsFontSize),
+                    children: [
+                      const TextSpan(
+                        text: label,
+                        style: TextStyle(fontWeight: FontWeight.w400),
+                      ),
+                      TextSpan(
+                        text: value,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final referenceSize = tester.getSize(find.byKey(const Key('reference')));
+
+      expect(rowSize.height, closeTo(referenceSize.height, 0.5));
+      expect(rowSize.width, closeTo(referenceSize.width, 0.5));
     });
   });
 }
