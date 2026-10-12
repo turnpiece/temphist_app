@@ -158,9 +158,9 @@ const double kTabletBreakpointWidth = 700.0;
 const double kTabletMaxContentWidth = 600.0;
 const double kChartHeight = 800.0;
 const int kChartStartYear = 1975;
-// Visual Crossing currently limits historical API coverage to a 50-year window.
-// Keep this as a single source of truth so expanding coverage (e.g. 100 years)
-// only requires updating one constant.
+// The TempHist API serves a 50-year window of ERA5 reanalysis data (via
+// Open-Meteo), plus the current year. Keep this as a single source of truth so
+// expanding coverage (e.g. 100 years) only requires updating one constant.
 const int kHistoricalDataWindowYears = 50;
 
 /// Location constants
