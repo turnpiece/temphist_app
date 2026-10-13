@@ -41,7 +41,7 @@ class DataAttribution extends StatelessWidget {
             textScaler: TextScaler.noScaling,
             style: TextStyle(
               color: kGreyLabelColour,
-              fontSize: kFontSizeBody - 3,
+              fontSize: kStatsFontSize,
               height: 1.4,
               decoration: TextDecoration.underline,
               decorationColor: kGreyLabelColour,
