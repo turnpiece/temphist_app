@@ -356,6 +356,8 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
   static const List<String> _periodKeys = ['daily', 'week', 'month', 'year'];
   bool _isSharing = false;
+  // Anchors the iPad share popover to the share button.
+  final GlobalKey _shareButtonKey = GlobalKey();
   late final ScrollController _dailyScrollController;
   late final ScrollController _weekScrollController;
   late final ScrollController _monthScrollController;
@@ -1226,6 +1228,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
                     button: true,
                     enabled: !_isSharing,
                     child: GestureDetector(
+                      key: _shareButtonKey,
                       onTap: _isSharing
                           ? null
                           : () => _shareCurrentPeriod(pageIndex),
@@ -1315,7 +1318,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
       await shareService.share(
         shareUrl: shareUrl,
-        shareButtonKey: null,
+        shareButtonKey: _shareButtonKey,
       );
     } catch (e) {
       DebugUtils.logLazy(() => 'Share failed: $e');
