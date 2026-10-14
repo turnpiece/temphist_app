@@ -68,7 +68,7 @@ A network connection is required for the first load of each view, for location s
 
 ## Accessibility
 
-The location name, the period tabs and the settings button are labelled for VoiceOver, and most text follows the system text size setting.
+The location name, the period tabs, and the share and settings buttons are labelled for VoiceOver, and most text follows the system text size setting.
 
 ---
 
