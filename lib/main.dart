@@ -1221,28 +1221,33 @@ class TemperatureScreenState extends State<TemperatureScreen>
                   ),
                   const SizedBox(width: 8),
                   // Share icon
-                  GestureDetector(
-                    onTap: _isSharing
-                        ? null
-                        : () => _shareCurrentPeriod(pageIndex),
-                    behavior: HitTestBehavior.opaque,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
-                      child: _isSharing
-                          ? SizedBox(
-                              width: kIconSize + 6,
-                              height: kIconSize + 6,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
+                  Semantics(
+                    label: 'Share',
+                    button: true,
+                    enabled: !_isSharing,
+                    child: GestureDetector(
+                      onTap: _isSharing
+                          ? null
+                          : () => _shareCurrentPeriod(pageIndex),
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        child: _isSharing
+                            ? SizedBox(
+                                width: kIconSize + 6,
+                                height: kIconSize + 6,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: kGreyLabelColour.withValues(alpha: 0.7),
+                                ),
+                              )
+                            : Icon(
+                                Icons.ios_share,
                                 color: kGreyLabelColour.withValues(alpha: 0.7),
+                                size: kIconSize + 6,
                               ),
-                            )
-                          : Icon(
-                              Icons.ios_share,
-                              color: kGreyLabelColour.withValues(alpha: 0.7),
-                              size: kIconSize + 6,
-                            ),
+                      ),
                     ),
                   ),
                   // Settings gear
