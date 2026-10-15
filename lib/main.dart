@@ -203,6 +203,7 @@ void main() async {
     providerAndroid: kDebugMode ? const AndroidDebugProvider() : const AndroidPlayIntegrityProvider(),
     providerApple: kDebugMode ? const AppleDebugProvider() : const AppleDeviceCheckProvider(),
   );
+  unawaited(_reportAppCheckTokenHealth());
   // Ensure user is signed in (anonymous)
   await _ensureSignedIn();
   await PeriodCacheService.init();
@@ -236,6 +237,42 @@ void _setSystemUIOverlayStyle() {
         statusBarColor: Colors.transparent,
       ),
     );
+  }
+}
+
+/// Diagnostic only: fetches an App Check token and, if that fails, records a
+/// non-fatal Crashlytics error tagged with platform/provider so invalid
+/// App Check requests can be attributed. Never throws or affects sign-in.
+Future<void> _reportAppCheckTokenHealth() async {
+  if (kDebugMode) return;
+  final platform = io.Platform.isAndroid ? 'android' : 'ios';
+  final provider = io.Platform.isAndroid ? 'play_integrity' : 'device_check';
+  Future<void> report(String code, String message) async {
+    final crashlytics = FirebaseCrashlytics.instance;
+    await crashlytics.setCustomKey('app_check_provider', provider);
+    await crashlytics.setCustomKey('platform', platform);
+    await crashlytics.setCustomKey('app_check_error', '$code: $message');
+    await crashlytics.recordError(
+      Exception('App Check token failure [$platform/$provider] $code: $message'),
+      StackTrace.current,
+      fatal: false,
+      reason: 'app_check_token_failure',
+    );
+  }
+
+  try {
+    final token = await FirebaseAppCheck.instance.getToken();
+    if (token == null || token.isEmpty) {
+      await report('empty_token', 'getToken returned null/empty');
+    }
+  } on FirebaseException catch (e) {
+    try {
+      await report(e.code, e.message ?? '');
+    } catch (_) {}
+  } catch (e) {
+    try {
+      await report('unknown', e.toString());
+    } catch (_) {}
   }
 }
 
