@@ -1,13 +1,80 @@
 name: iOS Build (Flutter)
 
+# Mirrors android.yml: every PR gets a build check (analyze, test, unsigned
+# build); only a push to main (or a manual run) goes on to sign and upload to
+# TestFlight. The check job uses no signing or App Store Connect secrets, so it
+# is safe to run on PRs. It does need GoogleService-Info.plist, which is
+# gitignored and decoded from a secret -- GitHub withholds secrets from fork
+# PRs, so there the build step is skipped and only analyze and test run.
+
 on:
+  pull_request:
   push:
     branches:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: ios-${{ github.ref }}
+  # Never cancel a TestFlight upload part-way when a newer push arrives.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v5
+
+      - name: 🔧 Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26'
+
+      - name: 🚀 Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.0"
+          channel: "stable"
+          cache: true
+
+      - name: 🔍 Check Flutter and Dart versions
+        run: |
+          flutter --version
+          dart --version
+
+      - name: 📦 Install dependencies
+        run: flutter pub get
+
+      - name: 🔎 Analyze
+        run: flutter analyze
+
+      - name: 🧪 Run tests
+        run: flutter test
+
+      - name: 🔐 Decode GoogleService-Info.plist
+        id: plist
+        env:
+          GOOGLE_SERVICE_INFO_PLIST_B64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_B64 }}
+        run: |
+          if [ -z "$GOOGLE_SERVICE_INFO_PLIST_B64" ]; then
+            echo "::warning::GOOGLE_SERVICE_INFO_PLIST_B64 is unavailable (fork PR?); skipping the iOS build."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$GOOGLE_SERVICE_INFO_PLIST_B64" | base64 --decode > ios/Runner/GoogleService-Info.plist
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 🏗️ Build iOS app (no code signing)
+        if: steps.plist.outputs.available == 'true'
+        run: flutter build ios --release --no-codesign
+
+  testflight:
+    # Deploy only from main (or a manual run), and only once the check passes.
+    if: github.event_name != 'pull_request'
+    needs: build-ios
     runs-on: macos-latest
 
     steps:
@@ -23,13 +90,13 @@ jobs:
             RELEASE_DATE=$(date +'%Y-%m-%d')
             echo "Tag detected: $VERSION"
             echo "Setting release date to: $RELEASE_DATE"
-            
+
             # Update version in all config files
             sed -i '' "s/appVersion = '.*'/appVersion = '${VERSION#v}'/" lib/config/*.dart
-            
-            # Update release date in all config files  
+
+            # Update release date in all config files
             sed -i '' "s/releaseDate = '.*'/releaseDate = '$RELEASE_DATE'/" lib/config/*.dart
-            
+
             echo "Version and release date update complete"
           else
             # This is a branch push - just log and continue
@@ -56,9 +123,6 @@ jobs:
 
       - name: 📦 Install dependencies
         run: flutter pub get
-
-      - name: 🧪 Run tests
-        run: flutter test
 
       - name: 🔐 Decode GoogleService-Info.plist
         run: |

@@ -8,15 +8,9 @@ name: Android Build (Flutter)
 # stay manual.
 
 on:
+  # No `paths:` filter: this is a required status check on main, and a filtered
+  # workflow never reports on a docs-only PR, which would block the merge.
   pull_request:
-    paths:
-      - "android/**"
-      - "lib/**"
-      - "test/**"
-      - "assets/**"
-      - "pubspec.yaml"
-      - "pubspec.lock"
-      - ".github/workflows/android.yml"
   push:
     branches:
       - main
