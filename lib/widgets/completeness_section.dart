@@ -94,7 +94,6 @@ class CompletenessSection extends StatelessWidget {
               Expanded(
                 child: Text(
                   isRetrying ? 'Retrying…' : 'Failed to load some chart data.',
-                  textScaler: TextScaler.noScaling,
                   style: TextStyle(
                     color: isRetrying ? kGreyLabelColour : kErrorColour,
                     fontSize: kStatsFontSize,
@@ -120,7 +119,6 @@ class CompletenessSection extends StatelessWidget {
                       ),
                       child: Text(
                         'Retry',
-                        textScaler: TextScaler.noScaling,
                         style: const TextStyle(
                           color: kErrorColour,
                           fontSize: kStatsFontSize,
@@ -137,7 +135,6 @@ class CompletenessSection extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             note,
-            textScaler: TextScaler.noScaling,
             style: const TextStyle(
               color: kGreyLabelColour,
               fontSize: kStatsFontSize,
@@ -149,7 +146,6 @@ class CompletenessSection extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             'Data completeness: ${completeness.toStringAsFixed(0)}%',
-            textScaler: TextScaler.noScaling,
             style: const TextStyle(
               color: kGreyLabelColour,
               fontSize: kStatsFontSize,

@@ -63,120 +63,146 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
+  void _previous() {
+    if (_currentPage > 0) {
+      _controller.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [kBackgroundColour, kBackgroundColourDark],
+    // Onboarding is the root route, so an Android back gesture or button would
+    // otherwise leave the app. Step back through the pages instead.
+    return PopScope(
+      canPop: _currentPage == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _previous();
+      },
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [kBackgroundColour, kBackgroundColourDark],
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: LayoutBuilder(builder: (context, constraints) {
-            final screenWidth = MediaQuery.of(context).size.width;
-            final isTablet = screenWidth >= kTabletBreakpointWidth;
-            final contentWidth = isTablet
-                ? kTabletMaxContentWidth.clamp(0.0, constraints.maxWidth)
-                : constraints.maxWidth;
-            final isLandscape =
-                MediaQuery.of(context).orientation == Orientation.landscape;
+          child: SafeArea(
+            child: LayoutBuilder(builder: (context, constraints) {
+              final screenWidth = MediaQuery.of(context).size.width;
+              final isTablet = screenWidth >= kTabletBreakpointWidth;
+              final contentWidth = isTablet
+                  ? kTabletMaxContentWidth.clamp(0.0, constraints.maxWidth)
+                  : constraints.maxWidth;
+              final isLandscape =
+                  MediaQuery.of(context).orientation == Orientation.landscape;
 
-            // On tablets the PageView is given a fixed height that fills most
-            // of the screen.  Content starts just below the skip button; the
-            // dots + next-button group is pinned to the bottom of the remaining
-            // space via an Expanded + Align(bottomCenter).
-            //
-            // Using 72 % of available height in landscape and 70 % in portrait
-            // ensures even the tallest page (Average & Trend, ~440 px) fits
-            // without scrolling on all current iPad sizes.
-            final double tabletPageViewHeight = isLandscape
-                ? ((constraints.maxHeight - 48) * 0.72).clamp(200.0, 560.0)
-                : ((constraints.maxHeight - 48) * 0.7).clamp(300.0, 660.0);
+              // On tablets the PageView is given a fixed height that fills most
+              // of the screen.  Content starts just below the skip button; the
+              // dots + next-button group is pinned to the bottom of the remaining
+              // space via an Expanded + Align(bottomCenter).
+              //
+              // Using 72 % of available height in landscape and 70 % in portrait
+              // ensures even the tallest page (Average & Trend, ~440 px) fits
+              // without scrolling on all current iPad sizes.
+              final double tabletPageViewHeight = isLandscape
+                  ? ((constraints.maxHeight - 48) * 0.72).clamp(200.0, 560.0)
+                  : ((constraints.maxHeight - 48) * 0.7).clamp(300.0, 660.0);
 
-            final skipButton = Align(
-              alignment: Alignment.centerRight,
-              child: Opacity(
-                opacity: _currentPage < _pages.length - 1 ? 1.0 : 0.0,
-                child: TextButton(
-                  onPressed: _currentPage < _pages.length - 1
-                      ? widget.onComplete
-                      : null,
-                  child: const Text(
-                    'Skip',
-                    style: TextStyle(
-                      color: kButtonColour,
-                      fontSize: kFontSizeBody,
+              // Back on the left, Skip on the right. Both keep their space when
+              // hidden so the pages below never shift.
+              const topButtonStyle = TextStyle(
+                color: kButtonColour,
+                fontSize: kFontSizeBody,
+              );
+              final showBack = _currentPage > 0;
+              final showSkip = _currentPage < _pages.length - 1;
+              final topButtons = Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Opacity(
+                    opacity: showBack ? 1.0 : 0.0,
+                    child: TextButton(
+                      onPressed: showBack ? _previous : null,
+                      child: const Text('Back', style: topButtonStyle),
                     ),
                   ),
-                ),
-              ),
-            );
+                  Opacity(
+                    opacity: showSkip ? 1.0 : 0.0,
+                    child: TextButton(
+                      onPressed: showSkip ? widget.onComplete : null,
+                      child: const Text('Skip', style: topButtonStyle),
+                    ),
+                  ),
+                ],
+              );
 
-            final pageView = PageView(
-              controller: _controller,
-              onPageChanged: (i) {
-                if (mounted) setState(() => _currentPage = i);
-              },
-              children: _pages,
-            );
+              final pageView = PageView(
+                controller: _controller,
+                onPageChanged: (i) {
+                  if (mounted) setState(() => _currentPage = i);
+                },
+                children: _pages,
+              );
 
-            return Center(
-              child: SizedBox(
-                width: contentWidth,
-                child: Column(
-                  children: [
-                    // Skip always at the top, within the constrained width.
-                    skipButton,
-                    if (isTablet) ...[
-                      // Tablet: large fixed-height PageView sits near the top;
-                      // dots + button are pinned to the bottom of the remaining
-                      // space so the button always appears low on the screen.
-                      SizedBox(height: tabletPageViewHeight, child: pageView),
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.bottomCenter,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildDots(isTablet: true),
-                              SizedBox(height: isLandscape ? 12 : 28),
-                              _buildNextButton(),
-                              SizedBox(height: isLandscape ? 32 : 48),
-                            ],
+              return Center(
+                child: SizedBox(
+                  width: contentWidth,
+                  child: Column(
+                    children: [
+                      // Back/Skip always at the top, within the constrained width.
+                      topButtons,
+                      if (isTablet) ...[
+                        // Tablet: large fixed-height PageView sits near the top;
+                        // dots + button are pinned to the bottom of the remaining
+                        // space so the button always appears low on the screen.
+                        SizedBox(height: tabletPageViewHeight, child: pageView),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildDots(isTablet: true),
+                                SizedBox(height: isLandscape ? 12 : 28),
+                                _buildNextButton(),
+                                SizedBox(height: isLandscape ? 32 : 48),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ] else ...[
-                      // Phone: PageView fills remaining space; dots and button
-                      // sit at the bottom.
-                      // On small screens (iPhone SE: ~647px available) the
-                      // bottom controls are tightened so the PageView gets
-                      // more room and content is less likely to be clipped.
-                      if (isLandscape) const SizedBox(height: 4),
-                      Expanded(child: pageView),
-                      SizedBox(
-                          height: isLandscape
-                              ? 16
-                              : (constraints.maxHeight < 700 ? 8 : 24)),
-                      _buildDots(),
-                      SizedBox(
-                          height: isLandscape
-                              ? 12
-                              : (constraints.maxHeight < 700 ? 8 : 16)),
-                      _buildNextButton(),
-                      SizedBox(
-                          height: isLandscape
-                              ? 6
-                              : (constraints.maxHeight < 700 ? 8 : 12)),
+                      ] else ...[
+                        // Phone: PageView fills remaining space; dots and button
+                        // sit at the bottom.
+                        // On small screens (iPhone SE: ~647px available) the
+                        // bottom controls are tightened so the PageView gets
+                        // more room and content is less likely to be clipped.
+                        if (isLandscape) const SizedBox(height: 4),
+                        Expanded(child: pageView),
+                        SizedBox(
+                            height: isLandscape
+                                ? 16
+                                : (constraints.maxHeight < 700 ? 8 : 24)),
+                        _buildDots(),
+                        SizedBox(
+                            height: isLandscape
+                                ? 12
+                                : (constraints.maxHeight < 700 ? 8 : 16)),
+                        _buildNextButton(),
+                        SizedBox(
+                            height: isLandscape
+                                ? 6
+                                : (constraints.maxHeight < 700 ? 8 : 12)),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            );
-          }),
+              );
+            }),
+          ),
         ),
       ),
     );

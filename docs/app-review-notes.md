@@ -1,105 +1,77 @@
 # TempHist — APP REVIEW NOTES
 
-These notes are intended to help reviewers understand how TempHist works and how to test its key features.
+TempHist answers one question: **how does the temperature today, this week, this month or this year compare with the same period in every year back to 1940?** It works for any location in the world, which you can search for by name.
+
+No account, login or test credentials are needed. The app signs in anonymously in the background and works immediately.
 
 ---
 
-## Overview
+## 60-second walkthrough
 
-TempHist shows historical temperature data for any location — today's high/low vs. the historical average, week-by-week trends, monthly patterns, and year-on-year comparisons. The app requires no account or login; it uses Firebase anonymous authentication automatically on first launch.
-
----
-
-## Test account / credentials
-
-No test account is needed. The app signs in anonymously via Firebase on launch and works immediately. Reviewers do not need to create an account or enter any credentials.
-
----
-
-## Onboarding
-
-On first launch, a 7-screen onboarding flow introduces the app's key concepts:
-
-1. **Welcome** — overview of the app
-2. **Day view** — how to read today's temperature vs. the historical average
-3. **Tap** — tapping a chart bar shows the exact values for that day/week/month
-4. **Average trend** — explains the trend line overlaid on charts
-5. **Swipe** — introduces horizontal swipe navigation between time periods
-6. **Location** — explains how location is detected and how to change it
-7. **Temperature unit** — °C / °F preference, which can be changed at any time
-
-The same information is available at any time via the Help page, accessible from the Settings panel (gear icon, top right).
+1. **Launch the app.** A short 7-screen introduction appears on first launch. Tap **Get Started** (or **Skip**).
+2. **Location permission.** iOS asks whether TempHist may use your location while the app is in use. Either answer works:
+   - **Allow While Using App** — the app detects the nearest city and opens on it.
+   - **Don't Allow** — the **Choose your location** selector opens straight away and cannot be dismissed, so the next step is to pick a city.
+3. **Pick or search for a city.** In the selector, type any city name in the search box (for example _Nairobi_, _Sydney_ or _Reykjavik_) and tap a result. Search covers locations worldwide, not a fixed list.
+4. **Read the chart.** Each bar is one year's temperature for the date shown, with the historical average and trend line overlaid. Tap any bar to see its exact value and how far it was above or below the average.
+5. **Switch time period.** Tap the **Today · Week · Month · Year** tabs at the top, or swipe left and right.
+6. **Change units.** Tap the **gear icon** (top right), then switch between **°C** and **°F**. The same menu has **Change location**, the **Help** page and the **Privacy policy**.
+7. **Share.** Tap the **share icon** (top right, next to the gear). The app creates a link to a web page showing the same chart and opens the iOS share sheet.
 
 ---
 
-## Navigation
+## What the app does
 
-The main screen has four time periods navigated by **horizontal swipe**:
+- **Four views of the same question.** Today, Week, Month and Year each compare the current period with the same period in each of the last 51 years (this year and the 50 before it).
+- **Worldwide location search.** Search any city by name. The selector also shows your current location, places you have visited, and popular cities, and remembers places you have chosen.
+- **Average and trend.** An average line and a trend line, with the rate of change per decade and an error margin, show whether a period is warming or cooling over time.
+- **°C / °F.** Switchable at any time and remembered.
+- **Sharing.** Each view can be shared as a link to a web page that renders the same chart, with a title and description shown in link previews.
+- **Help page.** Explains how to read the chart, how the numbers are calculated and where the data comes from.
 
-| Period | Description                                                                                                             |
-| ------ | ----------------------------------------------------------------------------------------------------------------------- |
-| Day    | Today's temperature compared with the same date across each of the past 50 years                                        |
-| Week   | The average temperature of the 7 days ending today compared with the same 7-day window in each of the past 50 years     |
-| Month  | The average temperature of the 30 days ending today compared with the same 30-day window in each of the past 50 years   |
-| Year   | The average temperature of the 365 days ending today compared with the same 365-day window in each of the past 50 years |
-
-The swipe gesture is demonstrated during onboarding. There are no visible tab buttons — swiping left/right is the primary navigation method.
-
----
-
-## Location
-
-Location works in two modes:
-
-**GPS (automatic)** — on first launch the app requests "Allow While Using App" location permission. If granted, it detects the nearest city automatically. If the permission is denied, the app falls back to a default location and prompts the user to set one manually.
-
-**Manual selection** — tapping the location name at the top of the screen opens the location selector. It shows:
-
-- Current location (if GPS permission is granted)
-- Visited locations (places the device's GPS has detected the user physically visiting)
-- A list of popular locations — the user's most-selected cities first, with pre-approved locations as a fallback
-
-Tapping the search bar opens a **Recent Selections** overlay showing up to 10 locations the user has explicitly chosen within the last 30 days, ordered by how often each was selected. Typing in the search bar replaces this overlay with live search results.
-
-The location indicator uses a colour coding system:
-
-- Green — the user's current GPS-detected location
-- Blue — a popular location selected from the app's pre-approved list
-- Red — a visited location (previously GPS-detected, but not the current position)
+| Period | What each year's bar is                          |
+| ------ | ------------------------------------------------ |
+| Today  | The mean temperature on that date                |
+| Week   | The mean of the 7 days ending on that date       |
+| Month  | The mean of the 31 days ending on that date      |
+| Year   | The mean of the 365 days ending on that date     |
 
 ---
 
-## Cache-first architecture
+## Data
 
-Temperature data is fetched from the API on the first view of each time period and cached to disk for up to 7 days. On subsequent visits within a session (or after reopening the app), data may load instantly from cache rather than the network — this is intentional behaviour, not a bug.
-
-Reviewers can force a fresh network fetch by pulling down to refresh on any period screen.
+Temperatures are the **ERA5 reanalysis** produced by ECMWF for the Copernicus Climate Change Service, delivered through [Open-Meteo](https://open-meteo.com) (CC BY 4.0). The record starts in 1940. The newest few days come from Open-Meteo's forecast model. Attribution appears on the data screens and in more detail on the Help page.
 
 ---
 
-## Sharing
+## Location and privacy
 
-The share button (top right on each period screen) does the following:
+- Location permission is **When In Use** only. The app does not use background location.
+- The detected city is sent to the TempHist API to fetch data and is saved on the device so the app opens at the most recent location.
+- The app works fully without location permission: the user simply chooses or searches for a city.
+- Firebase anonymous authentication and Crashlytics are used. There is no advertising and no tracking.
+- The privacy policy is at https://temphist.com/privacy/app and is linked in the app under Settings.
 
-1. Creates a share record on the TempHist API and returns a short URL
-2. Opens the iOS share sheet with that URL, allowing the user to share via Messages, Mail, or any other app
+---
 
-Sharing requires an active network connection. The URL resolves to a web page showing the same chart and includes Open Graph metadata so link previews in Messages, Mail, etc. render a title, description, and preview image.
+## Caching and refresh
+
+Fetched data is cached on the device for 24 hours, so a view can open instantly without a network request. This is intentional. Pull down on any period screen to force a fresh fetch.
+
+---
+
+## Network
+
+A network connection is required for the first load of each view, for location search and for creating share links. All requests use HTTPS. Cached data remains available offline.
 
 ---
 
 ## Accessibility
 
-The app relies on Flutter's built-in accessibility support, which provides VoiceOver compatibility and Dynamic Type scaling for standard UI elements. Dedicated accessibility enhancements — including explicit semantic labels for chart elements — are planned for a future release.
+The location name, the period tabs, and the share and settings buttons are labelled for VoiceOver, and most text follows the system text size setting.
 
 ---
 
-## Network requirements
+## Devices
 
-The app requires a network connection for:
-
-- Initial data load for each time period
-- Location search (fetching the pre-approved locations list)
-- Creating share records
-
-All requests use HTTPS. Cached data is served offline after the first successful load.
+TempHist runs on iPhone and iPad.

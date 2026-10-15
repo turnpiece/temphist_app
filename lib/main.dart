@@ -203,6 +203,7 @@ void main() async {
     providerAndroid: kDebugMode ? const AndroidDebugProvider() : const AndroidPlayIntegrityProvider(),
     providerApple: kDebugMode ? const AppleDebugProvider() : const AppleDeviceCheckProvider(),
   );
+  unawaited(_reportAppCheckTokenHealth());
   // Ensure user is signed in (anonymous)
   await _ensureSignedIn();
   await PeriodCacheService.init();
@@ -217,7 +218,6 @@ void _setSystemUIOverlayStyle() {
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarBrightness: Brightness.dark, // Light text on dark background
-        systemNavigationBarColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
@@ -227,7 +227,6 @@ void _setSystemUIOverlayStyle() {
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light, // Light icons/text
-        systemNavigationBarColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
@@ -236,9 +235,44 @@ void _setSystemUIOverlayStyle() {
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        systemNavigationBarColor: Colors.transparent,
       ),
     );
+  }
+}
+
+/// Diagnostic only: fetches an App Check token and, if that fails, records a
+/// non-fatal Crashlytics error tagged with platform/provider so invalid
+/// App Check requests can be attributed. Never throws or affects sign-in.
+Future<void> _reportAppCheckTokenHealth() async {
+  if (kDebugMode) return;
+  final platform = io.Platform.isAndroid ? 'android' : 'ios';
+  final provider = io.Platform.isAndroid ? 'play_integrity' : 'device_check';
+  Future<void> report(String code, String message) async {
+    final crashlytics = FirebaseCrashlytics.instance;
+    await crashlytics.setCustomKey('app_check_provider', provider);
+    await crashlytics.setCustomKey('platform', platform);
+    await crashlytics.setCustomKey('app_check_error', '$code: $message');
+    await crashlytics.recordError(
+      Exception('App Check token failure [$platform/$provider] $code: $message'),
+      StackTrace.current,
+      fatal: false,
+      reason: 'app_check_token_failure',
+    );
+  }
+
+  try {
+    final token = await FirebaseAppCheck.instance.getToken();
+    if (token == null || token.isEmpty) {
+      await report('empty_token', 'getToken returned null/empty');
+    }
+  } on FirebaseException catch (e) {
+    try {
+      await report(e.code, e.message ?? '');
+    } catch (_) {}
+  } catch (e) {
+    try {
+      await report('unknown', e.toString());
+    } catch (_) {}
   }
 }
 
@@ -359,6 +393,8 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
   static const List<String> _periodKeys = ['daily', 'week', 'month', 'year'];
   bool _isSharing = false;
+  // Anchors the iPad share popover to the share button.
+  final GlobalKey _shareButtonKey = GlobalKey();
   late final ScrollController _dailyScrollController;
   late final ScrollController _weekScrollController;
   late final ScrollController _monthScrollController;
@@ -1224,28 +1260,34 @@ class TemperatureScreenState extends State<TemperatureScreen>
                   ),
                   const SizedBox(width: 8),
                   // Share icon
-                  GestureDetector(
-                    onTap: _isSharing
-                        ? null
-                        : () => _shareCurrentPeriod(pageIndex),
-                    behavior: HitTestBehavior.opaque,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
-                      child: _isSharing
-                          ? SizedBox(
-                              width: kIconSize + 6,
-                              height: kIconSize + 6,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
+                  Semantics(
+                    label: 'Share',
+                    button: true,
+                    enabled: !_isSharing,
+                    child: GestureDetector(
+                      key: _shareButtonKey,
+                      onTap: _isSharing
+                          ? null
+                          : () => _shareCurrentPeriod(pageIndex),
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        child: _isSharing
+                            ? SizedBox(
+                                width: kIconSize + 6,
+                                height: kIconSize + 6,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: kGreyLabelColour.withValues(alpha: 0.7),
+                                ),
+                              )
+                            : Icon(
+                                Icons.ios_share,
                                 color: kGreyLabelColour.withValues(alpha: 0.7),
+                                size: kIconSize + 6,
                               ),
-                            )
-                          : Icon(
-                              Icons.ios_share,
-                              color: kGreyLabelColour.withValues(alpha: 0.7),
-                              size: kIconSize + 6,
-                            ),
+                      ),
                     ),
                   ),
                   // Settings gear
@@ -1313,7 +1355,7 @@ class TemperatureScreenState extends State<TemperatureScreen>
 
       await shareService.share(
         shareUrl: shareUrl,
-        shareButtonKey: null,
+        shareButtonKey: _shareButtonKey,
       );
     } catch (e) {
       DebugUtils.logLazy(() => 'Share failed: $e');
@@ -1669,7 +1711,6 @@ class TemperatureScreenState extends State<TemperatureScreen>
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        systemNavigationBarColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
         // iOS uses statusBarBrightness, Android uses statusBarIconBrightness
         statusBarBrightness: io.Platform.isIOS ? Brightness.dark : null,

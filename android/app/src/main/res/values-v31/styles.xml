@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ replaces windowBackground with the system splash screen, which shows
+         the adaptive launcher icon on windowSplashScreenBackground. Match the icon's
+         background so the bars sit on a seamless field, as on iOS. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">#242456</item>
+    </style>
+</resources>

@@ -14,6 +14,7 @@ import '../utils/debug_utils.dart';
 import '../utils/remote_logger.dart';
 import '../utils/temperature_utils.dart';
 import 'completeness_section.dart';
+import 'data_attribution.dart';
 import 'gradient_spinner.dart';
 import 'temperature_bar_chart.dart';
 
@@ -966,7 +967,6 @@ class PeriodPageState extends State<PeriodPage>
             top: kSectionTopPadding,
             left: isSmallPhone ? 0 : contentHPadding,
             right: isSmallPhone ? 0 : contentHPadding,
-            bottom: kSectionBottomPadding,
           ),
           child: Container(
             width: double.infinity,
@@ -1010,6 +1010,26 @@ class PeriodPageState extends State<PeriodPage>
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+
+    // Open-Meteo's licence asks for a link next to the data it provides.
+    // Indented to line up with the text inside the stats bubble above.
+    slivers.add(
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: isSmallPhone
+                ? contentHPadding
+                : contentHPadding + bubbleInnerHPadding,
+            right: contentHPadding,
+            bottom: kSectionBottomPadding,
+          ),
+          child: const Align(
+            alignment: Alignment.centerLeft,
+            child: DataAttribution(),
           ),
         ),
       ),
@@ -1123,7 +1143,12 @@ class PeriodPageState extends State<PeriodPage>
   }
 
   Widget _buildStatRow(String label, String value, Color colour) {
+    // RichText ignores the system text size unless given the scaler, so pass
+    // it to make the stats follow Dynamic Type like the rest of the page.
+    // (Text.rich would also inherit the theme's body style, making the rows
+    // taller.)
     return RichText(
+      textScaler: MediaQuery.textScalerOf(context),
       text: TextSpan(
         style: TextStyle(fontSize: kStatsFontSize, color: colour),
         children: [

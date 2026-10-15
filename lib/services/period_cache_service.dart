@@ -11,7 +11,7 @@ import '../utils/debug_utils.dart';
 ///   - others → identifier is `MM-dd`
 ///   - unitGroup is appended only when non-Celsius (e.g. `:fahrenheit`)
 ///
-/// TTL: 7 days.
+/// TTL: 24 hours.
 ///
 /// All methods are no-ops (return null/false) if [init] has not been called.
 class PeriodCacheService {
