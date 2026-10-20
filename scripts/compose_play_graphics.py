@@ -4,11 +4,9 @@
 usage: compose_play_graphics.py <raw_dir> <out_dir>
 
 Writes into <out_dir>:
-  icon-512.png             512x512 store icon, from the iOS 1024 icon (full
+  icon-512.png             512x512 store icon: assets/logo.png on the navy icon
+                           background, laid out like the iOS app icon (full
                            square; Play applies its own mask). 32-bit PNG.
-  icon-512-launcher-match.png
-                           the same size rendered from the Android adaptive
-                           icon exactly as the launcher draws it.
   feature-graphic-1024x500.png
                            headline and subtitle on the promo gradient with two
                            phones (Today and Year) bleeding off the bottom.
@@ -27,24 +25,17 @@ from compose_appstore_screenshots import (  # noqa: E402
 )
 
 ROOT = Path(__file__).resolve().parent.parent
-IOS_ICON = ROOT / "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024.png"
-ANDROID_FG = ROOT / "android/app/src/main/res/drawable-xxxhdpi/ic_launcher_foreground.png"
-ANDROID_BG = (0x24, 0x24, 0x56)  # ic_launcher_background
-ANDROID_INSET = 0.16  # <inset android:inset="16%"> in mipmap-anydpi-v26/launcher_icon.xml
+LOGO = ROOT / "assets/logo.png"  # the multicoloured bars, transparent, flush left
+ICON_BG = (0x24, 0x24, 0x56)  # ic_launcher_background
+LOGO_X = 204  # puts the bars where the iOS app icon has them
 
 W, H = 1024, 500
 
 
 def icons(out: Path) -> None:
-    src = Image.open(IOS_ICON).convert("RGBA")
-    src.resize((512, 512), Image.LANCZOS).save(out / "icon-512.png", optimize=True)
-
-    size = 1024
-    inner = int(size * (1 - 2 * ANDROID_INSET))
-    canvas = Image.new("RGBA", (size, size), ANDROID_BG + (255,))
-    fg = Image.open(ANDROID_FG).convert("RGBA").resize((inner, inner), Image.LANCZOS)
-    canvas.alpha_composite(fg, ((size - inner) // 2, (size - inner) // 2))
-    canvas.resize((512, 512), Image.LANCZOS).save(out / "icon-512-launcher-match.png", optimize=True)
+    canvas = Image.new("RGBA", (1024, 1024), ICON_BG + (255,))
+    canvas.alpha_composite(Image.open(LOGO).convert("RGBA"), (LOGO_X, 0))
+    canvas.resize((512, 512), Image.LANCZOS).save(out / "icon-512.png", optimize=True)
 
 
 def phone(canvas: Image.Image, raw: Path, x: int, top: int, width: int) -> None:

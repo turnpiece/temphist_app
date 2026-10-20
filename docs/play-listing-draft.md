@@ -53,6 +53,5 @@ Weather data by Open-Meteo.com (CC BY 4.0).
 
 In `assets/promos/png/1.4/android-play/`, made by `scripts/compose_play_graphics.py`:
 
-- `icon-512.png`: 512×512 32-bit PNG, full square (Play applies the mask), from the iOS 1024 icon.
-- `icon-512-launcher-match.png`: the same size drawn from the Android adaptive icon as the launcher shows it. The bars are much smaller, so it reads poorly at store size.
+- `icon-512.png`: 512×512 32-bit PNG, full square (Play applies the mask). `assets/logo.png` (the multicoloured bars) on the navy icon background, laid out like the iOS app icon.
 - `feature-graphic-1024x500.png`: headline plus the Today and Year views.
