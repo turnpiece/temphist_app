@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compose App Store screenshots in the TempHist promo style.
 
-usage: compose_appstore_screenshots.py <raw_dir> <out_dir> <device: iphone69|iphone63|ipad13>
+usage: compose_appstore_screenshots.py <raw_dir> <out_dir> <device: iphone69|iphone63|ipad13|androidphone>
 
 Each raw simulator capture becomes a canvas of the exact App Store size: a
 bold left-aligned headline and a grey subtitle on the dark navy gradient used
@@ -12,6 +12,8 @@ Connect requires.
 Raw frames are expected to be named as in FRAMES below, captured from:
   iphone69: iPhone 16 Pro Max simulator (1320x2868)
   ipad13:   iPad Pro 13-inch (M5) simulator (2064x2752)
+  androidphone: Pixel_10 emulator (1080x2424), for Google Play (9:16 canvas,
+            as Play rejects phone screenshots taller than 2:1)
 with the status bar overridden (scripts/simulator_screenshots.sh) and the
 app showing London, light appearance. iphone63 reuses the iPhone captures at
 the 6.1"/6.3" canvas size (1206x2622).
@@ -48,6 +50,7 @@ DEVICES = {
     "iphone69": dict(size=(1320, 2868), head=0.079, sub=0.032, holder_w=0.80, holder_top=0.27),
     "iphone63": dict(size=(1206, 2622), head=0.079, sub=0.032, holder_w=0.80, holder_top=0.27),
     "ipad13": dict(size=(2064, 2752), head=0.058, sub=0.025, holder_w=0.78, holder_top=0.27),
+    "androidphone": dict(size=(1080, 1920), head=0.079, sub=0.032, holder_w=0.80, holder_top=0.27),
 }
 
 BG_TOP, BG_BOTTOM = (24, 29, 90), (13, 17, 63)  # sampled from the 1.2 promos
