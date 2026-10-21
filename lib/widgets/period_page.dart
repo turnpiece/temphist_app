@@ -956,6 +956,9 @@ class PeriodPageState extends State<PeriodPage>
           showTemperatureAxis: false,
           presentation: presentation,
           isDailyPeriod: widget.periodKey == 'daily',
+          periodDescription: widget.periodKey == 'daily'
+              ? 'this day'
+              : 'the ${widget.periodLabel.toLowerCase()}',
         ),
       ),
     );

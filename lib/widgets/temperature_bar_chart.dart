@@ -58,6 +58,118 @@ class TemperatureChartPresentation {
   }
 }
 
+/// Decimal places for a temperature or anomaly shown to the user.
+///
+/// Fahrenheit values and daily records come from 1dp source data, so the
+/// second digit would be noise; weekly/monthly/yearly Celsius averages keep two.
+int chartTemperatureDecimals(
+  TemperatureChartPresentation presentation, {
+  required bool isDailyPeriod,
+}) {
+  final isFahrenheit = presentation.unitLabel == '°F';
+  return (isFahrenheit || isDailyPeriod) ? 1 : 2;
+}
+
+/// "14.2°C" for a data point, converted and rounded the way the chart shows it.
+String formatChartTemperature(
+  TemperatureChartData d,
+  TemperatureChartPresentation presentation, {
+  required bool isDailyPeriod,
+}) {
+  final display = presentation.shouldConvert
+      ? celsiusToFahrenheit(d.temperature)
+      : d.temperature;
+  final decimals =
+      chartTemperatureDecimals(presentation, isDailyPeriod: isDailyPeriod);
+  return '${display.toStringAsFixed(decimals)}${presentation.unitLabel}';
+}
+
+/// "+1.1°C above average" for a data point, or null when it has no anomaly.
+///
+/// [spoken] drops the +/− sign (a screen reader would read it out loud on top
+/// of "above"/"below") and says "same as average" instead of "at the average".
+String? formatChartAnomaly(
+  TemperatureChartData d,
+  TemperatureChartPresentation presentation, {
+  required bool isDailyPeriod,
+  bool spoken = false,
+}) {
+  final anomaly = d.anomaly;
+  if (anomaly == null) return null;
+
+  final decimals =
+      chartTemperatureDecimals(presentation, isDailyPeriod: isDailyPeriod);
+  final rawAnomaly = presentation.shouldConvert ? anomaly * 9 / 5 : anomaly;
+  final displayAnomaly = double.parse(rawAnomaly.toStringAsFixed(decimals));
+  final magnitude =
+      '${displayAnomaly.abs().toStringAsFixed(decimals)}${presentation.unitLabel}';
+
+  if (displayAnomaly > 0) {
+    return '${spoken ? '' : '+'}$magnitude above average';
+  }
+  if (displayAnomaly < 0) {
+    return '${spoken ? '' : '−'}$magnitude below average';
+  }
+  return spoken ? 'same as average' : '$magnitude at the average';
+}
+
+/// One spoken sentence per bar, e.g. "2019: 14.8°C, 1.9°C above average".
+String describeChartPoint(
+  TemperatureChartData d,
+  TemperatureChartPresentation presentation, {
+  required bool isDailyPeriod,
+}) {
+  final temp = formatChartTemperature(d, presentation,
+      isDailyPeriod: isDailyPeriod);
+  final anomaly = formatChartAnomaly(d, presentation,
+      isDailyPeriod: isDailyPeriod, spoken: true);
+  return anomaly == null ? '${d.year}: $temp' : '${d.year}: $temp, $anomaly';
+}
+
+/// Summary read out for the whole chart, which a screen-reader user cannot
+/// otherwise get at: the per-year values only appear in a tap-only tooltip.
+///
+/// e.g. "Bar chart of temperature by year for the past week, 1976 to 2026.
+/// Latest, 2026: 14.2°C, 1.1°C above average. Warmest, 2022: 16.0°C.
+/// Coolest, 1986: 9.8°C. Average 12.9°C. Trend: Rising at 0.40°C/decade."
+String temperatureChartSemanticsLabel({
+  required TemperatureChartPresentation presentation,
+  required bool isDailyPeriod,
+  String? periodDescription,
+  double? averageTemperature,
+  double? trendSlope,
+}) {
+  final points = presentation.validData
+      .where((d) => int.tryParse(d.year) != null)
+      .toList()
+    ..sort((a, b) => int.parse(a.year).compareTo(int.parse(b.year)));
+  if (points.isEmpty) return 'Temperature chart, no data';
+
+  final latest = points.last;
+  final warmest = points.reduce((a, b) => b.temperature > a.temperature ? b : a);
+  final coolest = points.reduce((a, b) => b.temperature < a.temperature ? b : a);
+
+  String temp(TemperatureChartData d) =>
+      formatChartTemperature(d, presentation, isDailyPeriod: isDailyPeriod);
+
+  final forPeriod = periodDescription == null ? '' : ' for $periodDescription';
+  final isFahrenheit = presentation.unitLabel == '°F';
+
+  final parts = <String>[
+    'Bar chart of temperature by year$forPeriod, ${points.first.year} to ${latest.year}',
+    'Latest, ${describeChartPoint(latest, presentation, isDailyPeriod: isDailyPeriod)}',
+    if (points.length > 1) ...[
+      'Warmest, ${warmest.year}: ${temp(warmest)}',
+      'Coolest, ${coolest.year}: ${temp(coolest)}',
+    ],
+    if (averageTemperature != null)
+      'Average ${formatTemperature(averageTemperature, isFahrenheit: isFahrenheit, convert: presentation.shouldConvert)}',
+    if (trendSlope != null)
+      'Trend: ${formatTrendValue(trendSlope, isFahrenheit: isFahrenheit, convert: presentation.shouldConvert)}',
+  ];
+  return '${parts.join('. ')}.';
+}
+
 const double kTemperatureChartTopAxisHeight = 22.0;
 const double kChartXAxisPlotOffsetStart = 8.0;
 const double kChartXAxisPlotOffsetEnd = 8.0;
@@ -407,6 +519,10 @@ class TemperatureBarChart extends StatefulWidget {
   /// digit is noise; weekly/monthly/yearly are averages where it's meaningful.
   final bool isDailyPeriod;
 
+  /// Spoken in the chart's screen-reader summary, e.g. "the past week" or
+  /// "this day". Omitted from the summary when null.
+  final String? periodDescription;
+
   const TemperatureBarChart({
     super.key,
     required this.chartData,
@@ -420,6 +536,7 @@ class TemperatureBarChart extends StatefulWidget {
     this.standardDeviation,
     this.presentation,
     this.isDailyPeriod = false,
+    this.periodDescription,
   });
 
   @override
@@ -447,33 +564,11 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
         if (presentation == null) return const SizedBox.shrink();
 
         final d = data as TemperatureChartData;
-        final displayTemp = presentation.shouldConvert
-            ? celsiusToFahrenheit(d.temperature)
-            : d.temperature;
-        final isFahrenheit = presentation.unitLabel == '°F';
-        final tempDecimals = (isFahrenheit || widget.isDailyPeriod) ? 1 : 2;
 
         Widget? anomalyWidget;
-        if (d.anomaly != null) {
-          final rawAnomaly = presentation.shouldConvert
-              ? d.anomaly! * 9 / 5
-              : d.anomaly!;
-          final displayAnomaly =
-              double.parse(rawAnomaly.toStringAsFixed(tempDecimals));
-          final String direction;
-          final String sign;
-          if (displayAnomaly > 0) {
-            direction = 'above';
-            sign = '+';
-          } else if (displayAnomaly < 0) {
-            direction = 'below';
-            sign = '−';
-          } else {
-            direction = 'at the';
-            sign = '';
-          }
-          final anomalyText =
-              '$sign${displayAnomaly.abs().toStringAsFixed(tempDecimals)}${presentation.unitLabel} $direction average';
+        final anomalyText = formatChartAnomaly(d, presentation,
+            isDailyPeriod: widget.isDailyPeriod);
+        if (anomalyText != null) {
           final baseColor = d.barFillColor ?? Colors.white;
           final hsl = HSLColor.fromColor(baseColor);
           final anomalyColor =
@@ -503,7 +598,8 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
                     color: Colors.white, fontSize: kFontSizeBody - 2),
               ),
               Text(
-                '${displayTemp.toStringAsFixed(tempDecimals)}${presentation.unitLabel}',
+                formatChartTemperature(d, presentation,
+                    isDailyPeriod: widget.isDailyPeriod),
                 style: const TextStyle(
                     color: Colors.white, fontSize: kFontSizeBody - 2),
               ),
@@ -627,9 +723,23 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
             enableAxisAnimation: false,
           );
 
-          return Center(
-            child: SizedBox(
-                height: widget.height, width: chartWidth, child: chart),
+          return Semantics(
+            label: temperatureChartSemanticsLabel(
+              presentation: presentation,
+              isDailyPeriod: widget.isDailyPeriod,
+              periodDescription: widget.periodDescription,
+              averageTemperature: widget.averageTemperature,
+              trendSlope: widget.trendSlope,
+            ),
+            image: true,
+            container: true,
+            // The chart's own nodes are just unlabelled paint; the summary
+            // above replaces them.
+            excludeSemantics: true,
+            child: Center(
+              child: SizedBox(
+                  height: widget.height, width: chartWidth, child: chart),
+            ),
           );
         },
       ),
