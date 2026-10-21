@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show OrdinalSortKey;
 import 'package:syncfusion_flutter_charts/charts.dart';
 
 import '../constants/app_constants.dart';
@@ -168,6 +170,28 @@ String temperatureChartSemanticsLabel({
       'Trend: ${formatTrendValue(trendSlope, isFahrenheit: isFahrenheit, convert: presentation.shouldConvert)}',
   ];
   return '${parts.join('. ')}.';
+}
+
+/// Grows each bar's rect into a full-width row so it is a usable touch target
+/// for screen-reader exploration: a bar can be only a few points tall and as
+/// short as the data. [bars] must be sorted top to bottom; adjacent rows meet
+/// halfway across the gap between their bars.
+List<Rect> expandBarRowRects(
+  List<Rect> bars, {
+  required double left,
+  required double right,
+}) {
+  return [
+    for (var i = 0; i < bars.length; i++)
+      Rect.fromLTRB(
+        left,
+        i == 0 ? bars[i].top : (bars[i - 1].bottom + bars[i].top) / 2,
+        right,
+        i == bars.length - 1
+            ? bars[i].bottom
+            : (bars[i].bottom + bars[i + 1].top) / 2,
+      ),
+  ];
 }
 
 const double kTemperatureChartTopAxisHeight = 22.0;
@@ -549,6 +573,32 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
   // Updated during build so the tooltip builder always sees current data.
   TemperatureChartPresentation? _presentation;
 
+  final GlobalKey _chartBoxKey = GlobalKey();
+
+  /// Where each bar was last painted, keyed by data index and expressed in the
+  /// chart box's coordinates. The chart gives us no semantics of its own, so
+  /// these rects position the per-bar `Semantics` nodes laid over it.
+  Map<int, Rect> _barRects = const {};
+
+  /// Called from the series renderer's paint with the bars' rects in its own
+  /// coordinates. Sets state only when something moved, and only after the
+  /// frame, because this runs mid-paint.
+  void _reportBarRects(RenderBox series, Map<int, Rect> local) {
+    final box = _chartBoxKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.attached || !series.attached) return;
+
+    final transform = series.getTransformTo(box);
+    final mapped = {
+      for (final e in local.entries)
+        e.key: MatrixUtils.transformRect(transform, e.value),
+    };
+    if (mapEquals(mapped, _barRects)) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _barRects = mapped);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -723,22 +773,67 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
             enableAxisAnimation: false,
           );
 
-          return Semantics(
-            label: temperatureChartSemanticsLabel(
-              presentation: presentation,
-              isDailyPeriod: widget.isDailyPeriod,
-              periodDescription: widget.periodDescription,
-              averageTemperature: widget.averageTemperature,
-              trendSlope: widget.trendSlope,
-            ),
-            image: true,
-            container: true,
-            // The chart's own nodes are just unlabelled paint; the summary
-            // above replaces them.
-            excludeSemantics: true,
-            child: Center(
-              child: SizedBox(
-                  height: widget.height, width: chartWidth, child: chart),
+          final summary = temperatureChartSemanticsLabel(
+            presentation: presentation,
+            isDailyPeriod: widget.isDailyPeriod,
+            periodDescription: widget.periodDescription,
+            averageTemperature: widget.averageTemperature,
+            trendSlope: widget.trendSlope,
+          );
+
+          // Rows are ordered top to bottom, which is the order a sighted
+          // reader would take them in; the summary always comes first.
+          final bars = _barRects.entries
+              .where((e) =>
+                  e.key < presentation.styledChartData.length &&
+                  presentation.styledChartData[e.key].hasData)
+              .toList()
+            ..sort((a, b) => a.value.top.compareTo(b.value.top));
+          final rows = expandBarRowRects(
+            [for (final b in bars) b.value],
+            left: 0,
+            right: chartWidth,
+          );
+
+          return Center(
+            child: SizedBox(
+              key: _chartBoxKey,
+              height: widget.height,
+              width: chartWidth,
+              // Not a leaf: the summary and every bar are siblings so each
+              // one is separately focusable.
+              child: Semantics(
+                container: true,
+                explicitChildNodes: true,
+                child: Stack(
+                  children: [
+                    // The chart's own nodes are just unlabelled paint. The
+                    // summary sits underneath and covers the whole chart so a
+                    // touch that misses every bar still finds it.
+                    Semantics(
+                      label: summary,
+                      image: true,
+                      container: true,
+                      sortKey: const OrdinalSortKey(0),
+                      child: ExcludeSemantics(child: chart),
+                    ),
+                    for (var i = 0; i < bars.length; i++)
+                      Positioned.fromRect(
+                        rect: rows[i],
+                        child: Semantics(
+                          label: describeChartPoint(
+                            presentation.styledChartData[bars[i].key],
+                            presentation,
+                            isDailyPeriod: widget.isDailyPeriod,
+                          ),
+                          container: true,
+                          sortKey: OrdinalSortKey(i + 1.0),
+                          child: const SizedBox.expand(),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           );
         },
@@ -755,7 +850,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
     return [
       RangeColumnSeries<TemperatureChartData, int>(
         onCreateRenderer: (ChartSeries<TemperatureChartData, int> series) {
-          return _TemperatureBarSeriesRenderer();
+          return _TemperatureBarSeriesRenderer(_reportBarRects);
         },
         dataSource: data,
         xValueMapper: (TemperatureChartData data, _) =>
@@ -808,6 +903,24 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
 
 class _TemperatureBarSeriesRenderer
     extends RangeColumnSeriesRenderer<TemperatureChartData, int> {
+  _TemperatureBarSeriesRenderer(this.onBarRects);
+
+  final void Function(RenderBox series, Map<int, Rect> rects) onBarRects;
+
+  @override
+  void onPaint(PaintingContext context, Offset offset) {
+    super.onPaint(context, offset);
+
+    final rects = <int, Rect>{};
+    for (final segment in segments) {
+      if (segment is RangeColumnSegment<TemperatureChartData, int>) {
+        final rect = segment.segmentRect;
+        if (rect != null) rects[segment.currentSegmentIndex] = rect.outerRect;
+      }
+    }
+    onBarRects(this, rects);
+  }
+
   @override
   RangeColumnSegment<TemperatureChartData, int> createSegment() {
     return _TemperatureBarSegment();

@@ -68,6 +68,34 @@ void main() {
     });
   });
 
+  group('expandBarRowRects', () {
+    test('rows span the full width and meet halfway between bars', () {
+      final rows = expandBarRowRects(
+        const [
+          Rect.fromLTRB(5, 0, 20, 4),
+          Rect.fromLTRB(5, 6, 40, 10),
+          Rect.fromLTRB(5, 14, 10, 18),
+        ],
+        left: 0,
+        right: 100,
+      );
+      expect(rows, const [
+        Rect.fromLTRB(0, 0, 100, 5),
+        Rect.fromLTRB(0, 5, 100, 12),
+        Rect.fromLTRB(0, 12, 100, 18),
+      ]);
+    });
+
+    test('empty and single', () {
+      expect(expandBarRowRects(const [], left: 0, right: 10), isEmpty);
+      expect(
+        expandBarRowRects(const [Rect.fromLTRB(2, 3, 4, 5)],
+            left: 0, right: 10),
+        const [Rect.fromLTRB(0, 3, 10, 5)],
+      );
+    });
+  });
+
   group('temperatureChartSemanticsLabel', () {
     test('summarises latest, warmest, coolest, average and trend (°C)', () {
       final label = temperatureChartSemanticsLabel(
@@ -162,6 +190,8 @@ void main() {
       ),
     ));
     await tester.pump();
+    // Bar rects are reported mid-paint and applied after the frame.
+    await tester.pump();
 
     final expected = temperatureChartSemanticsLabel(
       presentation: p,
@@ -174,6 +204,19 @@ void main() {
     expect(
       tester.getSemantics(find.bySemanticsLabel(expected)),
       matchesSemantics(label: expected, isImage: true),
+    );
+    // One node per bar, each wholly inside the chart and not empty.
+    for (final d in data) {
+      final label = describeChartPoint(d, p, isDailyPeriod: false);
+      final finder = find.bySemanticsLabel(label);
+      expect(finder, findsOneWidget, reason: label);
+      final rect = tester.getSemantics(finder).rect;
+      expect(rect.width, greaterThan(0), reason: label);
+      expect(rect.height, greaterThan(0), reason: label);
+    }
+    expect(
+      find.bySemanticsLabel(describeChartPoint(data[0], p, isDailyPeriod: false)),
+      findsOneWidget,
     );
     handle.dispose();
   });
