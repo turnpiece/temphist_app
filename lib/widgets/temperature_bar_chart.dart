@@ -304,62 +304,65 @@ class TemperatureChartTopAxis extends StatelessWidget {
   Widget build(BuildContext context) {
     final chartWidth = computeTemperatureChartWidth(context);
 
-    return Center(
-      child: SizedBox(
-        width: chartWidth,
-        height: kTemperatureChartTopAxisHeight,
-        child: SfCartesianChart(
-          isTransposed: true,
-          margin: const EdgeInsets.only(
-            left: kChartHorizontalMargin,
-            right: kChartRightMargin,
-          ),
-          primaryXAxis: NumericAxis(
-            labelStyle: const TextStyle(
-              fontSize: kFontSizeAxisLabel,
-              color: Colors.transparent,
-              fontFamilyFallback: kChartAxisFontFamilyFallback,
+    // Decoration for screen readers: the chart below speaks every value.
+    return ExcludeSemantics(
+      child: Center(
+        child: SizedBox(
+          width: chartWidth,
+          height: kTemperatureChartTopAxisHeight,
+          child: SfCartesianChart(
+            isTransposed: true,
+            margin: const EdgeInsets.only(
+              left: kChartHorizontalMargin,
+              right: kChartRightMargin,
             ),
-            majorGridLines: const MajorGridLines(width: 0),
-            majorTickLines: const MajorTickLines(width: 0, size: 0),
-            labelIntersectAction: AxisLabelIntersectAction.hide,
-            minimum: kChartStartYear.toDouble(),
-            maximum: DateTime.now().year.toDouble(),
-            interval: 5,
-            labelFormat: '{value}',
-            plotOffsetStart: kChartXAxisPlotOffsetStart,
-            plotOffsetEnd: kChartXAxisPlotOffsetEnd,
-            axisLine: const AxisLine(width: 0),
-          ),
-          primaryYAxis: NumericAxis(
-            opposedPosition: true,
-            axisLabelFormatter: (AxisLabelRenderDetails details) {
-              return ChartAxisLabel(
-                presentation.formatAxisLabel(details.value.toDouble()),
-                details.textStyle,
-              );
-            },
-            minimum: presentation.yAxisMin,
-            maximum: presentation.yAxisMax,
-            majorGridLines: const MajorGridLines(width: 0),
-            labelStyle: const TextStyle(
-              fontSize: kFontSizeAxisLabel,
-              color: kGreyLabelColour,
-              fontFamilyFallback: kChartAxisFontFamilyFallback,
+            primaryXAxis: NumericAxis(
+              labelStyle: const TextStyle(
+                fontSize: kFontSizeAxisLabel,
+                color: Colors.transparent,
+                fontFamilyFallback: kChartAxisFontFamilyFallback,
+              ),
+              majorGridLines: const MajorGridLines(width: 0),
+              majorTickLines: const MajorTickLines(width: 0, size: 0),
+              labelIntersectAction: AxisLabelIntersectAction.hide,
+              minimum: kChartStartYear.toDouble(),
+              maximum: DateTime.now().year.toDouble(),
+              interval: 5,
+              labelFormat: '{value}',
+              plotOffsetStart: kChartXAxisPlotOffsetStart,
+              plotOffsetEnd: kChartXAxisPlotOffsetEnd,
+              axisLine: const AxisLine(width: 0),
             ),
-            plotOffset: 0,
-            interval: presentation.yAxisInterval,
-            labelPosition: ChartDataLabelPosition.outside,
-            majorTickLines: const MajorTickLines(
-              size: 4,
-              width: 1,
-              color: kAxisLabelColour,
+            primaryYAxis: NumericAxis(
+              opposedPosition: true,
+              axisLabelFormatter: (AxisLabelRenderDetails details) {
+                return ChartAxisLabel(
+                  presentation.formatAxisLabel(details.value.toDouble()),
+                  details.textStyle,
+                );
+              },
+              minimum: presentation.yAxisMin,
+              maximum: presentation.yAxisMax,
+              majorGridLines: const MajorGridLines(width: 0),
+              labelStyle: const TextStyle(
+                fontSize: kFontSizeAxisLabel,
+                color: kGreyLabelColour,
+                fontFamilyFallback: kChartAxisFontFamilyFallback,
+              ),
+              plotOffset: 0,
+              interval: presentation.yAxisInterval,
+              labelPosition: ChartDataLabelPosition.outside,
+              majorTickLines: const MajorTickLines(
+                size: 4,
+                width: 1,
+                color: kAxisLabelColour,
+              ),
+              axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
             ),
-            axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
+            plotAreaBorderWidth: 0,
+            enableAxisAnimation: false,
+            series: const <CartesianSeries<dynamic, dynamic>>[],
           ),
-          plotAreaBorderWidth: 0,
-          enableAxisAnimation: false,
-          series: const <CartesianSeries<dynamic, dynamic>>[],
         ),
       ),
     );

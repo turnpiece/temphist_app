@@ -214,10 +214,29 @@ void main() {
       expect(rect.width, greaterThan(0), reason: label);
       expect(rect.height, greaterThan(0), reason: label);
     }
-    expect(
-      find.bySemanticsLabel(describeChartPoint(data[0], p, isDailyPeriod: false)),
-      findsOneWidget,
-    );
+    // Nothing else in the chart (axes, gridlines, trend/average lines) is
+    // announced: the summary plus one node per bar, and no more.
+    expect(find.semantics.byPredicate((n) => n.label.isNotEmpty),
+        findsNWidgets(1 + data.length));
+    handle.dispose();
+  });
+
+  testWidgets('top temperature axis is hidden from screen readers',
+      (tester) async {
+    final handle = tester.ensureSemantics();
+    final p = _presentation(data);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: TemperatureChartTopAxis(presentation: p)),
+    ));
+    await tester.pump();
+
+    // The bars carry their own values, so the scale is only decoration.
+    for (final label in ['0°C', '5°C', '10°C', '15°C', '20°C', '25°C', '30°C']) {
+      expect(find.bySemanticsLabel(label), findsNothing, reason: label);
+    }
+    expect(find.semantics.byPredicate((n) => n.label.isNotEmpty),
+        findsNothing);
     handle.dispose();
   });
 }
