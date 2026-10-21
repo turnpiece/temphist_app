@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show OrdinalSortKey;
 import 'package:syncfusion_flutter_charts/charts.dart';
 
 import '../constants/app_constants.dart';
@@ -56,6 +58,140 @@ class TemperatureChartPresentation {
     final display = shouldConvert ? celsiusToFahrenheit(rawValue) : rawValue;
     return '${display.toStringAsFixed(0)}$unitLabel';
   }
+}
+
+/// Decimal places for a temperature or anomaly shown to the user.
+///
+/// Fahrenheit values and daily records come from 1dp source data, so the
+/// second digit would be noise; weekly/monthly/yearly Celsius averages keep two.
+int chartTemperatureDecimals(
+  TemperatureChartPresentation presentation, {
+  required bool isDailyPeriod,
+}) {
+  final isFahrenheit = presentation.unitLabel == '°F';
+  return (isFahrenheit || isDailyPeriod) ? 1 : 2;
+}
+
+/// "14.2°C" for a data point, converted and rounded the way the chart shows it.
+String formatChartTemperature(
+  TemperatureChartData d,
+  TemperatureChartPresentation presentation, {
+  required bool isDailyPeriod,
+}) {
+  final display = presentation.shouldConvert
+      ? celsiusToFahrenheit(d.temperature)
+      : d.temperature;
+  final decimals =
+      chartTemperatureDecimals(presentation, isDailyPeriod: isDailyPeriod);
+  return '${display.toStringAsFixed(decimals)}${presentation.unitLabel}';
+}
+
+/// "+1.1°C above average" for a data point, or null when it has no anomaly.
+///
+/// [spoken] drops the +/− sign (a screen reader would read it out loud on top
+/// of "above"/"below") and says "same as average" instead of "at the average".
+String? formatChartAnomaly(
+  TemperatureChartData d,
+  TemperatureChartPresentation presentation, {
+  required bool isDailyPeriod,
+  bool spoken = false,
+}) {
+  final anomaly = d.anomaly;
+  if (anomaly == null) return null;
+
+  final decimals =
+      chartTemperatureDecimals(presentation, isDailyPeriod: isDailyPeriod);
+  final rawAnomaly = presentation.shouldConvert ? anomaly * 9 / 5 : anomaly;
+  final displayAnomaly = double.parse(rawAnomaly.toStringAsFixed(decimals));
+  final magnitude =
+      '${displayAnomaly.abs().toStringAsFixed(decimals)}${presentation.unitLabel}';
+
+  if (displayAnomaly > 0) {
+    return '${spoken ? '' : '+'}$magnitude above average';
+  }
+  if (displayAnomaly < 0) {
+    return '${spoken ? '' : '−'}$magnitude below average';
+  }
+  return spoken ? 'same as average' : '$magnitude at the average';
+}
+
+/// One spoken sentence per bar, e.g. "2019: 14.8°C, 1.9°C above average".
+String describeChartPoint(
+  TemperatureChartData d,
+  TemperatureChartPresentation presentation, {
+  required bool isDailyPeriod,
+}) {
+  final temp = formatChartTemperature(d, presentation,
+      isDailyPeriod: isDailyPeriod);
+  final anomaly = formatChartAnomaly(d, presentation,
+      isDailyPeriod: isDailyPeriod, spoken: true);
+  return anomaly == null ? '${d.year}: $temp' : '${d.year}: $temp, $anomaly';
+}
+
+/// Summary read out for the whole chart, which a screen-reader user cannot
+/// otherwise get at: the per-year values only appear in a tap-only tooltip.
+///
+/// e.g. "Bar chart of temperature by year for the past week, 1976 to 2026.
+/// Latest, 2026: 14.2°C, 1.1°C above average. Warmest, 2022: 16.0°C.
+/// Coolest, 1986: 9.8°C. Average 12.9°C. Trend: Rising at 0.40°C/decade."
+String temperatureChartSemanticsLabel({
+  required TemperatureChartPresentation presentation,
+  required bool isDailyPeriod,
+  String? periodDescription,
+  double? averageTemperature,
+  double? trendSlope,
+}) {
+  final points = presentation.validData
+      .where((d) => int.tryParse(d.year) != null)
+      .toList()
+    ..sort((a, b) => int.parse(a.year).compareTo(int.parse(b.year)));
+  if (points.isEmpty) return 'Temperature chart, no data';
+
+  final latest = points.last;
+  final warmest = points.reduce((a, b) => b.temperature > a.temperature ? b : a);
+  final coolest = points.reduce((a, b) => b.temperature < a.temperature ? b : a);
+
+  String temp(TemperatureChartData d) =>
+      formatChartTemperature(d, presentation, isDailyPeriod: isDailyPeriod);
+
+  final forPeriod = periodDescription == null ? '' : ' for $periodDescription';
+  final isFahrenheit = presentation.unitLabel == '°F';
+
+  final parts = <String>[
+    'Bar chart of temperature by year$forPeriod, ${points.first.year} to ${latest.year}',
+    'Latest, ${describeChartPoint(latest, presentation, isDailyPeriod: isDailyPeriod)}',
+    if (points.length > 1) ...[
+      'Warmest, ${warmest.year}: ${temp(warmest)}',
+      'Coolest, ${coolest.year}: ${temp(coolest)}',
+    ],
+    if (averageTemperature != null)
+      'Average ${formatTemperature(averageTemperature, isFahrenheit: isFahrenheit, convert: presentation.shouldConvert)}',
+    if (trendSlope != null)
+      'Trend: ${formatTrendValue(trendSlope, isFahrenheit: isFahrenheit, convert: presentation.shouldConvert)}',
+  ];
+  return '${parts.join('. ')}.';
+}
+
+/// Grows each bar's rect into a full-width row so it is a usable touch target
+/// for screen-reader exploration: a bar can be only a few points tall and as
+/// short as the data. [bars] must be sorted top to bottom; adjacent rows meet
+/// halfway across the gap between their bars.
+List<Rect> expandBarRowRects(
+  List<Rect> bars, {
+  required double left,
+  required double right,
+}) {
+  return [
+    for (var i = 0; i < bars.length; i++)
+      Rect.fromLTRB(
+        left,
+        i == 0 ? bars[i].top : (bars[i - 1].bottom + bars[i].top) / 2,
+        right,
+        i == bars.length - 1
+            ? bars[i].bottom
+            : (bars[i].bottom + bars[i + 1].top) / 2,
+      ),
+  ];
 }
 
 const double kTemperatureChartTopAxisHeight = 22.0;
@@ -168,62 +304,65 @@ class TemperatureChartTopAxis extends StatelessWidget {
   Widget build(BuildContext context) {
     final chartWidth = computeTemperatureChartWidth(context);
 
-    return Center(
-      child: SizedBox(
-        width: chartWidth,
-        height: kTemperatureChartTopAxisHeight,
-        child: SfCartesianChart(
-          isTransposed: true,
-          margin: const EdgeInsets.only(
-            left: kChartHorizontalMargin,
-            right: kChartRightMargin,
-          ),
-          primaryXAxis: NumericAxis(
-            labelStyle: const TextStyle(
-              fontSize: kFontSizeAxisLabel,
-              color: Colors.transparent,
-              fontFamilyFallback: kChartAxisFontFamilyFallback,
+    // Decoration for screen readers: the chart below speaks every value.
+    return ExcludeSemantics(
+      child: Center(
+        child: SizedBox(
+          width: chartWidth,
+          height: kTemperatureChartTopAxisHeight,
+          child: SfCartesianChart(
+            isTransposed: true,
+            margin: const EdgeInsets.only(
+              left: kChartHorizontalMargin,
+              right: kChartRightMargin,
             ),
-            majorGridLines: const MajorGridLines(width: 0),
-            majorTickLines: const MajorTickLines(width: 0, size: 0),
-            labelIntersectAction: AxisLabelIntersectAction.hide,
-            minimum: kChartStartYear.toDouble(),
-            maximum: DateTime.now().year.toDouble(),
-            interval: 5,
-            labelFormat: '{value}',
-            plotOffsetStart: kChartXAxisPlotOffsetStart,
-            plotOffsetEnd: kChartXAxisPlotOffsetEnd,
-            axisLine: const AxisLine(width: 0),
-          ),
-          primaryYAxis: NumericAxis(
-            opposedPosition: true,
-            axisLabelFormatter: (AxisLabelRenderDetails details) {
-              return ChartAxisLabel(
-                presentation.formatAxisLabel(details.value.toDouble()),
-                details.textStyle,
-              );
-            },
-            minimum: presentation.yAxisMin,
-            maximum: presentation.yAxisMax,
-            majorGridLines: const MajorGridLines(width: 0),
-            labelStyle: const TextStyle(
-              fontSize: kFontSizeAxisLabel,
-              color: kGreyLabelColour,
-              fontFamilyFallback: kChartAxisFontFamilyFallback,
+            primaryXAxis: NumericAxis(
+              labelStyle: const TextStyle(
+                fontSize: kFontSizeAxisLabel,
+                color: Colors.transparent,
+                fontFamilyFallback: kChartAxisFontFamilyFallback,
+              ),
+              majorGridLines: const MajorGridLines(width: 0),
+              majorTickLines: const MajorTickLines(width: 0, size: 0),
+              labelIntersectAction: AxisLabelIntersectAction.hide,
+              minimum: kChartStartYear.toDouble(),
+              maximum: DateTime.now().year.toDouble(),
+              interval: 5,
+              labelFormat: '{value}',
+              plotOffsetStart: kChartXAxisPlotOffsetStart,
+              plotOffsetEnd: kChartXAxisPlotOffsetEnd,
+              axisLine: const AxisLine(width: 0),
             ),
-            plotOffset: 0,
-            interval: presentation.yAxisInterval,
-            labelPosition: ChartDataLabelPosition.outside,
-            majorTickLines: const MajorTickLines(
-              size: 4,
-              width: 1,
-              color: kAxisLabelColour,
+            primaryYAxis: NumericAxis(
+              opposedPosition: true,
+              axisLabelFormatter: (AxisLabelRenderDetails details) {
+                return ChartAxisLabel(
+                  presentation.formatAxisLabel(details.value.toDouble()),
+                  details.textStyle,
+                );
+              },
+              minimum: presentation.yAxisMin,
+              maximum: presentation.yAxisMax,
+              majorGridLines: const MajorGridLines(width: 0),
+              labelStyle: const TextStyle(
+                fontSize: kFontSizeAxisLabel,
+                color: kGreyLabelColour,
+                fontFamilyFallback: kChartAxisFontFamilyFallback,
+              ),
+              plotOffset: 0,
+              interval: presentation.yAxisInterval,
+              labelPosition: ChartDataLabelPosition.outside,
+              majorTickLines: const MajorTickLines(
+                size: 4,
+                width: 1,
+                color: kAxisLabelColour,
+              ),
+              axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
             ),
-            axisLine: const AxisLine(width: 1, color: kAxisLabelColour),
+            plotAreaBorderWidth: 0,
+            enableAxisAnimation: false,
+            series: const <CartesianSeries<dynamic, dynamic>>[],
           ),
-          plotAreaBorderWidth: 0,
-          enableAxisAnimation: false,
-          series: const <CartesianSeries<dynamic, dynamic>>[],
         ),
       ),
     );
@@ -407,6 +546,10 @@ class TemperatureBarChart extends StatefulWidget {
   /// digit is noise; weekly/monthly/yearly are averages where it's meaningful.
   final bool isDailyPeriod;
 
+  /// Spoken in the chart's screen-reader summary, e.g. "the past week" or
+  /// "this day". Omitted from the summary when null.
+  final String? periodDescription;
+
   const TemperatureBarChart({
     super.key,
     required this.chartData,
@@ -420,6 +563,7 @@ class TemperatureBarChart extends StatefulWidget {
     this.standardDeviation,
     this.presentation,
     this.isDailyPeriod = false,
+    this.periodDescription,
   });
 
   @override
@@ -431,6 +575,32 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
 
   // Updated during build so the tooltip builder always sees current data.
   TemperatureChartPresentation? _presentation;
+
+  final GlobalKey _chartBoxKey = GlobalKey();
+
+  /// Where each bar was last painted, keyed by data index and expressed in the
+  /// chart box's coordinates. The chart gives us no semantics of its own, so
+  /// these rects position the per-bar `Semantics` nodes laid over it.
+  Map<int, Rect> _barRects = const {};
+
+  /// Called from the series renderer's paint with the bars' rects in its own
+  /// coordinates. Sets state only when something moved, and only after the
+  /// frame, because this runs mid-paint.
+  void _reportBarRects(RenderBox series, Map<int, Rect> local) {
+    final box = _chartBoxKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.attached || !series.attached) return;
+
+    final transform = series.getTransformTo(box);
+    final mapped = {
+      for (final e in local.entries)
+        e.key: MatrixUtils.transformRect(transform, e.value),
+    };
+    if (mapEquals(mapped, _barRects)) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _barRects = mapped);
+    });
+  }
 
   @override
   void initState() {
@@ -447,33 +617,11 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
         if (presentation == null) return const SizedBox.shrink();
 
         final d = data as TemperatureChartData;
-        final displayTemp = presentation.shouldConvert
-            ? celsiusToFahrenheit(d.temperature)
-            : d.temperature;
-        final isFahrenheit = presentation.unitLabel == '°F';
-        final tempDecimals = (isFahrenheit || widget.isDailyPeriod) ? 1 : 2;
 
         Widget? anomalyWidget;
-        if (d.anomaly != null) {
-          final rawAnomaly = presentation.shouldConvert
-              ? d.anomaly! * 9 / 5
-              : d.anomaly!;
-          final displayAnomaly =
-              double.parse(rawAnomaly.toStringAsFixed(tempDecimals));
-          final String direction;
-          final String sign;
-          if (displayAnomaly > 0) {
-            direction = 'above';
-            sign = '+';
-          } else if (displayAnomaly < 0) {
-            direction = 'below';
-            sign = '−';
-          } else {
-            direction = 'at the';
-            sign = '';
-          }
-          final anomalyText =
-              '$sign${displayAnomaly.abs().toStringAsFixed(tempDecimals)}${presentation.unitLabel} $direction average';
+        final anomalyText = formatChartAnomaly(d, presentation,
+            isDailyPeriod: widget.isDailyPeriod);
+        if (anomalyText != null) {
           final baseColor = d.barFillColor ?? Colors.white;
           final hsl = HSLColor.fromColor(baseColor);
           final anomalyColor =
@@ -503,7 +651,8 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
                     color: Colors.white, fontSize: kFontSizeBody - 2),
               ),
               Text(
-                '${displayTemp.toStringAsFixed(tempDecimals)}${presentation.unitLabel}',
+                formatChartTemperature(d, presentation,
+                    isDailyPeriod: widget.isDailyPeriod),
                 style: const TextStyle(
                     color: Colors.white, fontSize: kFontSizeBody - 2),
               ),
@@ -627,9 +776,68 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
             enableAxisAnimation: false,
           );
 
+          final summary = temperatureChartSemanticsLabel(
+            presentation: presentation,
+            isDailyPeriod: widget.isDailyPeriod,
+            periodDescription: widget.periodDescription,
+            averageTemperature: widget.averageTemperature,
+            trendSlope: widget.trendSlope,
+          );
+
+          // Rows are ordered top to bottom, which is the order a sighted
+          // reader would take them in; the summary always comes first.
+          final bars = _barRects.entries
+              .where((e) =>
+                  e.key < presentation.styledChartData.length &&
+                  presentation.styledChartData[e.key].hasData)
+              .toList()
+            ..sort((a, b) => a.value.top.compareTo(b.value.top));
+          final rows = expandBarRowRects(
+            [for (final b in bars) b.value],
+            left: 0,
+            right: chartWidth,
+          );
+
           return Center(
             child: SizedBox(
-                height: widget.height, width: chartWidth, child: chart),
+              key: _chartBoxKey,
+              height: widget.height,
+              width: chartWidth,
+              // Not a leaf: the summary and every bar are siblings so each
+              // one is separately focusable.
+              child: Semantics(
+                container: true,
+                explicitChildNodes: true,
+                child: Stack(
+                  children: [
+                    // The chart's own nodes are just unlabelled paint. The
+                    // summary sits underneath and covers the whole chart so a
+                    // touch that misses every bar still finds it.
+                    Semantics(
+                      label: summary,
+                      image: true,
+                      container: true,
+                      sortKey: const OrdinalSortKey(0),
+                      child: ExcludeSemantics(child: chart),
+                    ),
+                    for (var i = 0; i < bars.length; i++)
+                      Positioned.fromRect(
+                        rect: rows[i],
+                        child: Semantics(
+                          label: describeChartPoint(
+                            presentation.styledChartData[bars[i].key],
+                            presentation,
+                            isDailyPeriod: widget.isDailyPeriod,
+                          ),
+                          container: true,
+                          sortKey: OrdinalSortKey(i + 1.0),
+                          child: const SizedBox.expand(),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
           );
         },
       ),
@@ -645,7 +853,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
     return [
       RangeColumnSeries<TemperatureChartData, int>(
         onCreateRenderer: (ChartSeries<TemperatureChartData, int> series) {
-          return _TemperatureBarSeriesRenderer();
+          return _TemperatureBarSeriesRenderer(_reportBarRects);
         },
         dataSource: data,
         xValueMapper: (TemperatureChartData data, _) =>
@@ -698,6 +906,24 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
 
 class _TemperatureBarSeriesRenderer
     extends RangeColumnSeriesRenderer<TemperatureChartData, int> {
+  _TemperatureBarSeriesRenderer(this.onBarRects);
+
+  final void Function(RenderBox series, Map<int, Rect> rects) onBarRects;
+
+  @override
+  void onPaint(PaintingContext context, Offset offset) {
+    super.onPaint(context, offset);
+
+    final rects = <int, Rect>{};
+    for (final segment in segments) {
+      if (segment is RangeColumnSegment<TemperatureChartData, int>) {
+        final rect = segment.segmentRect;
+        if (rect != null) rects[segment.currentSegmentIndex] = rect.outerRect;
+      }
+    }
+    onBarRects(this, rects);
+  }
+
   @override
   RangeColumnSegment<TemperatureChartData, int> createSegment() {
     return _TemperatureBarSegment();

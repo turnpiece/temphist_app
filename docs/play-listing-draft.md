@@ -47,6 +47,8 @@ Weather data by Open-Meteo.com (CC BY 4.0).
 | Support / contact | https://turnpiece.com/support (add a contact email in Play Console) |
 | Privacy policy | https://temphist.com/privacy/app |
 | Phone screenshots | `assets/promos/png/1.4/android-phone/` (01–05 and 07; 06 shows "England" as Current) |
+| 7-inch tablet screenshots | `assets/promos/png/1.4/android-tablet-7/` (01–04 and 07; Nexus 7 emulator, 1200×1920 portrait) |
+| 10-inch tablet screenshots | `assets/promos/png/1.4/android-tablet-10/` (01–04 and 07; Pixel Tablet emulator, 1600×2560 portrait) |
 | Release notes (production, first release) | Search any city in the world and see how today, this week, this month and this year compare with the past 50 years. |
 
 ## Graphics
