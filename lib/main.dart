@@ -1707,6 +1707,28 @@ class TemperatureScreenState extends State<TemperatureScreen>
       ),
     );
 
+    // On Android, a swipe back from the left screen edge (gesture navigation)
+    // or the back button is claimed by the system before the PageView sees it,
+    // and would leave the app. Step back through the period tabs first, as
+    // onboarding does with its pages. iOS has no system back at the root.
+    appContent = ValueListenableBuilder<int>(
+      valueListenable: _pageIndexNotifier,
+      builder: (_, pageIndex, child) => PopScope(
+        canPop: pageIndex == 0,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && _pageController.hasClients) {
+            _pageController.animateToPage(
+              pageIndex - 1,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+          }
+        },
+        child: child!,
+      ),
+      child: appContent,
+    );
+
     // Wrap with AnnotatedRegion for mobile platforms
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
