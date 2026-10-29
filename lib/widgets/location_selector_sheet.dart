@@ -281,6 +281,16 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // The required selector (shown when location is refused) has no close
+    // button and ignores barrier taps, so Android's back button must not be a
+    // way out of it either.
+    return PopScope(
+      canPop: widget.canDismiss,
+      child: _buildSheet(context),
+    );
+  }
+
+  Widget _buildSheet(BuildContext context) {
     // Material (not Scaffold) so that showGeneralDialog gives us the full
     // screen size correctly in both portrait and landscape.
     return Material(
