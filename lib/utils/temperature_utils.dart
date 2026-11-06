@@ -44,6 +44,22 @@ String formatTrendValue(
       : 'Falling at $formatted$errorStr$unit';
 }
 
+/// Rewrites [text] so a screen reader says decimals reliably.
+///
+/// Speech engines vary: some read "8.97" as "eight dot ninety-seven". This
+/// spells the point out and reads the decimals digit by digit, so "8.97°C"
+/// becomes "8 point 9 7°C", spoken "eight point nine seven degrees Celsius".
+/// "±" and "/decade" are also written out. Use it for semantics labels only,
+/// never for text that is drawn on screen.
+String spokenNumbers(String text) => text
+    .replaceAllMapped(
+      RegExp(r'(\d)\.(\d+)'),
+      (m) => '${m[1]} point ${m[2]!.split('').join(' ')}',
+    )
+    .replaceAll('±', 'plus or minus')
+    .replaceAll('/decade', ' per decade')
+    .replaceAll(RegExp(r' {2,}'), ' ');
+
 /// Return the unit suffix string: `"°F"` or `"°C"`.
 String temperatureUnitLabel({required bool isFahrenheit}) =>
     isFahrenheit ? '°F' : '°C';

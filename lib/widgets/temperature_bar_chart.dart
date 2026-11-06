@@ -814,7 +814,7 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
                     // summary sits underneath and covers the whole chart so a
                     // touch that misses every bar still finds it.
                     Semantics(
-                      label: summary,
+                      label: spokenNumbers(summary),
                       image: true,
                       container: true,
                       sortKey: const OrdinalSortKey(0),
@@ -824,11 +824,11 @@ class _TemperatureBarChartState extends State<TemperatureBarChart> {
                       Positioned.fromRect(
                         rect: rows[i],
                         child: Semantics(
-                          label: describeChartPoint(
+                          label: spokenNumbers(describeChartPoint(
                             presentation.styledChartData[bars[i].key],
                             presentation,
                             isDailyPeriod: widget.isDailyPeriod,
-                          ),
+                          )),
                           container: true,
                           sortKey: OrdinalSortKey(i + 1.0),
                           child: const SizedBox.expand(),
