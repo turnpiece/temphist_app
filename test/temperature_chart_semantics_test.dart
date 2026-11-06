@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:temphist_app/utils/temperature_utils.dart';
 import 'package:temphist_app/widgets/temperature_bar_chart.dart';
 
 TemperatureChartData _point(String year, double temp, {double? anomaly}) =>
@@ -93,6 +94,24 @@ void main() {
             left: 0, right: 10),
         const [Rect.fromLTRB(0, 3, 10, 5)],
       );
+    });
+  });
+
+  group('spokenNumbers', () {
+    test('spells out the point and reads decimals digit by digit', () {
+      expect(spokenNumbers('Average 8.97°C'), 'Average 8 point 9 7°C');
+      expect(spokenNumbers('2026: 14.2°F, 1.3°F above average'),
+          '2026: 14 point 2°F, 1 point 3°F above average');
+    });
+
+    test('writes out ± and /decade', () {
+      expect(spokenNumbers('Rising at 1.1 ± 0.1°C/decade'),
+          'Rising at 1 point 1 plus or minus 0 point 1°C per decade');
+    });
+
+    test('leaves integers and years alone', () {
+      expect(spokenNumbers('Year ending 6th November, 2026: 56°F'),
+          'Year ending 6th November, 2026: 56°F');
     });
   });
 
@@ -193,13 +212,13 @@ void main() {
     // Bar rects are reported mid-paint and applied after the frame.
     await tester.pump();
 
-    final expected = temperatureChartSemanticsLabel(
+    final expected = spokenNumbers(temperatureChartSemanticsLabel(
       presentation: p,
       isDailyPeriod: false,
       periodDescription: 'the past week',
       averageTemperature: 12.9,
       trendSlope: 0.4,
-    );
+    ));
     expect(find.bySemanticsLabel(expected), findsOneWidget);
     expect(
       tester.getSemantics(find.bySemanticsLabel(expected)),
@@ -207,7 +226,8 @@ void main() {
     );
     // One node per bar, each wholly inside the chart and not empty.
     for (final d in data) {
-      final label = describeChartPoint(d, p, isDailyPeriod: false);
+      final label =
+          spokenNumbers(describeChartPoint(d, p, isDailyPeriod: false));
       final finder = find.bySemanticsLabel(label);
       expect(finder, findsOneWidget, reason: label);
       final rect = tester.getSemantics(finder).rect;

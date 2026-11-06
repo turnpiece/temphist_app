@@ -1150,20 +1150,24 @@ class PeriodPageState extends State<PeriodPage>
     // it to make the stats follow Dynamic Type like the rest of the page.
     // (Text.rich would also inherit the theme's body style, making the rows
     // taller.)
-    return RichText(
-      textScaler: MediaQuery.textScalerOf(context),
-      text: TextSpan(
-        style: TextStyle(fontSize: kStatsFontSize, color: colour),
-        children: [
-          TextSpan(
-            text: '$label  ',
-            style: const TextStyle(fontWeight: FontWeight.w400),
-          ),
-          TextSpan(
-            text: value,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ],
+    return Semantics(
+      label: spokenNumbers('$label $value'),
+      excludeSemantics: true,
+      child: RichText(
+        textScaler: MediaQuery.textScalerOf(context),
+        text: TextSpan(
+          style: TextStyle(fontSize: kStatsFontSize, color: colour),
+          children: [
+            TextSpan(
+              text: '$label  ',
+              style: const TextStyle(fontWeight: FontWeight.w400),
+            ),
+            TextSpan(
+              text: value,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
       ),
     );
   }
