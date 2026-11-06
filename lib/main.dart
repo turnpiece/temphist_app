@@ -1371,38 +1371,43 @@ class TemperatureScreenState extends State<TemperatureScreen>
     }
   }
 
-  static const List<String> _periodLabels = [
-    'Daily',
-    'Past week',
-    'Past month',
-    'Past year'
-  ];
   static const List<String> _tabLabels = ['Today', 'Week', 'Month', 'Year'];
 
   Widget _buildPeriodTabs(int pageIndex) {
     const innerPadding = 2.0;
     const pillRadius = 20.0;
 
+    void selectPage(int i) => _pageController.animateToPage(
+          i,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+
+    // Each segment is its own button so screen readers can focus and activate
+    // it individually. A single labelled node has no tap action, so TalkBack
+    // taps its centre, which lands on whichever segment is in the middle.
     return Semantics(
-      label:
-          '${_periodLabels[pageIndex]}. Period ${pageIndex + 1} of ${_periodKeys.length}. Tap or swipe to change.',
-      child: ExcludeSemantics(
-        child: Container(
-          decoration: BoxDecoration(
-            color: kSegmentedControlBackgroundColour,
-            borderRadius: const BorderRadius.all(Radius.circular(pillRadius)),
-          ),
-          padding: const EdgeInsets.all(innerPadding),
-          child: Row(
-            children: [
-              for (int i = 0; i < _tabLabels.length; i++)
-                Expanded(
+      container: true,
+      explicitChildNodes: true,
+      label: 'Time period',
+      child: Container(
+        decoration: BoxDecoration(
+          color: kSegmentedControlBackgroundColour,
+          borderRadius: const BorderRadius.all(Radius.circular(pillRadius)),
+        ),
+        padding: const EdgeInsets.all(innerPadding),
+        child: Row(
+          children: [
+            for (int i = 0; i < _tabLabels.length; i++)
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  selected: i == pageIndex,
+                  label: _tabLabels[i],
+                  onTap: () => selectPage(i),
+                  excludeSemantics: true,
                   child: GestureDetector(
-                    onTap: () => _pageController.animateToPage(
-                      i,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    ),
+                    onTap: () => selectPage(i),
                     behavior: HitTestBehavior.opaque,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
@@ -1431,8 +1436,8 @@ class TemperatureScreenState extends State<TemperatureScreen>
                     ),
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
