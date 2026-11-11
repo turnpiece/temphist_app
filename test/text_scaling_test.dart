@@ -165,6 +165,24 @@ void main() {
       }
     });
 
+    testWidgets('info note expands in the stats box without overflow on a '
+        'narrow phone at large text', (tester) async {
+      tester.view.physicalSize = const Size(320 * 2, 2400 * 2);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(page(2.0));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.textContaining('Average: the mean'), findsNothing);
+      await tester.tap(find.bySemanticsLabel('What do these numbers mean?'));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.textContaining('Average: the mean'), findsOneWidget);
+      expect(find.text('More about the numbers'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('rows are the same size as a plain RichText at the default '
         'text size (no theme line height or letter spacing leaks in)',
         (tester) async {
