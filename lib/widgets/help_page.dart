@@ -1,27 +1,35 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../constants/app_constants.dart';
 import 'onboarding/visuals/average_trend_illustration.dart';
 import 'onboarding/visuals/day_chart_illustration.dart';
 
+/// Help sections other screens can link to directly.
+enum HelpSection { trendCertainty }
+
 /// A full-screen scrollable help page explaining how the app works.
 ///
 /// Entry point: tapping "Help" in [SettingsSheet] dismisses the sheet and
 /// navigates here using a slide-up transition.
 class HelpPage extends StatelessWidget {
-  const HelpPage({super.key});
+  /// Section to scroll to once the page opens, if any.
+  final HelpSection? section;
 
-  /// Push the help page onto the navigator with a slide-up animation.
-  static Future<void> show(BuildContext context) {
+  const HelpPage({super.key, this.section});
+
+  /// Push the help page onto the navigator with a slide-up animation,
+  /// optionally scrolled to [section].
+  static Future<void> show(BuildContext context, {HelpSection? section}) {
     return showGeneralDialog(
       context: context,
       barrierDismissible: false,
       barrierLabel: 'Dismiss',
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => const HelpPage(),
+      pageBuilder: (_, __, ___) => HelpPage(section: section),
       transitionBuilder: (_, animation, __, child) => SlideTransition(
         position: Tween<Offset>(
           begin: const Offset(0, 1),
@@ -70,7 +78,7 @@ class HelpPage extends StatelessWidget {
                             color: kGreyLabelColour.withValues(alpha: 0.3),
                             height: 1,
                           ),
-                          const Expanded(child: _Body()),
+                          Expanded(child: _Body(section: section)),
                         ],
                       ),
                     ),
@@ -115,17 +123,46 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _Body extends StatelessWidget {
-  const _Body();
+class _Body extends StatefulWidget {
+  final HelpSection? section;
+
+  const _Body({this.section});
+
+  @override
+  State<_Body> createState() => _BodyState();
+}
+
+class _BodyState extends State<_Body> {
+  final _trendCertaintyKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.section == HelpSection.trendCertainty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final target = _trendCertaintyKey.currentContext;
+        if (!mounted || target == null) return;
+        Scrollable.ensureVisible(
+          target,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListView(
+      // The page is short, so build every section up front (a finite extent:
+      // an infinite one breaks the semantics tree). A lazily built
+      // list would not have the linked section ready to scroll to.
+      scrollCacheExtent: const ScrollCacheExtent.pixels(20000),
       padding: const EdgeInsets.symmetric(
         horizontal: kContentHorizontalMargin + kScreenPadding,
         vertical: kSectionTopPadding,
       ),
-      children: const [
+      children: [
         _Section(
           title: 'What is TempHist?',
           body:
@@ -162,7 +199,7 @@ class _Body extends StatelessWidget {
                     'Trend (yellow line) — shows whether temperatures are rising, falling or steady over the decades.'),
           ],
           footer:
-              'The error margin on the trend gives an idea as to how reliable it is. Trend accuracy increases with longer time periods. The trend is most reliable on the Year view, where each data point averages a full year of readings. On the Day view it reflects a single date each year, so day-to-day weather variation can make it less meaningful.',
+              'The standard error (±) on the trend shows how uncertain it is; see \'How certain is the trend?\' below. Trend accuracy increases with longer time periods. The trend is most reliable on the Year view, where each data point averages a full year of readings. On the Day view it reflects a single date each year, so day-to-day weather variation can make it less meaningful.',
         ),
         _Section(
           title: 'Where the data comes from',
@@ -171,7 +208,10 @@ class _Body extends StatelessWidget {
           items: [
             'A reanalysis re-runs a weather model over past decades so that it agrees with the observations available at the time.',
             'Each value is a modelled estimate of the daily mean air temperature for a grid cell about 25 km across, not a reading from a single weather station. It can differ from official station records, especially in cities, on coasts and in hills.',
-            'The newest few days come from Open-Meteo\'s forecast model, so today\'s value can sit slightly above or below the history it is compared with.',
+            'Every year comes from the same ERA5 grid cell at your location, using the same pinned model version. The service\'s default switches model in 2017, which would put a step into the series.',
+            'The newest week comes from Open-Meteo\'s forecast model, which is a different model, so the latest figure can sit slightly above or below the history it is compared with. It also counts as a point in the trend, so it can nudge it slightly.',
+            'To keep things fast, a place can occasionally be served data for a neighbouring location within about 30 km.',
+            'ERA5 is a model product rather than a homogenised station record, so the earliest years may drift slightly.',
           ],
           richFooter: [
             _TextPart('Weather data by '),
@@ -195,9 +235,21 @@ class _Body extends StatelessWidget {
               'For the date you are viewing, each of the last 51 years (this year and the 50 before it) gets a single value: the mean of the daily temperatures in a window ending on that date. The window is the day itself for Today, the 7 days ending on it for Week, 31 days for Month and 365 days for Year.',
           items: [
             'The average is the mean of those yearly values.',
-            'The trend is a straight-line fit through the yearly values, in °C (or °F) per decade, with an error margin.',
+            'The trend is a straight-line fit through the yearly values, in °C (or °F) per decade, with its standard error (±).',
+            'Both use the same 51 values, so the window moves forward each year: 1976 to 2026 for a 2026 view, 1977 to 2027 for a 2027 view.',
           ],
           footer: 'A trend describes the past; it is not a forecast.',
+        ),
+        _Section(
+          key: _trendCertaintyKey,
+          title: 'How certain is the trend?',
+          body:
+              'The ± after a trend is its standard error: roughly how much the fitted rate of change would shift if the same method were applied to another run of years like these. It is not the standard deviation, which is the year-to-year spread shown separately.',
+          extraParagraphs: [
+            'One standard error covers about two-thirds of the likely range; double it for roughly 95%. If a trend is smaller than about twice its ±, such as +0.5 ± 0.8°F/decade, it can\'t be told apart from no trend. When comparing cities, compare each trend against its ± rather than the trend alone.',
+          ],
+          footer:
+              'The calculation treats each year as independent of the last, which isn\'t quite true, so the real uncertainty is probably a little wider. Single dates are noisy, so their trends have a wide ±; Past year is the steadiest view.',
         ),
         _Section(
           title: 'Time periods',
@@ -241,6 +293,9 @@ class _Body extends StatelessWidget {
 class _Section extends StatelessWidget {
   final String title;
   final String body;
+
+  /// Further body paragraphs, shown straight after [body].
+  final List<String>? extraParagraphs;
   final Widget? visual;
   final List<_Bullet>? bullets;
   final List<String>? items;
@@ -252,8 +307,10 @@ class _Section extends StatelessWidget {
   final List<_TextPart>? richFooter;
 
   const _Section({
+    super.key,
     required this.title,
     required this.body,
+    this.extraParagraphs,
     this.visual,
     this.bullets,
     this.items,
@@ -280,11 +337,23 @@ class _Section extends StatelessWidget {
           Text(
             body,
             style: const TextStyle(
-              color: kGreyLabelColour,
+              color: kHelpBodyTextColour,
               fontSize: kFontSizeBody,
               height: 1.45,
             ),
           ),
+          if (extraParagraphs != null)
+            for (final paragraph in extraParagraphs!) ...[
+              const SizedBox(height: 10),
+              Text(
+                paragraph,
+                style: const TextStyle(
+                  color: kHelpBodyTextColour,
+                  fontSize: kFontSizeBody,
+                  height: 1.45,
+                ),
+              ),
+            ],
           if (visual != null) ...[
             const SizedBox(height: 16),
             visual!,
@@ -304,7 +373,7 @@ class _Section extends StatelessWidget {
                     const Text(
                       '• ',
                       style: TextStyle(
-                        color: kGreyLabelColour,
+                        color: kHelpBodyTextColour,
                         fontSize: kFontSizeBody,
                       ),
                     ),
@@ -312,7 +381,7 @@ class _Section extends StatelessWidget {
                       child: Text(
                         item,
                         style: const TextStyle(
-                          color: kGreyLabelColour,
+                          color: kHelpBodyTextColour,
                           fontSize: kFontSizeBody,
                           height: 1.45,
                         ),
@@ -331,7 +400,7 @@ class _Section extends StatelessWidget {
             Text(
               footer!,
               style: const TextStyle(
-                color: kGreyLabelColour,
+                color: kHelpBodyTextColour,
                 fontSize: kFontSizeBody,
                 height: 1.45,
               ),
@@ -402,7 +471,7 @@ class _LinkTextState extends State<_LinkText> {
     return Text.rich(
       TextSpan(
         style: const TextStyle(
-          color: kGreyLabelColour,
+          color: kHelpBodyTextColour,
           fontSize: kFontSizeBody - 2,
           height: 1.45,
         ),
@@ -465,7 +534,7 @@ class _BulletRow extends StatelessWidget {
             child: Text(
               bullet.label,
               style: const TextStyle(
-                color: kGreyLabelColour,
+                color: kHelpBodyTextColour,
                 fontSize: kFontSizeBody,
                 height: 1.45,
               ),

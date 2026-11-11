@@ -25,7 +25,9 @@ const kLocationPopularColour = Color(0xFFD0D4DE);
 const kAxisLabelColour = Color(0xFFECECEC);
 const kAxisGridColour = kAxisLabelColour;
 const kGreyLabelColour = Color(0xFFB0B0B0);
-const kSegmentedControlBackgroundColour = Color(0x1FECECEC);
+/// Body text on the Help page. Brighter than [kGreyLabelColour] so it sits
+/// closer to the headings and links.
+const kHelpBodyTextColour = Color(0xFFD0D0D0);const kSegmentedControlBackgroundColour = Color(0x1FECECEC);
 const kSegmentedControlSelectedBackgroundColour = Color(0x2EECECEC);
 const kSegmentedControlSelectedTextColour = kTextPrimaryColour;
 const kSegmentedControlUnselectedTextColour = kHeadingColour;

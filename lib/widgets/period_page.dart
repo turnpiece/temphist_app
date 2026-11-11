@@ -16,6 +16,7 @@ import '../utils/temperature_utils.dart';
 import 'completeness_section.dart';
 import 'data_attribution.dart';
 import 'gradient_spinner.dart';
+import 'stats_info.dart';
 import 'temperature_bar_chart.dart';
 
 /// A reusable page that fetches and displays period temperature data
@@ -91,6 +92,7 @@ class PeriodPageState extends State<PeriodPage>
   PeriodTemperatureData? _data;
   CacheState _cacheState = CacheState.none;
   bool _isLoading = false;
+  bool _statsInfoExpanded = false;
   String? _error;
   String _loadingMessage = '';
   Timer? _loadingMessageTimer;
@@ -877,6 +879,12 @@ class PeriodPageState extends State<PeriodPage>
     final double contentHPadding = kScreenPadding + kContentHorizontalMargin;
     final bool isTablet = screenWidth >= kTabletBreakpointWidth;
     final double bubbleInnerHPadding = isTablet ? 20.0 : 12.0;
+    // The stats box info button is 48dp wide and sits flush with the box's
+    // right edge; the first rows need this much extra room to clear it.
+    final double infoButtonClearance = 48.0 -
+        (isSmallPhone
+            ? kScreenPadding + kContentHorizontalMargin
+            : bubbleInnerHPadding);
 
     if (data.summary.isNotEmpty) {
       final double summaryLineCount = isTablet
@@ -973,43 +981,71 @@ class PeriodPageState extends State<PeriodPage>
           ),
           child: Container(
             width: double.infinity,
-            padding: EdgeInsets.symmetric(
-              horizontal: isSmallPhone ? contentHPadding : bubbleInnerHPadding,
-              vertical: kSummaryBubbleVerticalPadding,
-            ),
             decoration: BoxDecoration(
               color: kStatsBubbleColour.withValues(alpha: 0.4),
-              borderRadius:
-                  isSmallPhone ? BorderRadius.zero : const BorderRadius.all(Radius.circular(kBubbleBorderRadius)),
+              borderRadius: isSmallPhone
+                  ? BorderRadius.zero
+                  : const BorderRadius.all(
+                      Radius.circular(kBubbleBorderRadius)),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Stack(
               children: [
-                _buildStatRow(
-                  'Average',
-                  formatTemperature(data.average.mean,
-                      isFahrenheit: widget.isFahrenheit,
-                      convert: needsConversion),
-                  kAverageColour,
-                ),
-                if (data.standardDeviation != null) ...[
-                  const SizedBox(height: 6),
-                  _buildStatRow(
-                    'Standard deviation',
-                    formatTemperature(data.standardDeviation!,
-                        isFahrenheit: widget.isFahrenheit,
-                        convert: needsConversion),
-                    kStdDevColour,
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal:
+                        isSmallPhone ? contentHPadding : bubbleInnerHPadding,
+                    vertical: kSummaryBubbleVerticalPadding,
                   ),
-                ],
-                const SizedBox(height: 6),
-                _buildStatRow(
-                  'Trend',
-                  formatTrendValue(data.trend.slope,
-                      slopeError: data.trend.slopeError,
-                      isFahrenheit: widget.isFahrenheit,
-                      convert: needsConversion),
-                  kTrendColour,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Keep the first rows clear of the info button in the
+                      // top-right corner; the Trend row below it can use the
+                      // full width.
+                      Padding(
+                        padding: EdgeInsets.only(right: infoButtonClearance),
+                        child: _buildStatRow(
+                          'Average',
+                          formatTemperature(data.average.mean,
+                              isFahrenheit: widget.isFahrenheit,
+                              convert: needsConversion),
+                          kAverageColour,
+                        ),
+                      ),
+                      if (data.standardDeviation != null) ...[
+                        const SizedBox(height: 6),
+                        Padding(
+                          padding: EdgeInsets.only(right: infoButtonClearance),
+                          child: _buildStatRow(
+                            'Standard deviation',
+                            formatTemperature(data.standardDeviation!,
+                                isFahrenheit: widget.isFahrenheit,
+                                convert: needsConversion),
+                            kStdDevColour,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 6),
+                      _buildStatRow(
+                        'Trend',
+                        formatTrendValue(data.trend.slope,
+                            slopeError: data.trend.slopeError,
+                            isFahrenheit: widget.isFahrenheit,
+                            convert: needsConversion),
+                        kTrendColour,
+                      ),
+                      if (_statsInfoExpanded) const StatsInfoNote(),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: StatsInfoButton(
+                    expanded: _statsInfoExpanded,
+                    onPressed: () => setState(
+                        () => _statsInfoExpanded = !_statsInfoExpanded),
+                  ),
                 ),
               ],
             ),
