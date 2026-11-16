@@ -526,6 +526,14 @@ class TemperatureService {
     );
   }
 
+  /// Rounds a latitude/longitude to 2 decimal places (about 1 km), so device
+  /// coordinates sent to the API stay at approximate, city-level precision.
+  /// This keeps the Play Console data safety declaration of "approximate
+  /// location" accurate.
+  @visibleForTesting
+  static double coarsenCoordinate(double value) =>
+      (value * 100).roundToDouble() / 100;
+
   /// Submit a location selection signal to `POST /v1/locations/selections`.
   ///
   /// Prefers submitting a canonical [location_id] when cached. Falls back to
@@ -573,8 +581,10 @@ class TemperatureService {
       payload = Map<String, dynamic>.from(rawData);
     }
 
-    if (latitude != null) payload['latitude'] = latitude;
-    if (longitude != null) payload['longitude'] = longitude;
+    // Coarsen device coordinates before they leave the phone so the server only
+    // ever receives city-level precision (see [coarsenCoordinate]).
+    if (latitude != null) payload['latitude'] = coarsenCoordinate(latitude);
+    if (longitude != null) payload['longitude'] = coarsenCoordinate(longitude);
     if (timezone != null) payload['timezone'] = timezone;
 
     _lastSubmittedKey = submissionKey;
