@@ -28,8 +28,8 @@ void main() {
     });
 
     test('returns null when cache is empty', () {
-      expect(TemperatureService.canonicalIdFor('London, United Kingdom'),
-          isNull);
+      expect(
+          TemperatureService.canonicalIdFor('London, United Kingdom'), isNull);
     });
 
     test('returns null when key is not in cache', () {
@@ -62,7 +62,8 @@ void main() {
         'Paris, France': 'paris',
       });
 
-      expect(TemperatureService.canonicalIdFor('paris, France'), equals('paris'));
+      expect(
+          TemperatureService.canonicalIdFor('paris, France'), equals('paris'));
     });
 
     test('fuzzy match does not cross to a different city', () {
@@ -71,7 +72,8 @@ void main() {
       });
 
       // "Newark" starts differently — must not match "New York".
-      expect(TemperatureService.canonicalIdFor('Newark, United States'), isNull);
+      expect(
+          TemperatureService.canonicalIdFor('Newark, United States'), isNull);
     });
 
     test('fuzzy hit is written back to cache for O(1) future lookups', () {
@@ -80,14 +82,14 @@ void main() {
       });
 
       // First call — fuzzy lookup.
-      final first = TemperatureService.canonicalIdFor(
-          'Berlin, Brandenburg, Germany');
+      final first =
+          TemperatureService.canonicalIdFor('Berlin, Brandenburg, Germany');
       expect(first, equals('berlin'));
 
       // Second call — must hit exact-match branch (cache was updated).
       // We verify this indirectly: still returns the same id.
-      final second = TemperatureService.canonicalIdFor(
-          'Berlin, Brandenburg, Germany');
+      final second =
+          TemperatureService.canonicalIdFor('Berlin, Brandenburg, Germany');
       expect(second, equals('berlin'));
     });
 
@@ -140,10 +142,10 @@ void main() {
         'Tokyo, Japan': 'tokyo',
       });
 
-      expect(TemperatureService.canonicalIdFor('London, United Kingdom'),
-          isNull);
-      expect(TemperatureService.canonicalIdFor('Tokyo, Japan'),
-          equals('tokyo'));
+      expect(
+          TemperatureService.canonicalIdFor('London, United Kingdom'), isNull);
+      expect(
+          TemperatureService.canonicalIdFor('Tokyo, Japan'), equals('tokyo'));
     });
   });
 
@@ -179,7 +181,8 @@ void main() {
     });
 
     test('is a no-op for a null or empty timezone', () {
-      TemperatureService.restoreLocationTimezone('London, United Kingdom', null);
+      TemperatureService.restoreLocationTimezone(
+          'London, United Kingdom', null);
       TemperatureService.restoreLocationTimezone('London, United Kingdom', '');
 
       expect(TemperatureService.timezoneFor('London, United Kingdom'), isNull);
@@ -189,6 +192,18 @@ void main() {
       TemperatureService.restoreLocationTimezone('', 'Europe/London');
 
       expect(TemperatureService.timezoneFor(''), isNull);
+    });
+  });
+
+  group('coarsenCoordinate', () {
+    test('rounds to 2 decimal places', () {
+      expect(TemperatureService.coarsenCoordinate(51.507351), equals(51.51));
+      expect(TemperatureService.coarsenCoordinate(-0.127758), equals(-0.13));
+    });
+
+    test('handles negative values and zero', () {
+      expect(TemperatureService.coarsenCoordinate(-33.86882), equals(-33.87));
+      expect(TemperatureService.coarsenCoordinate(0), equals(0));
     });
   });
 }
