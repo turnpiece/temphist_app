@@ -56,4 +56,4 @@ Weather data by Open-Meteo.com (CC BY 4.0).
 In `assets/promos/png/1.4/android-play/`, made by `scripts/compose_play_graphics.py`:
 
 - `icon-512.png`: 512×512 32-bit PNG, full square (Play applies the mask). `assets/logo.png` (the multicoloured bars) on the navy icon background, laid out like the iOS app icon.
-- `feature-graphic-1024x500.png`: headline plus the Today and Year views.
+- `feature-graphic-1024x500.png`: headline plus the Today and Year views. Play's listing cards show it in a 16:9 box (cover-fit), trimming ~67px off each side, so keep text and phones within x=84..940.

@@ -31,6 +31,16 @@ LOGO_X = 204  # puts the bars where the iOS app icon has them
 
 W, H = 1024, 500
 
+# Play's listing cards show the graphic in a 16:9 box with cover-fit, so only the
+# central H*16/9 (~889px) of the 1024 width is guaranteed visible (~67px trimmed each
+# side). Keep all text and phones inside this safe zone, with a little slack.
+SAFE_LEFT = 84
+SAFE_RIGHT = W - SAFE_LEFT
+PHONE_W = 220
+PHONE_GAP = 27
+RIGHT_PHONE_X = SAFE_RIGHT - PHONE_W
+LEFT_PHONE_X = RIGHT_PHONE_X - PHONE_GAP - PHONE_W
+
 
 def icons(out: Path) -> None:
     canvas = Image.new("RGBA", (1024, 1024), ICON_BG + (255,))
@@ -60,8 +70,8 @@ def feature_graphic(raw_dir: Path, out: Path) -> None:
     canvas = gradient(W, H)
     draw = ImageDraw.Draw(canvas)
 
-    margin = 56
-    text_w = 470
+    margin = SAFE_LEFT
+    text_w = LEFT_PHONE_X - SAFE_LEFT - 40
     head_font = font(54, 700)
     sub_font = font(23, 400)
     y = 118
@@ -73,9 +83,8 @@ def feature_graphic(raw_dir: Path, out: Path) -> None:
         draw.text((margin, y), line, font=sub_font, fill=GREY)
         y += int(sub_font.size * 1.4)
 
-    phone_w = 220
-    phone(canvas, raw_dir / "13-year.png", 790, 120, phone_w)
-    phone(canvas, raw_dir / "10-today.png", 545, 56, phone_w)
+    phone(canvas, raw_dir / "13-year.png", RIGHT_PHONE_X, 120, PHONE_W)
+    phone(canvas, raw_dir / "10-today.png", LEFT_PHONE_X, 56, PHONE_W)
 
     canvas.save(out / "feature-graphic-1024x500.png", optimize=True)
 
