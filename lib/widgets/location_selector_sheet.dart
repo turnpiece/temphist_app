@@ -242,7 +242,9 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
         .toList();
     final userSelectedCities = {for (final l in userSelected) cityName(l)};
 
-    // API popular locations — shuffled, deduped against user selections.
+    // API popular locations, deduped against user selections. Kept in the
+    // API's order (most selected first): the list runs to hundreds of places,
+    // most chosen once, so shuffling it surfaced an arbitrary long-tail sample.
     List<String> apiPopular = [];
     if (widget.connectivityOnline) {
       try {
@@ -252,8 +254,7 @@ class _LocationSelectorSheetState extends State<LocationSelectorSheet> {
             .where((l) =>
                 !isExcludedFromPopular(l) &&
                 !userSelectedCities.contains(cityName(l)))
-            .toList()
-          ..shuffle();
+            .toList();
       } catch (_) {}
     }
 
