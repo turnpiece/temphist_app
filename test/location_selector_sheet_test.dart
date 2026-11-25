@@ -191,6 +191,18 @@ void main() {
   });
 
   group('LocationSelectorSheet — selected location check', () {
+    testWidgets('nothing is ticked when no location has been chosen yet',
+        (tester) async {
+      // The required selector (location refused, first launch) passes an
+      // empty selectedLocation; no row may look pre-selected.
+      SharedPreferences.setMockInitialValues({
+        'locationHistory': '["London, United Kingdom","Paris, France"]',
+      });
+      await _pump(tester, _sheet(gpsLocation: '', selectedLocation: ''));
+      expect(find.text('London'), findsOneWidget);
+      expect(find.byIcon(Icons.check), findsNothing);
+    });
+
     testWidgets('selected location in recent shows check icon', (tester) async {
       SharedPreferences.setMockInitialValues({
         'locationHistory': '["Belfast, United Kingdom","Paris, France"]',

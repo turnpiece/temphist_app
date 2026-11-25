@@ -955,7 +955,10 @@ class TemperatureScreenState extends State<TemperatureScreen>
     LocationSelectorSheet.show(
       context,
       gpsLocation: _locationService.gpsLocation,
-      selectedLocation: _determinedLocation,
+      // Nothing has been chosen yet. _determinedLocation only holds the
+      // internal fallback (kDefaultLocation), which mustn't show as ticked or
+      // be moved to the top of the list.
+      selectedLocation: '',
       onLocationSelected: _onLocationSelected,
       canDismiss: false,
       connectivityOnline: _isOnline,
